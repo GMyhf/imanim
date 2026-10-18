@@ -73,8 +73,8 @@ Brief（学科/学段/知识点/时长/风格）
 | --- | --- | --- | --- |
 | ① | 配音 | **已解除（#60-A）**。`audio/tts.py` 不再走 Windows SAPI/powershell，改为第三方网关 HTTP：`POST {QX_LLM_BASE_URL}/v1/audio/speech`（默认 `https://api.openai-next.com`），模型 `qwen3-tts-flash`，voice `cherry`。间歇性 403/408/429/5xx 已内置重试：共 5 次尝试、间隔 3s 起翻倍（3/6/12/24s）。网关 WAV 头 size 字段溢出、speed 参数无效两个坑均已在代码内处理/如实记账 | Linux 容器可用，但有三个前提：**(a)** 密钥经 env 注入——`QX_LLM_API_KEY` 直接给值，或 `QX_LLM_KEY_FILE` 指向容器内可读的密钥文件（代码缺省的 `D:\Desktop\key.txt` 在 Linux 不存在，必须二选一，**密钥只走创空间的环境变量配置，不进镜像、不进仓库**）；**(b)** 容器出网可达 `api.openai-next.com`（可用 `QX_LLM_BASE_URL` 换网关）；**(c)** 接受 403/429 抖动——重试已内置，但网关持续不可用时配音会失败 |
 | ② | 中文字体 | `scene.py` 默认已不是 YaHei：`T()` 中文走 `SimSun`（宋体）、拉丁/数字走 `Times New Roman`，分别可用 env `MVP_TEXT_FONT` / `MVP_LATIN_FONT` 覆盖 | **两款都是商业字体，不能打进 Linux 镜像**。替代映射：SimSun → `Noto Serif CJK SC`（衬线、全量 CJK，`fonts-noto-cjk` 提供）；Times New Roman → `TeX Gyre Termes`（Times 度量兼容，`fonts-texgyre`）或 `Liberation Serif`（`fonts-liberation`）。Dockerfile 已按此装包并设 env |
-| ③ | 字号/字距标定 | 标定值与字体**强绑定**，且已按 SimSun+Times 栈重测过一轮：`scene.py` 的 `_DELTA_DESC/_DELTA_CJK/_DELTA_PAREN`（分段基线拼接）与 `review.py` 的 `UNIT_CJK=0.44 / UNIT_ASCII=0.50`（LEGIBLE 闸门估宽）都是量着这套字体实测的 | **硬依赖：换字体必须重测**。在容器里把 `MVP_TEXT_FONT`/`MVP_LATIN_FONT` 换成 ② 的替代字体后，必须重跑 `.local/typo2/probe.py` 那套测量、把 `_DELTA_*` 与 `UNIT_*` 按新字体重写——否则 LEGIBLE 闸门算出的字号与真实渲染脱钩，v7 那种 12px 角标会从闸门漏出去。重测前不建议在容器开生成入口 |
-| ④ | 字幕烧录 | `pipeline/mux.py` 的 ASS Style 里 `FontName` **仍写死 `Microsoft YaHei`**（源码如实，尚未改） | 仍未解除：Linux 容器里没有 YaHei，烧录字幕会落到 fontconfig 的兜底字体，与画面字体不一致。需要把它改成 env 注入（与 ② 同源）——这是 mvp 代码改动，不在 deploy 范围内，台账如实挂着 |
+| ③ | 字号/字距标定 | **机制已解除（2026-10-19 代码侧改动），数值仍缺一次容器实测**。标定值不再硬编码在 `scene.py`/`review.py` 里：唯一事实源移到 `mvp/font_metrics.py` 的 `CALIBRATED` 表（按 `(MVP_TEXT_FONT, MVP_LATIN_FONT)` 字体对查表；SimSun+Times 现值 0.00300/0.00097/0.00284/0.44/0.50 逐字保留进表，Windows 行为不变）。`scene._seg_bottom_delta` 与 `review._est_width` 运行时查表；**表里没有的字体对直接抛 `FontMetricsError` 拒绝排版/估宽**，不会静默沿用 SimSun 旧值（重测入口 `mvp/tools_fontmetrics.py`，本机 SimSun 复测能重现表值，方法学同源） | 剩余动作（必须进容器做，本机无 docker）：按下节检查单第 1 步跑一次 `python mvp/tools_fontmetrics.py`，把输出的 `table_entry` 粘进 `CALIBRATED`。**填表前容器里点"提交生成"会硬报错**——这正是 README 旧话"重测前不要开生成入口"的代码化；画廊模式不排版、不受影响 |
+| ④ | 字幕烧录 | **已解除（代码侧）**。`pipeline/mux.py` 的 ASS `FontName` 不再写死 `Microsoft YaHei`：改为模块级 `SUB_FONT = os.environ.get("MVP_SUB_FONT", "Microsoft YaHei")`，与 ② 同源走 env；缺省值不动 Windows 本机行为 | 容器部署时需追加 `MVP_SUB_FONT`（建议与画面中文同源，如 `Noto Serif CJK SC`）——这是 env/Dockerfile 一行配置的事，代码侧已就绪；烧录字体未设时 ffmpeg 会落到 fontconfig 兜底字，与画面字体不一致 |
 | ⑤ | 公式 TeX | `scene.py` 已接入 LaTeX：`formula.props.tex` 走 MathTex（latex → dvisvgm），探测不到 TeX 时自动退回 Pango 排版（`rich()`），不会渲染失败 | 新增项（原台账写"本项目不需要 LaTeX"已过期）。要容器内出公式版，镜像需装 texlive（包清单见 Dockerfile：`texlive-latex-base` + `texlive-latex-extra` + `texlive-fonts-recommended` + `dvisvgm`，覆盖 TexTemplate 用的 amsmath/amssymb/mathptmx 与 standalone）。Linux 走 texlive 全量预装，**不存在 MiKTeX 那种渲染时才联网下宏包的问题**；不装 TeX 也能出片，只是公式退回 Unicode 排版 |
 
 另外两条待实测确认（本机没有 docker，`docker: command not found`，**这个镜像尚未经过构建验证**——
@@ -90,10 +90,17 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 
 按 SubTask #45③ 底稿，补上本轮新增的两个前置步骤（**加粗**项）：
 
-1. **[前置] 字体替代 + 字距重测**：确认镜像内 `MVP_TEXT_FONT="Noto Serif CJK SC"`、
-   `MVP_LATIN_FONT="TeX Gyre Termes"` 生效（`fc-match` 核对），在容器里重跑字距 probe、
-   按新字体更新 `scene.py` 的 `_DELTA_*` 与 `review.py` 的 `UNIT_CJK/UNIT_ASCII`（阻断项 ③）。
-   不重测就不开生成入口，只当画廊推。
+1. **[前置] 字体替代 + 字距重测（阻断项 ③，代码侧已改为度量表机制）**：
+   a) 确认镜像内 `MVP_TEXT_FONT="Noto Serif CJK SC"`、`MVP_LATIN_FONT="TeX Gyre Termes"`
+      生效（`fc-match "Noto Serif CJK SC"` 核对），并给字幕补一条同源 env：
+      `MVP_SUB_FONT="Noto Serif CJK SC"`（阻断项 ④，代码侧已就绪，缺省仍是 YaHei）；
+   b) 在容器里跑重测入口（一条命令出 JSON，含可直接粘贴的 `table_entry`）：
+      `python mvp/tools_fontmetrics.py --out /tmp/fontmetrics.json`
+      —— 若输出 `warning`（数字非等高 lining），该字体不能用，回到 a) 换字体；
+   c) 把 `table_entry` 粘进 `mvp/font_metrics.py` 的 `CALIBRATED` 字典并跑
+      `python mvp/tests/run_tests.py`（test_typo/test_fontmetrics 会复检），随源码重新构建；
+   d) 表没填之前生成入口在容器里会硬报错（`FontMetricsError`，报错文本即第 b/c 步指引），
+      只当画廊推——不再靠人工纪律，代码替你把关。
 2. **[前置] 网关密钥注入**：在创空间"环境变量"里配 `QX_LLM_API_KEY`（或 `QX_LLM_KEY_FILE`
    指向挂载的密钥文件）——**密钥只经 env 注入，绝不写进镜像/仓库/日志**；配好后在容器内
    跑一次最短文本的 TTS 合成验证出网与密钥（阻断项 ① 的三个前提逐项打勾）。
@@ -103,7 +110,8 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 5. 推 `.local/space/`（`deploy/build_space.py` 组装，产物已 gitignore；>100MB 单文件必须走
    LFS——当前最大 10.0MB，不触发）。
 6. 盯首次构建：pycairo/manimpango 现场编译 + texlive 安装（本机无 docker，镜像未经构建验证）。
-7. 构建通过、画廊页面核对无误后，再谈公开与生成入口（生成入口还压着 ④ mux 字体写死这条）。
+7. 构建通过、画廊页面核对无误后，再谈公开与生成入口（④ mux 字体已改 env 注入，记得在
+   容器 env 里配 `MVP_SUB_FONT`；生成入口的前置就只剩 ③ 的度量表填没填）。
 
 ## 许可与素材
 

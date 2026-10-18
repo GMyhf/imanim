@@ -27,6 +27,7 @@ MODELS = {
     "A3": "claude-opus-5-5",
     "A8": "gemini-3.1-pro-preview-thinking",
     "S22": "claude-opus-4-8",
+    "K0": "claude-opus-5-5",
     "K1": "claude-opus-5-5",
     "K2": "gemini-3.1-pro-preview-thinking",
     "P": "gemini-3.1-pro-preview-thinking",

@@ -5,3 +5,5 @@
 # 版本按本机实测锁定：本机跑的是 ManimCE 0.22.0。换版本要重跑 .local/typo2/probe.py 与
 # 字号/宽度那一组实测常数（scene.py 的 cap_width 标定、review.LEGIBLE 都依赖具体排版度量）。
 manim==0.22.0
+# 反馈写穿到 ModelScope 私有数据集用（只有设了 QX_FEEDBACK_REPO / QX_FEEDBACK_REPO_TOKEN 才会走到）
+modelscope_hub==0.4.6

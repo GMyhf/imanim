@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import os
 import re
@@ -25,17 +26,25 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 WEB_DIR = Path(__file__).resolve().parent
 MVP_DIR = WEB_DIR.parent
 JOBS_DIR = WEB_DIR / "jobs"
 OUT_DIR = MVP_DIR / "out"
+# 画廊白名单哨兵：run 目录下存在该标记文件（内容不限、可为空）才允许上墙。
+# 旧稿批量更换期间一律不放行——换新稿/验收合格后由人工在对应 run 目录放置此文件。
+# 只影响 /api/gallery 列表；已有产物文件一个都不删、不移、不改名。
+GALLERY_OK_SENTINEL = ".gallery_ok"
 KP_DIR = MVP_DIR / "pipeline" / "data" / "kp"
 RUNNER = WEB_DIR / "jobrunner.py"
 PY = sys.executable
 MAX_JOB_SECONDS = 30 * 60
-FEEDBACK_DIR = WEB_DIR / "feedback"
+FEEDBACK_DIR = Path(os.environ.get("QX_FEEDBACK_DIR") or (WEB_DIR / "feedback"))
+FEEDBACK_READ_TOKEN = os.environ.get("QX_FEEDBACK_TOKEN", "").strip()
+# 容器文件系统重启即清空，反馈另外写穿到一个 ModelScope 私有数据集；两项都配了才启用。
+FEEDBACK_REPO = os.environ.get("QX_FEEDBACK_REPO", "").strip()
+FEEDBACK_REPO_TOKEN = os.environ.get("QX_FEEDBACK_REPO_TOKEN", "").strip()
 FEEDBACK_TYPES = ("bug", "content", "suggestion", "other")
 FEEDBACK_LABELS = {"bug": "功能问题 / 报错", "content": "内容 / 科学性", "suggestion": "功能建议", "other": "其他"}
 FEEDBACK_MAX_TEXT = 5000
@@ -65,7 +74,7 @@ STYLES = [("clean", "clean · 白底板书"), ("board", "board · 深色黑板")
 DURATIONS = [60, 120, 180, 300]
 QUALITIES = [("draft", "480p 草稿（约 30s，演示用）"), ("hd", "720p（约 60s）"),
              ("fullhd", "1080p 正式（约 100s）")]
-STAGE_LABELS = {"retrieve": "检索知识点库", "storyboard": "生成分镜", "narration": "配音合成",
+STAGE_LABELS = {"retrieve": "检索知识点库", "draft": "起草知识点（库外）", "storyboard": "生成分镜", "narration": "配音合成",
                 "review": "静态监督检查", "render": "画面渲染", "mux": "音幕合成",
                 "done": "已完成", "failed": "失败", "queued": "排队中"}
 
@@ -236,6 +245,8 @@ def gallery() -> list[dict]:
             rd = d / "run" if (d / "run").is_dir() else d
             if not (rd / "sidecar.json").is_file():   # 没跑完/被闸门打回的不出现在墙上
                 continue
+            if not (rd / GALLERY_OK_SENTINEL).is_file():  # 未标记「已换稿/合格」的（旧稿）不上墙
+                continue
             items.append(run_meta(rd, f"{prefix}:{d.name}"))
     items.sort(key=lambda x: x["mtime"], reverse=True)
     return items
@@ -403,11 +414,67 @@ def submit_feedback(payload: dict) -> dict:
         raise ValueError(f"联系方式过长（>{FEEDBACK_MAX_CONTACT} 字）")
     FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
     fid = f"fb{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(3).hex()}"
-    (FEEDBACK_DIR / f"{fid}.json").write_text(json.dumps({
+    body = json.dumps({
         "id": fid, "time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "type": ftype, "text": text, "contact": contact,
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    }, ensure_ascii=False, indent=2)
+    (FEEDBACK_DIR / f"{fid}.json").write_text(body, encoding="utf-8")
+    threading.Thread(target=_feedback_push, args=(fid, body), daemon=True).start()
     return {"ok": True, "id": fid}
+
+
+def _feedback_api():
+    from modelscope_hub.api import HubApi
+    return HubApi(token=FEEDBACK_REPO_TOKEN)
+
+
+def _feedback_push(fid: str, body: str) -> None:
+    """写穿到远端数据集；失败只记一行（不含密钥），本地文件已经落盘，不影响访客提交。"""
+    if not (FEEDBACK_REPO and FEEDBACK_REPO_TOKEN):
+        return
+    try:
+        _feedback_api().upload_file(
+            FEEDBACK_REPO, "dataset", body.encode("utf-8"), f"feedback/{fid}.json",
+            commit_message=f"feedback {fid}", disable_tqdm=True)
+    except Exception as e:  # noqa: BLE001 - 网络/权限问题都只降级为本地存储
+        print(f"[feedback] 写穿失败 {fid}: {type(e).__name__}", flush=True)
+
+
+def feedback_restore() -> int:
+    """启动时把远端数据集里本地缺的反馈拉回来；返回拉回条数。"""
+    if not (FEEDBACK_REPO and FEEDBACK_REPO_TOKEN):
+        return 0
+    n = 0
+    try:
+        api = _feedback_api()
+        FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+        for fi in api.list_repo_files(FEEDBACK_REPO, "dataset"):
+            name = Path(fi.path).name
+            if not (fi.path.startswith("feedback/") and re.fullmatch(r"fb[\w-]+\.json", name)):
+                continue
+            if (FEEDBACK_DIR / name).exists():
+                continue
+            got = api.download_file(FEEDBACK_REPO, "dataset", fi.path, local_dir=FEEDBACK_DIR / ".restore")
+            (FEEDBACK_DIR / name).write_bytes(Path(got).read_bytes())
+            n += 1
+    except Exception as e:  # noqa: BLE001
+        print(f"[feedback] 恢复失败: {type(e).__name__}", flush=True)
+    return n
+
+
+def list_feedback(token: str = "") -> list[dict]:
+    """反馈默认公开可读；联系方式只在口令配置且吻合时返回，免得访客填的邮箱/微信被所有人看到。"""
+    show_contact = bool(FEEDBACK_READ_TOKEN) and hmac.compare_digest(
+        token.encode(), FEEDBACK_READ_TOKEN.encode())
+    items = []
+    if FEEDBACK_DIR.is_dir():
+        for f in sorted(FEEDBACK_DIR.glob("fb*.json"), reverse=True):
+            d = read_json(f)
+            if d:
+                if not show_contact:
+                    d.pop("contact", None)
+                items.append(d)
+    return items
 
 
 def parse_error(raw: str) -> object:
@@ -555,9 +622,15 @@ class Handler(BaseHTTPRequestHandler):
                 "spec_version": SPEC_VERSION,
                 "shot_head": SHOT_HEAD, "shot_tail": SHOT_TAIL,
                 "min_shot_seconds": MIN_SHOT_SECONDS,
-                "note": "知识点只能从下表选择：未命中知识点库的请求会被直接拒绝（Spec_Product 第 2 节的防幻觉闸门）。"})
+                # 生成开关如实下发：前端据此在表单里显示「仅展映 / 生成未开放」横幅，不在前端特判环境变量。
+                "generate_disabled": GENERATE_DISABLED,
+                "generate_disabled_msg": GENERATE_DISABLED_MSG if GENERATE_DISABLED else "",
+                "note": "知识点可自由填写：库内命中走库内条目，库外由模型起草（未核对教材出处，成片会如实标注）。"})
         if sub[0] == "gallery":
             return self.send_json({"items": gallery()})
+        if sub[0] == "feedback":
+            token = (parse_qs(urlparse(self.path).query).get("token") or [""])[0]
+            return self.send_json({"items": list_feedback(token)})
         if sub[0] == "status" and len(sub) == 2:
             st = status(sub[1])
             if st is None:
@@ -628,26 +701,27 @@ class Handler(BaseHTTPRequestHandler):
         if errs:
             return self.send_json({"error": "输入契约校验未通过", "findings": errs, "candidates": []}, 400)
 
-        # 防幻觉闸门：走 knowledge.load 的单一真源（含学段过滤）。
-        # 未命中或学段不符都抛 KnowledgeNotFound，candidates 给出库内可选知识点。
+        # 知识点口径（2026-10-18）：库内命中就用库内容并把 topic 归一化成条目正式名；
+        # 库里没有不再拒绝请求——任务里由 K0 起草一条 origin=model_draft、refs 为空的条目
+        # 再走同一条链路（pipeline/kp_draft.py）。起草需要模型，未开 K0/没配密钥时任务会
+        # 以人话错误结束，不在这里假装能生成。
+        hit = None
         try:
-            entry = knowledge.load(brief.subject, brief.topic, brief.grade)
-        except knowledge.KnowledgeNotFound as e:
-            return self.send_json({
-                "error": f"知识点库中没有「{brief.topic}」（{brief.subject}/{brief.grade}），"
-                         f"已拒绝生成（不允许模型编造知识点）",
-                "candidates": list(e.candidates), "findings": []}, 400)
+            hit = knowledge.load(brief.subject, brief.topic, brief.grade)
+        except knowledge.KnowledgeNotFound:
+            pass
         except ValueError as e:  # 库文件损坏/缺字段：也归为 4xx，不把 traceback 抛给用户
             return self.send_json({"error": f"知识点库校验失败：{e}", "findings": [], "candidates": []}, 400)
-
-        brief.topic = entry["topic"]  # 归一化为库内正式条目名
+        if hit:
+            brief.topic = hit["topic"]  # 归一化为库内正式条目名
         brief_dict = brief.__dict__
         try:
             job_id = start_generate(brief_dict, quality)
         except ValueError as e:  # 只有 GENERATE_DISABLED 会走到这里
             return self.send_json({"error": str(e), "findings": [], "candidates": []}, 409)
         self.send_json({"job": job_id, "key": f"job:{job_id}", "state": "running",
-                        "brief": brief_dict, "knowledge": entry, "quality": quality})
+                        "brief": brief_dict, "knowledge": hit,
+                        "draft": hit is None, "quality": quality})
 
     def api_regenerate(self):
         b = self.read_body()
@@ -690,6 +764,8 @@ def main() -> int:
     a = ap.parse_args()
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     warm_cache()
+    if FEEDBACK_REPO:
+        print(f"[feedback] 从远端恢复 {feedback_restore()} 条", flush=True)
     httpd = ThreadingHTTPServer((a.host, a.port), Handler)
     httpd.daemon_threads = True
     print(f"澄象 MVP 演示服务： http://{a.host}:{a.port}  (jobs -> {JOBS_DIR})", flush=True)

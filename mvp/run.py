@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from audio import tts  # noqa: E402
-from pipeline import (knowledge, llm_client, mux, requirement_llm, review, scoring_llm,  # noqa: E402
+from pipeline import (knowledge, kp_draft, llm_client, mux, requirement_llm, review, scoring_llm,  # noqa: E402
                       selfcheck, storyboard, storyboard_llm, visual_review_llm)
 from pipeline import ir
 from pipeline.ir import MAX_SHOT_IDLE, SHOT_HEAD, SHOT_TAIL, Brief  # noqa: E402
@@ -131,13 +131,21 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     if errs:
         raise ValueError("Brief 校验失败：" + "；".join(errs))
 
-    # A1/A2 需求分析 + 资料调用（命中不了就终止，防幻觉闸门）
+    # A1/A2 需求分析 + 资料调用：库内命中优先，库里没有的知识点由 K0 起草一条无出处的草稿条目
+    # （落进 pipeline/data/kp_auto/ 后，下游每一步读的都是同一份文件，单一真源不变）。
     step = time.time()
     if llm_client.enabled("A1"):
         a1 = requirement_llm.normalize(brief.subject, brief.grade, brief.topic, brief.target_seconds)
         brief.topic = a1["topic"]
         log["requirement"] = {**a1, "model": llm_client.model_for("A1")}
-    kp = knowledge.load(brief.subject, brief.topic, brief.grade)
+    try:
+        kp = knowledge.load(brief.subject, brief.topic, brief.grade)
+    except knowledge.KnowledgeNotFound:
+        kp = kp_draft.draft(brief.subject, brief.grade, brief.topic,
+                            brief.target_seconds, brief.raw_text)
+        log["kp_draft"] = {"id": kp["id"], "topic": kp["topic"],
+                           "model": llm_client.model_for("K0"),
+                           "note": "知识点库里没有这一条，内容由模型起草，未核对教材出处"}
     log["steps"]["retrieve"] = round(time.time() - step, 2)
 
     # A3 分镜（先按文本长度估时长）
@@ -319,6 +327,7 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
         "mb_per_min": round(size_mb / (total / 60), 1),
         "subtitles": n_subs,
         "knowledge_id": kp["id"],
+        "kp_origin": kp.get("origin") or "library",   # 画廊/详情页据此如实标「模型起草、未核对出处」
         "refs": kp["refs"],
         # A3 的预算账随片留档：画廊与 sidecar 里要能回答"这条片子是按自然语速讲的还是提速讲的"。
         "budget": storyboard.budget_of(plan),

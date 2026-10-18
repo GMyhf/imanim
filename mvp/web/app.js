@@ -26,7 +26,7 @@ const state = {
 const DEFAULTS = { subject: "physics", grade: "H1", seconds: "120", style: "clean", quality: "draft" };
 
 /* 错误人话映射（SubTask 63）：结论用人话说，原始错误文本保留在 details 折叠里，不吞信息。 */
-const NET_MSG = "无法连接到本地渲染服务：服务可能没有启动，或中途退出了。请确认 server.py 正在运行后刷新页面。";
+const NET_MSG = "无法连接到渲染服务：服务可能没有启动，或中途退出了。请确认服务正在运行后刷新页面。";
 const DISABLED_MSG = "当前部署已关闭在线生成（409）：这里只浏览已生成的作品墙、分镜脚本与技术文档。本地跑一条命令即可自行出片，见 README。";
 const JOB_FAIL_MSG = "生成失败：作业在执行中出错，未产出成片。原始错误见下方详情。";
 const GATE_FAIL_MSG = "生成被静态监督闸门打回：分镜未通过检查，未烧录半成品。可在下方修改分镜后重出片。";
@@ -53,6 +53,16 @@ async function loadTopics() {
   if (!r.ok) return showError($("#briefError"), d.error || "知识点库读取失败");
   state.meta = d;
   state.topics = d.topics || [];
+  /* 状态诚实：服务端 generate_disabled=1（创空间默认）时，表单里一眼说明「只展映、生成未开放」。
+   * 文案用服务端 GENERATE_DISABLED_MSG 原文，前端不特判、不伪造进度。 */
+  const dis = !!d.generate_disabled;
+  const note = $("#genNotice");
+  if (dis) {
+    note.textContent = d.generate_disabled_msg || DISABLED_MSG;
+    note.hidden = false;
+  } else {
+    note.hidden = true;
+  }
   const pref = loadPrefs();
   fill($("#fSubject"), d.subjects, pref.subject || DEFAULTS.subject);
   fill($("#fGrade"), d.grades, pref.grade || DEFAULTS.grade);
@@ -70,29 +80,14 @@ function fill(select, list, def) {
 }
 const opt = (value, label) => Object.assign(el("option"), { value, textContent: label });
 
-/* 知识点下拉只列「学科 + 学段」都匹配的库内条目——用户不能自由填，这是防幻觉闸门 */
+/* 知识点建议：把「学科 + 学段」都匹配的库内条目填进 datalist，仅作建议、不作限制；
+ * 库外知识点由服务端走模型生成分镜草稿，生成后可逐镜编辑。 */
 function refreshTopicOptions() {
   const subject = $("#fSubject").value, grade = $("#fGrade").value;
   const list = state.topics.filter((t) => t.subject === subject && t.grade === grade);
-  const sel = $("#fTopic");
-  sel.textContent = "";
-  if (!list.length) {
-    sel.append(opt("", "该学段下暂无入库知识点"));
-    sel.disabled = true;
-    const grades = [...new Set(state.topics.filter((t) => t.subject === subject).map((t) => t.grade))];
-    const labels = grades.map((g) => (state.meta.grades.find((x) => x.value === g) || {}).label || g);
-    const names = { math: "数学", physics: "物理", chemistry: "化学" };
-    $("#topicNote").textContent = (names[subject] || subject)
-      + "：已入库学段 " + (labels.join("、") || "无");
-    return;
-  }
-  sel.disabled = false;
-  sel.append(...list.map((t) => opt(t.topic, t.topic)));
-  const first = list[0];
-  $("#topicNote").textContent =
-    `${first.id} · ${first.shots} 段脚本` +
-    (first.refs && first.refs.length ? ` · 出处：${first.refs[0]}` : "") +
-    (first.has_prior ? " · 有先修说明" : "");
+  const dl = $("#topicSuggest");
+  dl.textContent = "";
+  dl.append(...list.map((t) => opt(t.topic, t.topic)));
 }
 
 /* ------------------------------------------------------------------ 生成 + 轮询 */
@@ -100,11 +95,11 @@ function briefFromForm() {
   return {
     subject: $("#fSubject").value,
     grade: $("#fGrade").value,
-    topic: $("#fTopic").value,
+    topic: $("#fTopic").value.trim(),
     target_seconds: parseInt($("#fSeconds").value, 10),
     style: $("#fStyle").value,
     quality: $("#fQuality").value,
-    narration: $("#fNarration").checked,
+    narration: true,
     prior_knowledge: $("#fPrior").checked,
     raw_text: $("#fRaw").value.trim(),
   };
@@ -113,7 +108,7 @@ function briefFromForm() {
 async function generate() {
   if (state.busy) return;
   const b = briefFromForm();
-  if (!b.topic) return showError($("#briefError"), "请先选择知识点");
+  if (!b.topic) return showError($("#briefError"), "请先写一个知识点");
   hideError($("#briefError"));
   const res = await post("/api/generate", b);
   if (!res) return;
@@ -395,6 +390,10 @@ async function loadGallery() {
     $("#wallHint").textContent = "作品墙加载失败：无法连接本地服务，请确认 server.py 正在运行后刷新。";
     return;
   }
+  if (!r.ok || d.error) {  // 接口 5xx/4xx 时不能冒充「新作品制作中」的空态
+    $("#wallHint").textContent = "作品墙加载失败：" + (d && d.error ? d.error : "HTTP " + r.status);
+    return;
+  }
   const items = d.items || [];
   const tabs = $("#wallTabs");
   if (tabs.children.length === 1) {
@@ -424,7 +423,7 @@ function drawWall(items) {
   resetWallLazy();
   $("#wallHint").textContent = list.length
     ? `共 ${list.length} 条 · 卡片元数据来自每个 run 的 sidecar.json / brief.json`
-    : "暂无成片。";
+    : "新作品制作中：旧稿正在批量更换，更换完成的合格作品才会出现在这里。";
   for (const it of list) {
     const card = el("div", "wcard");
     if (it.video) {
@@ -550,7 +549,7 @@ $("#btnReset").addEventListener("click", () => {
   $("#fSeconds").value = DEFAULTS.seconds;
   $("#fStyle").value = DEFAULTS.style;
   $("#fQuality").value = DEFAULTS.quality;
-  $("#fNarration").checked = true;
+  $("#fTopic").value = "";
   $("#fPrior").checked = true;
   $("#fRaw").value = "";
   try { localStorage.removeItem(PREF_KEY); } catch (e) { /* 忽略 */ }

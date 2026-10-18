@@ -17,7 +17,6 @@
       <span class="brand-sub">知识点 → 动态讲解视频</span>
     </div>
     <nav class="bar-right">
-      <span id="serverHint" class="hint">本地渲染 · 无排队 · 无账号</span>
     </nav>
   </div>
 </header>
@@ -26,8 +25,8 @@
 
   <section class="hero">
     <h1>把一个知识点讲清楚、讲完、讲到老师敢直接放进课件</h1>
-    <p class="lede">输入学段与知识点，拿到一支可改分镜的讲解视频。知识点只能从带教材出处的库里选，
-      模型不许自己编。</p>
+    <p class="lede">输入任意知识点，拿到一支可改分镜的讲解视频。库内知识点带教材出处；
+      库外知识点的分镜是模型生成、可人工修订的草稿。</p>
   </section>
 
   <!-- 生成卡片：结构化输入（Spec_Product 第 2 节），这是与竞品「一个文本框」的核心差异
@@ -53,8 +52,10 @@
         </label>
         <label class="field span-2">
           <span class="flabel">知识点 <b>*</b></span>
-          <select id="fTopic"></select>
-          <span class="note" id="topicNote">知识点由本地知识库枚举，未命中的请求会被闸门拒绝。</span>
+          <input type="text" id="fTopic" maxlength="200" autocomplete="off" list="topicSuggest"
+                 placeholder="写下你想看的知识点，例：用面积法理解定积分">
+          <datalist id="topicSuggest"></datalist>
+          <span class="note" id="topicNote">库里命中的知识点直接使用库内容（带教材出处）；库外的知识点会由模型先出一份分镜草稿，生成后可以在下面逐镜编辑。</span>
         </label>
       </div>
     </div>
@@ -88,25 +89,23 @@
         <span class="qnum">3</span>
         <span class="qtitle">用途？</span>
         <span class="qhint" tabindex="0" role="note" aria-label="提示：用途" aria-describedby="qhintTip3"
-              data-tip="当前仅影响配音与先修说明；可视化为主/细致讲解两档正在设计中（SubTask 52），尚未接入生成逻辑。">?</span>
-        <span class="sr-only" id="qhintTip3">当前仅影响配音与先修说明；可视化为主/细致讲解两档正在设计中（SubTask 52），尚未接入生成逻辑。</span>
+              data-tip="勾选后会先讲前置知识；字幕出于可达性要求不可关闭。">?</span>
+        <span class="sr-only" id="qhintTip3">勾选后会先讲前置知识；字幕出于可达性要求不可关闭。</span>
       </div>
       <div class="field-grid two">
         <div class="field checks">
-          <label class="check"><input type="checkbox" id="fNarration" checked> 配音（Windows 离线 TTS）</label>
           <label class="check"><input type="checkbox" id="fPrior" checked> 自动补先修说明</label>
           <label class="check readonly"><input type="checkbox" id="fSubs" checked disabled> 字幕（可达性要求，不可关）</label>
         </div>
-        <p class="note span-2">「可视化为主 / 需要细致有声讲解」两档用途即将上线，接入后会影响镜头版式配比与口播详略（当前阶段：设计中，不影响本次生成）。</p>
       </div>
     </div>
 
     <label class="field" for="fRaw">
       <span class="flabel">补充要求（选填）</span>
       <textarea id="fRaw" placeholder="例：结尾多留一行易错提醒；把例题换成斜面场景。只影响有对应开关的环节，不会覆盖知识点库内容。"></textarea>
-      <span class="note">对应 Brief.raw_text；分镜正文仍由知识点库的 sequence 决定，改正文请去下面的分镜编辑器。</span>
     </label>
 
+    <p class="note" id="genNotice" role="status" aria-live="polite" hidden></p>
     <div class="btn-row">
       <button type="button" class="btn ghost" id="btnClear">清空</button>
       <button type="button" class="btn ghost" id="btnReset">恢复默认</button>
@@ -169,10 +168,11 @@
     <button type="button" class="btn ghost foot-fb" id="btnFeedback">问题反馈</button>
   </footer>
 
-  <!-- 问题反馈：本地演示无账号，只落盘本机 feedback/ 目录（不发任何第三方服务） -->
+  <!-- 问题反馈：提交到本站服务端（保存在本站，不发任何第三方），无需账号 -->
   <section class="card hidden" id="feedbackCard">
     <h2>问题反馈</h2>
-    <p class="hint">内容错误、画面问题、功能建议都可以写。反馈只保存在本机 <code>feedback/</code> 目录，不联网、不需要账号。</p>
+    <p class="hint">内容错误、画面问题、功能建议都可以写。反馈会提交给澄象开发团队（保存在本站的服务端，不发给任何第三方），无需账号；姓名 / 所属单位 / 联系方式选填、仅用于回复，不会公开显示。</p>
+    <p class="hint">当前页面处于测试阶段，内容仍在批量更换。</p>
     <div class="field-grid two">
       <label class="field">
         <span class="flabel">类型</span>
@@ -184,8 +184,8 @@
         </select>
       </label>
       <label class="field">
-        <span class="flabel">联系方式（选填）</span>
-        <input type="text" id="fFbContact" maxlength="200" placeholder="邮箱 / 微信，仅用于回复">
+        <span class="flabel">姓名 / 所属单位 / 联系方式（选填）</span>
+        <input type="text" id="fFbContact" maxlength="200" placeholder="例：张三 / ××中学 / 邮箱或微信，仅用于回复">
       </label>
       <label class="field span-2">
         <span class="flabel">反馈内容 <b>*</b></span>

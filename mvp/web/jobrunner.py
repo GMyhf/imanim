@@ -31,12 +31,13 @@ sys.path.insert(0, str(MVP_DIR))
 
 import run as cli  # noqa: E402  mvp/run.py：复用 QUALITY / MANIM / _run / generate
 from audio import tts  # noqa: E402
-from pipeline import knowledge, mux, review, selfcheck, storyboard  # noqa: E402
+from pipeline import knowledge, kp_draft, mux, review, selfcheck, storyboard  # noqa: E402
 from pipeline.ir import SHOT_HEAD, SHOT_TAIL, Brief, Plan  # noqa: E402
 
 # 阶段中文名（对应 Spec_Workflow 的 A2~A7，前端按这个顺序画进度条）
 STAGES = [
     ("retrieve", "检索知识点库"),
+    ("draft", "起草知识点（库外）"),
     ("storyboard", "生成分镜"),
     ("narration", "配音合成"),
     ("review", "静态监督检查"),
@@ -125,6 +126,7 @@ def instrument(pg: Progress) -> None:
         setattr(owner, name, inner)
 
     wrap(knowledge, "load", "retrieve")
+    wrap(kp_draft, "draft", "draft")
     wrap(storyboard, "build", "storyboard")
     wrap(tts, "synth", "narration")
     wrap(review, "check", "review")
@@ -161,12 +163,9 @@ def do_generate(brief_data: dict, out_dir: Path, quality: str, pg: Progress) -> 
     errs = brief.validate()
     if errs:
         raise ValueError("Brief 校验失败：" + "；".join(errs))
-    # 防幻觉闸门的入口检查：知识点没命中库就直接失败并回候选（Spec 第 2 节）
-    try:
-        knowledge.load(brief.subject, brief.topic, brief.grade)
-    except knowledge.KnowledgeNotFound as e:
-        raise KeyError(f"资料库中没有 {brief.subject}/{brief.topic}") from e
-
+    # 知识点口径（2026-10-18 改）：库里命中就用库内容；库里没有不再当场拒绝，
+    # 由 run.generate 走 K0 起草一条 origin=model_draft、refs 为空的条目再往下走（见 pipeline/kp_draft.py）。
+    # 起草自身失败（未开 K0/模型自检不过）会让任务带着人话错误结束，不会出半成品。
     instrument(pg)
     log = cli.generate(brief, out_dir, quality=quality)
     return {"ok": True, "mode": "generate", "names": ascii_names(out_dir, log), "sidecar": log}

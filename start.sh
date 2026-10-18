@@ -3,12 +3,9 @@
 set -euo pipefail
 cd /app
 
-# 配音已换网关 HTTP（audio/tts.py，Linux 可用），但字体替代+字距重测、mux 烧录字体写死
-# 两条阻断项未清（README「移植阻断项」② ③ ④）→ 默认只出画廊。
-# 想开生成入口：先完成 README push 检查单的两个前置步骤（字距重测、QX_LLM_API_KEY 经
-# 创空间环境变量注入——密钥不进镜像），再把 MVP_ALLOW_GENERATE 置 1。
-if [ "${MVP_ALLOW_GENERATE:-0}" != "1" ]; then
-  export MVP_GENERATE_DISABLED=1
-fi
+# 在线生成默认开放（用户 2026-10-18 决定）。密钥 QX_LLM_API_KEY 必须经创空间环境变量注入，
+# 不进镜像；没配密钥时生成会如实报错。想临时关闭：环境变量 MVP_GENERATE_DISABLED=1。
+# 库外知识点由 K0 起草，需 QX_LLM_K0=1。
+export QX_LLM_K0="${QX_LLM_K0:-1}"
 
 exec python mvp/web/server.py --host 0.0.0.0 --port "${PORT:-7860}"
