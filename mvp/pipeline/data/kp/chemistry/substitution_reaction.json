@@ -1,0 +1,352 @@
+{
+  "id": "kp.chemistry.substitution_reaction",
+  "subject": "chemistry",
+  "grade": "H2",
+  "topic": "取代反应",
+  "aliases": [
+    "substitution",
+    "substitution reaction",
+    "亲核取代",
+    "亲核取代反应",
+    "SN1",
+    "SN2"
+  ],
+  "figure_refs": [],
+  "refs": [
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第7章 Reactions §7.5 Nucleophilic substitution（印刷 p.107-108；PDF p.119-120）：亲核取代定义——亲核体把电子给进 σ* 分子轨道、σ 键断裂、一个原子或基团从分子上断开离开，与加成反应相对；通式 Nu^- + CH3Cl → CH3Nu + Cl^-；主实例 HO^- + CH3Br → CH3OH + Br^-（「hydroxide takes the place of the bromide ion」）。页码为印刷页码；PDF 页序 = 印刷页码 + 12。"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第7章 §7.5（印刷 p.109-110；PDF p.121-122）：背面进攻（须从溴的正对面进攻碳，Fig.7.24、7.25）；C–O 新 σ 键形成与 C–Br 旧 σ 键断裂同时进行，溴离子带负电荷离开；过渡态 [HO--C--Br]（Fig.7.26，不可分离）；碳中心翻转（turned inside-out）；放射性碘离子 + 2-碘辛烷实验（Fig.7.27、7.28）：每发生一次取代，分子就翻转一次。"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第11章 Substitution and elimination reactions §11.1（印刷 p.172-173；PDF p.184-185）：SN1 两步机理——(CH3)3CBr 先断 C–Br 生成溴离子与碳正离子 (CH3)3C+（决速步，rate = k[(CH3)3CBr]，一级），碳正离子再与亲核体快速结合（Fig.11.1、11.2、11.3 能量剖面，第二个过渡态低于第一个）；SN2 一步机理——CH3Br + Nu^- → CH3Nu + Br^-，rate = k'[CH3Br][Nu^-]（二级）；SN2 命名：2 指决速步涉及两个物种（双分子）。"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第11章 §11.1（印刷 p.174；PDF p.186）：SN1 命名——1 指决速步只涉及一个物种（单分子、一级）；叔丁基溴的三个甲基严重阻碍亲核体从背面接近（Fig.11.4），故不走 SN2；CH3+ 能量太高、难以生成，而 (CH3)3C+ 被甲基稳定得多，故溴甲烷不走 SN1。"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第11章 §11.4 前后（印刷 p.183；PDF p.195）：碱与亲核体的对比——碱（也是亲核进攻）专攻 H–X 键而非 C–X 键；Brønsted–Lowry 酸碱质子理论与 Lewis 定义（Lewis 碱是好的电子给体）。"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第12章 The effects of the solvent（印刷 p.189；PDF p.201）：叔丁基氯先形成碳正离子（决速步），随后与亲核体结合得取代产物、与碱作用得消除产物异丁烯（Fig.12.1，一级）；298 K 不同溶剂中半衰期：水 24 秒、乙醇 94 天、丙酮 169 年、苯 30000 年、戊烷 2.2 亿年；CH3Br + Cl^- 按 SN2 进行，溶剂由水换为丙酮速率增至约 10^4 倍。"
+    }
+  ],
+  "prior": [
+    "HOMO 与 LUMO 的辨认、亲核进攻 π* 的加成实例（Keeler、Wothers 第7章 §7.1-§7.4，印刷 p.97-107）",
+    "速率方程、反应级数与决速步（Keeler、Wothers 第9章 §9.1、§9.6，印刷 p.131、141）",
+    "碳正离子的稳定性：σ 共轭与相邻孤对/π 体系的稳定作用（Keeler、Wothers 第11章 §11.2，印刷 p.174-177）"
+  ],
+  "forbidden": [
+    "亲核取代只是亲核体加成到分子上、没有原子或基团离开（出处：§7.5 明确取代与加成相对，印刷 p.107）",
+    "SN1 反应的速率也依赖亲核体浓度、是二级的（出处：SN1 速率 = k[(CH3)3CBr]，与亲核体浓度无关，印刷 p.172-173）",
+    "溴甲烷容易生成甲基正离子 CH3+ 并按 SN1 取代（出处：CH3+ 能量太高、难以生成，印刷 p.174）",
+    "叔丁基溴容易从背面被亲核进攻、按 SN2 进行（出处：三个甲基严重阻碍背面接近，印刷 p.174）",
+    "碳正离子一旦生成只会得到取代产物（出处：与亲核体结合得取代产物，与碱作用得消除产物异丁烯，Fig.12.1，印刷 p.189）",
+    "SN2 取代后碳中心的空间取向保持不变（出处：每发生一次取代，分子就翻转一次，印刷 p.110）"
+  ],
+  "must_say": [
+    "亲核体把电子给进 σ* 分子轨道，σ 键断裂，一个原子或基团从分子上离开；这类反应叫亲核取代，与加成反应相对",
+    "氢氧根离子取代溴甲烷中的溴离子：HO^- + CH3Br → CH3OH + Br^-",
+    "SN2 中亲核体从离去基团正背面进攻碳，新键形成与旧 C–Br 键断裂同时进行，溴离子带着负电荷离开，碳中心发生翻转；速率 = k'[CH3Br][Nu^-]，二级",
+    "SN1 分两步：先断 C–Br 键生成碳正离子（决速步），碳正离子再与亲核体快速结合；速率 = k[(CH3)3CBr]，一级、与亲核体浓度无关",
+    "叔丁基溴因三个甲基阻碍背面进攻而不走 SN2；溴甲烷因 CH3+ 能量太高难以生成而不走 SN1"
+  ],
+  "sequence": [
+    {
+      "title": "开场：谁的位子被占了",
+      "seconds": 13,
+      "narration": "氢氧根离子遇上溴甲烷，会把溴的位子占掉：氢氧根移进来、和碳成键，溴离子带着负电荷移出去。取代反应，被取代的基团是真的被换下、移走的。",
+      "emphasis": "取代 = 原子/基团的真实代替与移动",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "取代反应",
+            "sub": "一个基团真的被另一个换下、移走"
+          }
+        },
+        {
+          "kind": "particle_box",
+          "props": {
+            "state": "both",
+            "n": 6,
+            "before_label": "CH3Br + HO^-：氢氧根在 C–Br 键正背面待进入",
+            "after_label": "CH3OH + Br^-：氢氧根已移入成键，溴带负电荷已移出",
+            "label": "语义具象化：溴被真实换下并移出画面，氢氧根移入并与碳成键，是连续的代替与移动过程，不是整帧切换；方程式两侧原子用色标一一对应（C 灰、O 红、Br 棕、H 白），项的移动体现反应物到产物的内在联系"
+          }
+        }
+      ]
+    },
+    {
+      "title": "什么是亲核取代",
+      "seconds": 16,
+      "narration": "亲核体把电子给进 σ* 分子轨道，σ 键随之断裂，一个原子或基团从分子上离开。这类反应叫亲核取代，和加成反应相对。通式：Nu 负离子加 CH3Cl，生成 CH3Nu 加氯离子。",
+      "emphasis": "亲核体给电子进 σ* → σ 键断裂 → 原子/基团离开",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "heading": "定义的三个要点（§7.5）",
+            "lines": [
+              "亲核体把电子给进 σ* 分子轨道",
+              "σ 键断裂",
+              "一个原子或基团从分子上离开"
+            ]
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "Nu^- + CH3Cl → CH3Nu + Cl^-",
+            "note": "亲核取代通式：Nu^- 进来，Cl^- 出去"
+          }
+        },
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "取代",
+              "items": [
+                "亲核体给电子进 σ*",
+                "有原子或基团离开分子"
+              ]
+            },
+            "right": {
+              "h": "加成",
+              "items": [
+                "亲核体给电子进 π*",
+                "π 键断裂，没有基团被换下离开"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "主实例：氢氧根换下溴",
+      "seconds": 17,
+      "narration": "典型实例：氢氧根离子和溴甲烷反应。这是一个简单的取代反应——氢氧根取代了溴离子的位子：HO 负离子加 CH3Br，生成 CH3OH 加溴离子。溴甲烷的最低空轨道是 C–Br 的 σ*，氢氧根氧上的孤对电子就给进这里。",
+      "emphasis": "HO^- + CH3Br → CH3OH + Br^-：氢氧根取代溴离子的位子",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "HO^- + CH3Br → CH3OH + Br^-",
+            "note": "§7.5 主实例：LUMO = C–Br σ*，HOMO = 氢氧根氧上的孤对"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "氢氧根取代溴离子的位子 · 移入者与碳成键，被换下者带负电荷离开",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "背面进攻、同步断成、构型翻转（SN2）",
+      "seconds": 18,
+      "narration": "亲核体必须从溴的正对面进攻碳：新的碳氧键形成和旧的碳溴键断裂同时进行，溴离子带着负电荷离开，碳中心像雨伞被风吹翻一样发生翻转。放射性碘离子和 2-碘辛烷的实验表明：每发生一次取代，分子就翻转一次。这一步完成、速率正比于两个反应物浓度，是二级，叫 SN2。",
+      "emphasis": "背面进攻、新键形成与旧键断裂同时进行；每次取代伴随一次翻转；速率 = k'[CH3Br][Nu^-]",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "heading": "SN2 一步协同（Fig.7.24、7.26）",
+            "lines": [
+              "HO^- 从 C–Br 键正背面进攻碳",
+              "C–O 新 σ 键形成，与 C–Br 旧 σ 键断裂同时进行",
+              "Br^- 带着负电荷离开，碳中心翻转",
+              "过渡态 [HO--C--Br]：不可分离，只是途经的一种原子排布"
+            ]
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "放射性碘离子 + 2-碘辛烷实验：每发生一次取代，分子就翻转一次（Fig.7.27）",
+            "tone": "key"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "rate = k'[CH3Br][Nu^-]",
+            "note": "SN2：S=取代，N=亲核，2=决速步涉及两个物种（双分子、二级）"
+          }
+        }
+      ]
+    },
+    {
+      "title": "SN1：两步，先走再换",
+      "seconds": 16,
+      "narration": "叔丁基溴完全不同：第一步，碳溴键先断裂，生成溴离子和碳正离子，这步慢，是决速步；第二步，碳正离子再和亲核体快速结合。速率只取决于叔丁基溴的浓度，是一级，叫 SN1。总反应：(CH3)3CBr 加 Nu 负离子，生成 (CH3)3CNu 加溴离子。",
+      "emphasis": "SN1 两步：先离解成碳正离子（决速步），再快速结合；速率 = k[(CH3)3CBr]",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "heading": "SN1 两步机理（Fig.11.1、11.2）",
+            "lines": [
+              "第一步（慢，决速）：(CH3)3CBr → (CH3)3C^+ + Br^-",
+              "第二步（快）：(CH3)3C^+ + Nu^- → (CH3)3CNu",
+              "总反应：(CH3)3CBr + Nu^- → (CH3)3CNu + Br^-"
+            ]
+          }
+        },
+        {
+          "kind": "axis_graph",
+          "props": {
+            "curves": [
+              {
+                "points": [[0, 1], [2, 5], [4, 3], [6, 4], [8, 1.5]],
+                "label": "SN1 能量剖面（Fig.11.3）"
+              }
+            ],
+            "x_label": "反应坐标",
+            "y_label": "能量",
+            "marks": [
+              {"xy": [2, 5], "label": "过渡态 1"},
+              {"xy": [4, 3], "label": "碳正离子中间体"},
+              {"xy": [6, 4], "label": "过渡态 2（低于第一个）"}
+            ]
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "rate = k[(CH3)3CBr]",
+            "note": "SN1：1=决速步只涉及一个物种（单分子、一级），与亲核体浓度无关"
+          }
+        }
+      ]
+    },
+    {
+      "title": "为什么走的道路不同",
+      "seconds": 14,
+      "narration": "为什么叔丁基溴不走 SN2？三个甲基把背面进攻的路挡死了，亲核体无法从离去基团正背后接近。为什么溴甲烷不走 SN1？甲基正离子能量太高、难以生成；而叔丁基正离子被三个甲基稳定得多。",
+      "emphasis": "位阻挡住 SN2 背面进攻；CH3^+ 能量太高，(CH3)3C^+ 稳定得多",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "叔丁基溴为何不走 SN2",
+              "items": [
+                "三个甲基严重阻碍亲核体从背面接近（Fig.11.4）"
+              ]
+            },
+            "right": {
+              "h": "溴甲烷为何不走 SN1",
+              "items": [
+                "CH3^+ 能量太高，难以生成",
+                "(CH3)3C^+ 被甲基稳定得多"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "SN2 要求背面进攻：空间位阻是硬约束",
+            "tone": "warn"
+          }
+        }
+      ]
+    },
+    {
+      "title": "边界：取代 vs 消除，溶剂的影响",
+      "seconds": 17,
+      "narration": "取代有个相邻概念叫消除：碱进攻的是 H–X 键、把氢离子拉下来，而亲核体进攻 C–X 键。同一个碳正离子，遇到亲核体得取代产物，遇到碱就失去质子、得消除产物异丁烯。溶剂还剧烈改变速率：叔丁基氯在水里半衰期只有 24 秒，在戊烷里要两亿多年。",
+      "emphasis": "碱攻 H–X 得消除，亲核体攻 C–X 得取代；溶剂剧烈影响速率",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "取代",
+              "items": [
+                "亲核体进攻 C–X 键",
+                "X 被换下离开，Nu 成键接入"
+              ]
+            },
+            "right": {
+              "h": "消除",
+              "items": [
+                "碱进攻 H–X 键、拉下 H^+",
+                "碳正离子失去质子得异丁烯（Fig.12.1）"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "table",
+          "props": {
+            "headers": ["溶剂（叔丁基氯，298 K，一级）", "半衰期"],
+            "rows": [
+              ["水", "24 秒"],
+              ["乙醇", "94 天"],
+              ["丙酮", "169 年"],
+              ["苯", "30000 年"],
+              ["戊烷", "2.2 亿年"]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "收束：一张图记住取代",
+      "seconds": 15,
+      "narration": "收束成一句话：取代反应里，亲核体把电子给进 σ*，基团被真实地换下、移走。溴甲烷一步 SN2、背面进攻、伴随翻转；叔丁基溴两步 SN1、经过碳正离子。跟消除谁占上风，看进攻者是亲核体还是碱，也看溶剂。",
+      "emphasis": "SN2 一步翻转 / SN1 两步碳正离子；取代与消除看进攻者与溶剂",
+      "visuals": [
+        {
+          "kind": "mind_map",
+          "props": {
+            "root": "取代反应",
+            "branches": [
+              {
+                "h": "定义",
+                "children": ["亲核体给电子进 σ*", "σ 键断裂，基团离开"]
+              },
+              {
+                "h": "主实例",
+                "children": ["HO^- + CH3Br → CH3OH + Br^-"]
+              },
+              {
+                "h": "SN2",
+                "children": ["一步、二级", "背面进攻、构型翻转"]
+              },
+              {
+                "h": "SN1",
+                "children": ["两步、一级", "碳正离子中间体（决速步生成）"]
+              },
+              {
+                "h": "边界",
+                "children": ["消除：碱攻 H–X", "溶剂剧烈影响速率"]
+              }
+            ]
+          }
+        },
+        {
+          "kind": "summary",
+          "props": {
+            "points": [
+              "取代 = 基团的真实代替与移动：移入者成键，被换下者带电荷离开",
+              "SN2：一步协同，rate = k'[CH3Br][Nu^-]，每次取代伴随一次翻转",
+              "SN1：先离解成碳正离子（决速），再快速结合，rate = k[(CH3)3CBr]"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

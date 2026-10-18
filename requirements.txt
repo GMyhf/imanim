@@ -1,0 +1,7 @@
+# 澄象 MVP 的第三方依赖只有 manim 一个（其余全在标准库：http.server / subprocess / wave / json）。
+# manim 会带进 numpy、manimpango、pycairo、decorator、rich、click 等——Linux 上 pycairo/manimpango
+# 没有预编译轮子，需要镜像里先装 libcairo2-dev / libpango1.0-dev / gcc（见 Dockerfile）。
+#
+# 版本按本机实测锁定：本机跑的是 ManimCE 0.22.0。换版本要重跑 .local/typo2/probe.py 与
+# 字号/宽度那一组实测常数（scene.py 的 cap_width 标定、review.LEGIBLE 都依赖具体排版度量）。
+manim==0.22.0

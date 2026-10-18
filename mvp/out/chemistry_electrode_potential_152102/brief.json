@@ -1,0 +1,14 @@
+{
+  "subject": "chemistry",
+  "grade": "H2",
+  "topic": "电极电势的微观原理",
+  "target_seconds": 120,
+  "style": "clean",
+  "narration": true,
+  "prior_knowledge": true,
+  "resolution": "1920x1080",
+  "fps": 30,
+  "subtitles": true,
+  "language": "zh",
+  "raw_text": ""
+}

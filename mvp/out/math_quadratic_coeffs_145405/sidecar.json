@@ -1,0 +1,109 @@
+{
+  "steps": {
+    "retrieve": 0.01,
+    "storyboard": 0.0,
+    "narration": 8.19,
+    "render": 134.7,
+    "mux": 7.53,
+    "selfcheck": 427.51
+  },
+  "tts": {
+    "rate": 0,
+    "natural_seconds": 114.97,
+    "actual_seconds": 114.97,
+    "chars": 415,
+    "natural_chars_per_second": 3.61,
+    "chars_per_second": 3.61
+  },
+  "duration": {
+    "actual": 114.97,
+    "target": 120,
+    "deviation": 0.042
+  },
+  "rendered": {
+    "seconds": 114.96,
+    "plan": 114.97,
+    "drift": 0.0001
+  },
+  "audio_align": [
+    {
+      "shot_start": 0.0,
+      "expect": 0.45,
+      "actual": 0.57,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 17.37,
+      "expect": 17.82,
+      "actual": 17.94,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 36.3,
+      "expect": 36.75,
+      "actual": 36.9,
+      "delta": 0.15
+    },
+    {
+      "shot_start": 54.94,
+      "expect": 55.39,
+      "actual": 55.52,
+      "delta": 0.13
+    },
+    {
+      "shot_start": 70.04,
+      "expect": 70.49,
+      "actual": 70.63,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 90.52,
+      "expect": 90.97,
+      "actual": 91.13,
+      "delta": 0.16
+    },
+    {
+      "shot_start": 101.94,
+      "expect": 102.39,
+      "actual": 102.5,
+      "delta": 0.11
+    }
+  ],
+  "burn": {
+    "attempted": false,
+    "ok": false,
+    "detail": "字幕已由渲染层排在画面内，未做烧录（要外挂/烧录版加 --burn）"
+  },
+  "boundary_scan": {
+    "unexpected": false,
+    "any_blank": false
+  },
+  "artifact": "math-G9-二次函数a、b、c对图像的影响-114s-ece8edbd.mp4",
+  "size_mb": 6.5,
+  "cleaned_mb": 20.4,
+  "mb_per_min": 3.4,
+  "subtitles": 38,
+  "knowledge_id": "kp.math.quadratic_coeffs",
+  "refs": [
+    {
+      "source": "人教版数学九年级上册",
+      "locator": "第二十二章 二次函数（22.1 二次函数的图象和性质）"
+    },
+    {
+      "source": "义务教育数学课程标准（2022年版）",
+      "locator": "第四学段内容要求：知道二次函数，能画出其图像并探索性质"
+    }
+  ],
+  "budget": {
+    "kind": "storyboard_budget",
+    "source": "A3 分镜预算",
+    "locator": "target=120s",
+    "narration_chars": 436,
+    "natural_seconds": 117.62,
+    "budgeted_seconds": 120.0,
+    "fits_natural": true,
+    "min_seconds_for_natural": 118
+  },
+  "shots": 7,
+  "wall_seconds": 578.3
+}

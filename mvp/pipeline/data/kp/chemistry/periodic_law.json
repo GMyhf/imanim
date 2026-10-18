@@ -1,0 +1,412 @@
+{
+  "id": "kp.chemistry.periodic_law",
+  "subject": "chemistry",
+  "grade": "H2",
+  "topic": "元素周期律",
+  "aliases": [
+    "periodic law",
+    "周期律",
+    "元素性质的周期性",
+    "periodic trends",
+    "原子半径 电离能 电负性"
+  ],
+  "refs": [
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.7 电子结构与周期表（印刷 p.49 / PDF p.191）：1869 年 Meyer 与 Mendeleev 独立发现、周期律命名；类硅预言 72、Winkler 1886 年发现锗 72.59；Ar 与 Ca 反常；Moseley 与原子序数；同主族价层电子组态相似。PDF 页序 = 印刷页码 + 142。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.7（印刷 p.50 / PDF p.192）：周期数 = 价层主量子数；第三周期 3s、3p 填入 8 个电子；图 2.19 有效核电荷变化。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.8 原子半径（印刷 p.51 / PDF p.193）：半径定义；Cu 256 pm → 128 pm；Cl2 198 pm → 99 pm；图 2.21 锯齿；一般同周期减小、同族增大。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.8（印刷 p.52 / PDF p.194）：半径趋势成因（主量子数壳层、有效核电荷、屏蔽不佳）与斜对角趋势。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.10 电离能（印刷 p.54 / PDF p.196）：I1、I2 定义；Cu I1 746 kJ/mol、I2 1958 kJ/mol；图 2.24 第一电离能数据；通常同族减小、一般同周期增大。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.10（印刷 p.55 / PDF p.197）：除少数例外同周期上升；O 低于 N 因同轨道电子成对斥力；第二电离能总是高于第一电离能。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第2章 2.10（印刷 p.56 / PDF p.198）：第一电离能最高靠近 He、最低靠近 Cs；金属集中在左下。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第3章 3.12 电负性（印刷 p.91 / PDF p.233）：Pauling 1932 年；Mulliken χ = (I + Ea)/2；N、O、Br、Cl、F 电负性最高。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第3章 3.12（印刷 p.92 / PDF p.234）：C 2.55、O 3.44、Mg 1.31；差约 2 视为离子键，小于约 1.5 共价描述合理。"
+    },
+    {
+      "source": "Chambers、Holliday《Modern Inorganic Chemistry: An Intermediate Text》（Butterworths）",
+      "locator": "第2章 Periodic trends 小节（印刷 p.34 / PDF p.39）：表 2.6 第 2、3 周期原子序数（第三周期 11–18）；许多原子获得电子时放出能量。PDF 页序 = 印刷页码 + 5。"
+    }
+  ],
+  "prior": [
+    "核外电子排布与构造原理（Atkins 第2章 2.7，PDF p.191）",
+    "有效核电荷与屏蔽（Atkins 第2章 2.7，PDF p.192，图 2.19）",
+    "价电子与族序数的对应（Atkins 第2章 2.7，PDF p.191-192）"
+  ],
+  "forbidden": [
+    "电离能越大，原子半径越大",
+    "同周期自左向右核电荷数增大，原子半径随之增大",
+    "第一电离能同周期自左向右严格单调上升，没有例外",
+    "第二电离能可以低于第一电离能",
+    "现代周期表仍按相对原子质量递增排列"
+  ],
+  "must_say": [
+    "元素按原子质量递增排列，会分成性质相似的家庭",
+    "按原子序数排列，元素落入均匀重复的图案",
+    "同主族元素价层电子组态相似，所以性质相似",
+    "原子半径一般同周期自左向右减小，同族自上而下增大",
+    "第一电离能一般同周期自左向右增大，除少数例外",
+    "第二电离能总是高于第一电离能",
+    "电负性是原子在分子中拉引成键电子的能力"
+  ],
+  "figure_refs": [],
+  "sequence": [
+    {
+      "title": "一八六九：排序排出的规律",
+      "seconds": 15,
+      "narration": "一八六九年，迈尔和门捷列夫各自独立发现：元素按原子质量递增排列，会分成性质相似的家庭。门捷列夫把这个观察叫作周期律。",
+      "emphasis": "周期律：元素按序排列，分成性质相似的家庭",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "元素周期律",
+            "sub": "性质周期性变化与电子排布"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "1869 年 Meyer 与 Mendeleev 独立发现：按原子质量递增排列 → 元素分成性质相似的家庭 → 周期律",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "从原子质量到原子序数",
+      "seconds": 15,
+      "narration": "门捷列夫预言的类硅，一八八六年被发现，就是锗。但氩和钙质量同为四十，性质却迥异。莫塞莱定出原子序数后，按原子序数排列，元素落入均匀重复的图案。",
+      "emphasis": "按原子序数（不是原子质量）排列，才得到均匀重复的图案",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "heading": "排序依据的修正",
+            "lines": [
+              "Mendeleev 为类硅留空位：预言相对原子质量 72（H = 1）",
+              "1886 年 Winkler 发现锗：相对原子质量 72.59",
+              "反常：Ar 与 Ca 相对原子质量同为 40；Ar 惰性气体，Ca 活泼金属",
+              "Moseley 由 X 射线谱定出原子序数 → 按原子序数排列，图案均匀重复"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "周期背后：电子排布",
+      "seconds": 16,
+      "narration": "周期表的结构对应原子的电子结构。第三周期从钠到氩，3s 和 3p 轨道再填入八个电子，价电子数从一数到八。同主族元素价层电子组态相似，所以性质相似。",
+      "emphasis": "同主族价层电子组态相似 → 性质相似",
+      "visuals": [
+        {
+          "kind": "stat_chart",
+          "props": {
+            "type": "bar",
+            "data": [
+              {
+                "label": "Na",
+                "value": 1
+              },
+              {
+                "label": "Mg",
+                "value": 2
+              },
+              {
+                "label": "Al",
+                "value": 3
+              },
+              {
+                "label": "Si",
+                "value": 4
+              },
+              {
+                "label": "P",
+                "value": 5
+              },
+              {
+                "label": "S",
+                "value": 6
+              },
+              {
+                "label": "Cl",
+                "value": 7
+              },
+              {
+                "label": "Ar",
+                "value": 8
+              }
+            ],
+            "x_label": "第三周期元素（Z = 11→18）",
+            "y_label": "价电子数",
+            "label": "3s、3p 再填入 8 个电子：价电子 1→8，p 区族号减 10"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "有效核电荷 Zeff：同周期自左向右增大，进入下一周期骤然回落（图 2.19）",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "原子半径：定义与趋势",
+      "seconds": 15,
+      "narration": "原子半径是相邻原子核间距的一半：铜的核间距二百五十六皮米，减半得一百二十八皮米。原子半径一般同周期自左向右减小，同族自上而下增大。",
+      "emphasis": "半径一般：同周期减小、同族增大",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "r = d / 2",
+            "note": "d 为相邻原子核间距。Cu：256 pm → 128 pm；Cl2：198 pm → 氯共价半径 99 pm"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "图 2.21：原子半径随原子序数呈周期性锯齿变化 · 一般同周期减小、同族增大",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "半径为什么这样变",
+      "seconds": 14,
+      "narration": "同族往下，最外层电子占据主量子数更大的壳层，离核更远。同周期往右，新电子填入同一壳层，屏蔽不佳，有效核电荷增大，把电子拉得更紧。",
+      "emphasis": "成因：壳层主量子数（同族）与有效核电荷（同周期）",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "同族自上而下：增大",
+              "items": [
+                "最外层电子占据更大 n 的壳层",
+                "离核更远，如 Li → Cs"
+              ]
+            },
+            "right": {
+              "h": "同周期自左向右：减小",
+              "items": [
+                "新电子填入同一壳层，屏蔽不佳",
+                "有效核电荷增大，把电子拉紧"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "斜对角趋势：原子半径自右上向左下增大",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "电离能：拿走电子的最小代价",
+      "seconds": 15,
+      "narration": "电离能是气态原子失去电子所需的最小能量。铜的 I1 是 746 千焦每摩尔，I2 是 1958 千焦每摩尔，第二电离能总是高于第一电离能。第一电离能通常同族自上而下减小，一般同周期自左向右增大。",
+      "emphasis": "I = E(X+) − E(X)；通常同族减小、一般同周期增大；I2 总是高于 I1",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "I = E(X+) − E(X)",
+            "note": "气态原子失去电子的最小能量；Cu：I1 = 7.73 eV = 746 kJ/mol，I2 = 20.29 eV = 1958 kJ/mol"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "第一电离能最高的靠近 He、最低的靠近 Cs · 金属集中在左下（电离能低、易失电子）",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "第三周期电离能：逐点描画",
+      "seconds": 16,
+      "narration": "看第三周期，钠 494，镁 736，铝 577，硅 786，磷 1011，硫 1000，氯 1255，氩 1520，单位千焦每摩尔。整体上升，除少数例外：铝低于镁，硫低于磷。氧的第 8 个电子已在轨道中成对，成对斥力使它略低于氮。",
+      "emphasis": "整体上升，除少数例外；O 略低于 N：同轨道电子成对斥力",
+      "visuals": [
+        {
+          "kind": "axis_graph",
+          "props": {
+            "curves": [
+              {
+                "points": [
+                  [
+                    11,
+                    494
+                  ],
+                  [
+                    12,
+                    736
+                  ],
+                  [
+                    13,
+                    577
+                  ],
+                  [
+                    14,
+                    786
+                  ],
+                  [
+                    15,
+                    1011
+                  ],
+                  [
+                    16,
+                    1000
+                  ],
+                  [
+                    17,
+                    1255
+                  ],
+                  [
+                    18,
+                    1520
+                  ]
+                ],
+                "label": "第三周期第一电离能 Na→Ar（图 2.24）",
+                "tone": "accent"
+              }
+            ],
+            "x_label": "原子序数 Z",
+            "y_label": "第一电离能 / (kJ/mol)",
+            "marks": [
+              {
+                "xy": [
+                  13,
+                  577
+                ],
+                "label": "Al 577 < Mg 736：小例外",
+                "guides": true
+              },
+              {
+                "xy": [
+                  16,
+                  1000
+                ],
+                "label": "S 1000 < P 1011：小例外",
+                "guides": true
+              }
+            ],
+            "label": "同周期整体上升，除少数例外"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "第二周期：N 1400，O 1310。O 的第 8 个电子与已有电子成对，斥力抬高能量、更易失去",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "电负性：分子中的电子拔河",
+      "seconds": 16,
+      "narration": "电负性量度原子处于分子中时对成键电子的拉引能力，鲍林 1932 年提出。它倾向于在右上角高：氮、氧、溴、氯、氟最高。电负性差约 2，键最好视为离子键；差小于约 1.5，共价描述合理。",
+      "emphasis": "电负性倾向于右上角高、左下角低；差约 2 视为离子键，差小于约 1.5 可用共价描述",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "χ = (I + Ea) / 2",
+            "note": "Mulliken 标度（I、Ea 取 eV 数值）；Pauling 标度基于键解离能"
+          }
+        },
+        {
+          "kind": "stat_chart",
+          "props": {
+            "type": "bar",
+            "data": [
+              {
+                "label": "Mg",
+                "value": 1.31
+              },
+              {
+                "label": "C",
+                "value": 2.55
+              },
+              {
+                "label": "Cl",
+                "value": 3.16
+              },
+              {
+                "label": "O",
+                "value": 3.44
+              }
+            ],
+            "x_label": "元素",
+            "y_label": "Pauling 电负性 χ",
+            "label": "C-O 差 0.89：极性共价键；Mg-Cl 差 1.85：属例外，仍视为离子键"
+          }
+        }
+      ]
+    },
+    {
+      "title": "收束：一条规律，几条趋势",
+      "seconds": 14,
+      "narration": "小结：性质随原子序数呈周期性变化，实质是价层电子排布的周期性重复。半径一般同周期减小、同族增大；第一电离能一般同周期增大，有少数例外；电负性倾向于右上角高。",
+      "emphasis": "趋势表述保留「一般、通常、倾向于」限定；半径与电离能均可由有效核电荷与壳层解释",
+      "visuals": [
+        {
+          "kind": "mind_map",
+          "props": {
+            "root": "元素周期律",
+            "branches": [
+              "实质：价层电子组态周期性重复",
+              "原子半径：一般同周期减小、同族增大",
+              "第一电离能：一般同周期增大，少数例外",
+              "电负性：倾向于右上角高"
+            ]
+          }
+        },
+        {
+          "kind": "summary",
+          "props": {
+            "points": [
+              "现代周期表按原子序数排列",
+              "实质：价层电子排布的周期性重复",
+              "半径一般同周期减小、同族增大",
+              "第一电离能一般同周期增大，I2 总是大于 I1",
+              "电负性倾向于右上角高；差约 2 视为离子键"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

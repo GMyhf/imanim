@@ -1,0 +1,238 @@
+{
+  "id": "kp.math.linear_function",
+  "subject": "math",
+  "grade": "G8",
+  "topic": "一次函数的图像与性质",
+  "aliases": [
+    "一次函数",
+    "y = kx + b",
+    "linear function",
+    "一次函数图像"
+  ],
+  "refs": [
+    {
+      "source": "人教版数学八年级下册",
+      "locator": "第十九章 一次函数（19.2 一次函数，含正比例函数与图像性质）"
+    },
+    {
+      "source": "义务教育数学课程标准（2022年版）",
+      "locator": "第四学段内容要求：能画出一次函数的图像并探索其性质"
+    }
+  ],
+  "prior": [
+    "函数的概念与坐标系",
+    "正比例函数 y = kx 的图像",
+    "描点法画图"
+  ],
+  "forbidden": [
+    "k 越大直线与 y 轴的交点越高",
+    "b 越大直线越陡",
+    "一次函数的图像必过原点",
+    "一次函数的图像可以是曲线"
+  ],
+  "must_say": [
+    "k是不为零的常数",
+    "两点确定一条直线",
+    "y随x增大而增大"
+  ],
+  "sequence": [
+    {
+      "title": "什么是一次函数",
+      "seconds": 16,
+      "narration": "形如 y = kx + b，k 是不为零的常数，y 是 x 的一次函数。b 等于零时就是正比例函数 y = kx，是特例。",
+      "emphasis": "y = kx + b，k ≠ 0 是定义的一部分",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "一次函数",
+            "sub": "图像与性质"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "y = kx + b (k ≠ 0)",
+            "note": "k 决定方向与陡缓，b 决定上下位置"
+          }
+        }
+      ]
+    },
+    {
+      "title": "图像是一条直线",
+      "seconds": 17.5,
+      "narration": "一次函数的图像是一条直线。以 y = 2x + 1 为例，两点确定一条直线：x 取 0 得 y 是 1，x 取 1 得 y 是 3，描点连线。",
+      "emphasis": "两点法画一次函数图像",
+      "visuals": [
+        {
+          "kind": "graph_vt",
+          "props": {
+            "points": [
+              [
+                -1,
+                -1
+              ],
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                3
+              ]
+            ],
+            "label": "y = 2x + 1",
+            "slope_note": "k = 2：x 每增加 1，y 增加 2",
+            "x_label": "x",
+            "y_label": "y",
+            "dots": true
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "两点确定一条直线",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "k 管方向与陡缓",
+      "seconds": 17,
+      "narration": "关键看 k：k 大于零，y 随 x 增大而增大，直线上升，k 越大越陡；k 小于零，y 随 x 增大而减小，直线下降。",
+      "emphasis": "k > 0 上升，k < 0 下降",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "y = 2x + 1",
+              "items": [
+                "k = 2 > 0",
+                "从左到右上升",
+                "y 随 x 增大而增大"
+              ]
+            },
+            "right": {
+              "h": "y = −2x + 1",
+              "items": [
+                "k = −2 < 0",
+                "从左到右下降",
+                "y 随 x 增大而减小"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "k 定方向与陡缓",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "b 管上下平移",
+      "seconds": 20.5,
+      "narration": "把 y = 2x + 1 向下平移 2 个单位，得 y = 2x − 1。x 等于零时 y 就是 b，交 y 轴于 (0, b)；b 大上移、小下移，k 不变，两线平行。",
+      "emphasis": "y = 2x − 1 由 y = 2x + 1 平移而得，交 y 轴于 (0, b)",
+      "visuals": [
+        {
+          "kind": "graph_vt",
+          "props": {
+            "points": [
+              [
+                -1,
+                -3
+              ],
+              [
+                0,
+                -1
+              ],
+              [
+                1,
+                1
+              ]
+            ],
+            "label": "y = 2x − 1",
+            "slope_note": "由 y = 2x + 1 向下平移 2 个单位得到",
+            "x_label": "x",
+            "y_label": "y",
+            "dots": true,
+            "triangle": false,
+            "cases": [
+              {
+                "at": "向下平移",
+                "points": [
+                  [
+                    -1,
+                    1
+                  ],
+                  [
+                    0,
+                    3
+                  ],
+                  [
+                    1,
+                    5
+                  ]
+                ],
+                "label": "y = 2x + 1",
+                "tone": "dim"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "上加下减：b 只在 y 轴方向起的作用",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "例题：两点定表达式",
+      "seconds": 19.5,
+      "narration": "直线过 (0, −1) 和 (2, 3)，求关系式。设 y = kx + b，两点代入得 b = −1，k = 2，即 y = 2x − 1。回代验证成立。",
+      "emphasis": "先设表达式，再代点求解",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "lines": [
+              "设 y = kx + b",
+              "代入 (0, −1)：b = −1",
+              "代入 (2, 3)：3 = 2k − 1",
+              "解得 k = 2",
+              "所求：y = 2x − 1",
+              "回代两点验证成立"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "一句话记住",
+      "seconds": 10,
+      "narration": "图像是直线，k 管形状，b 管位置；画图求式靠两点。",
+      "emphasis": "k 定形，b 定位",
+      "visuals": [
+        {
+          "kind": "summary",
+          "props": {
+            "points": [
+              "y = kx + b，图像是直线",
+              "k > 0 上升，k < 0 下降",
+              "b 是与 y 轴交点的纵坐标",
+              "两点画图，两点定式"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

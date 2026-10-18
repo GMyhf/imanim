@@ -1,0 +1,281 @@
+{
+  "id": "kp.physics.peisu_method",
+  "subject": "physics",
+  "grade": "H1",
+  "topic": "配速法",
+  "aliases": [
+    "配速",
+    "叠加场中的配速法",
+    "配速法（摆线/滚轮线）"
+  ],
+  "refs": [
+    {
+      "source": "普通高中物理课程标准（2017年版2020年修订）（corpus/ictr/derived/senior-high-physics-2017-2020rev.extracted.txt）",
+      "locator": "第 935~945 行，内容要求 2.1.2、2.1.3"
+    },
+    {
+      "source": "corpus/k12kgraph/subject_specific_KG/physics.json",
+      "locator": "节点 physics_xzxbx2_rjb_cpt4、cpt6、cpt7、cpt8"
+    },
+    {
+      "source": "materials/page129_物理_Page129_Image1.md（手写笔记）",
+      "locator": "第 129 页：顶部手写笔记「叠加场中的配速法」及 2023·江苏卷第 3 题"
+    },
+    {
+      "source": "materials/page32_物理_Page32_Image1.md（错题笔记）",
+      "locator": "第 32 页：正解 & 同类题型，解法一（配速）、解法二（微积分）"
+    }
+  ],
+  "figure_refs": [
+    {
+      "source": "materials/page129_物理_Page129_Image1.md",
+      "locator": "第 129 页 插图 1",
+      "caption": "插图 1：题目配图（右上角物理模型）"
+    },
+    {
+      "source": "materials/page129_物理_Page129_Image1.md",
+      "locator": "第 129 页 插图 2",
+      "caption": "插图 2：左侧手写物理分析图（速度与力分解）"
+    },
+    {
+      "source": "materials/page129_物理_Page129_Image1.md",
+      "locator": "第 129 页 插图 3",
+      "caption": "插图 3：左侧手写运动轨迹图（摆线/滚轮线）"
+    },
+    {
+      "source": "materials/page129_物理_Page129_Image1.md",
+      "locator": "第 129 页 插图 4",
+      "caption": "插图 4：手写公式推导图（圆周运动几何关系）"
+    },
+    {
+      "source": "materials/page129_物理_Page129_Image1.md",
+      "locator": "第 129 页 插图 5",
+      "caption": "插图 5：底部手写轨迹分析图（不同入射速度的轨迹）"
+    }
+  ],
+  "prior": [
+    "洛伦兹力 F = qvB sinθ",
+    "带电粒子在匀强磁场中的匀速圆周运动",
+    "半径公式 r = mv/(qB) 与周期公式 T = 2πm/(qB)",
+    "运动的分解",
+    "动量定理"
+  ],
+  "forbidden": [
+    "两个分运动都是匀速圆周运动",
+    "带电粒子在匀强磁场中的周期随速度变化",
+    "配速法只能用于初速度为零的情形",
+    "配出来的速度可以随便取，不需要满足受力平衡"
+  ],
+  "must_say": [
+    "qvB = mg",
+    "匀速直线运动与匀速圆周运动",
+    "周期与速度无关",
+    "摆线"
+  ],
+  "sequence": [
+    {
+      "title": "叠加场里的难题",
+      "seconds": 12,
+      "narration": "带电粒子同时受重力和洛伦兹力，从静止释放，轨迹弯弯曲曲。配速法的思路是：把一个难的运动，拆成两个会算的运动。",
+      "emphasis": "配速法：拆成两个会算的运动",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "配速法",
+            "sub": "叠加场中的运动分解"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "前置：F = qvB sinθ；r = mv/(qB)",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "零速度拆成一对速度",
+      "seconds": 20,
+      "narration": "初速度 v_0 = 0。把它看成一个向右的速度 v 和一个向左的速度 v 之和。v 怎么取？让向右的 v 产生的洛伦兹力恰好与重力平衡，也就是 qvB = mg。",
+      "emphasis": "0 = 向右 v + 向左 v，且 qvB = mg",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "qvB = mg  ⇒  v = mg/(qB)",
+            "note": "配出的速度由受力平衡决定"
+          }
+        },
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "向右的 v",
+              "items": [
+                "洛伦兹力 qvB 向上",
+                "重力 mg 向下"
+              ]
+            },
+            "right": {
+              "h": "向左的 v",
+              "items": [
+                "洛伦兹力 qvB 向下",
+                "单独看它的效果"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "两个分运动",
+      "seconds": 20,
+      "narration": "单看向右的速度：洛伦兹力与重力平衡，做匀速直线运动。单看向左的速度：只剩洛伦兹力，做匀速圆周运动，半径 r = mv/(qB)，周期 T = 2πm/(qB)，周期与速度无关。合起来，就是匀速直线运动与匀速圆周运动的叠加。",
+      "emphasis": "向右：匀直；向左：匀圆周",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "单看向右",
+              "items": [
+                "qvB 与 mg 平衡",
+                "匀速直线运动"
+              ]
+            },
+            "right": {
+              "h": "单看向左",
+              "items": [
+                "只受洛伦兹力",
+                "匀速圆周运动"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "r = mv/(qB)    T = 2πm/(qB)",
+            "note": "周期与速度无关"
+          }
+        }
+      ]
+    },
+    {
+      "title": "合成：摆线",
+      "seconds": 20,
+      "narration": "圆心匀速平移，粒子绕圆心转圈，合成的轨迹叫摆线，也叫滚轮线。两个分速度同向时合速度最大，v_m = 2v = 2mg/(qB)；下落的最大高度等于直径，h_m = 2r = 2m²g/(q²B²)。",
+      "emphasis": "v_m = 2v，h_m = 2r",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "v_m = 2v = 2mg/(qB)",
+            "note": "最大速度"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "h_m = 2r = 2m²g/(q²B²)",
+            "note": "最大高度差"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "轨迹：摆线 / 滚轮线",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "最低点与竖直方向",
+      "seconds": 14,
+      "narration": "笔记里还记了两点：最低点加速度为负 g，方向竖直；竖直方向的分运动是简谐运动。",
+      "emphasis": "最低点 a = −g（竖直）；竖直方向为简谐运动",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "y = r(1 − cosθ)",
+            "note": "竖直方向：简谐运动"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "最低点加速度为 −g，竖直方向",
+            "tone": "warn"
+          }
+        }
+      ]
+    },
+    {
+      "title": "有初速度也能配",
+      "seconds": 14,
+      "narration": "初速度不为零时，同样先配出满足 qvB = mg 的 v，剩下的速度做圆周运动。笔记按 v_0 = v/4、v_0 = 2v、v_0 = v、v_0 = 0 四种情形分别画了轨迹。",
+      "emphasis": "先配 v，再看剩余速度",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "情形 ① ②",
+              "items": [
+                "v_0 = v/4",
+                "v_0 = 2v"
+              ]
+            },
+            "right": {
+              "h": "情形 ③ ④",
+              "items": [
+                "v_0 = v",
+                "v_0 = 0"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "阻力场景里的配速",
+      "seconds": 20,
+      "narration": "配速不只用在磁场里。小球质量 2 kg，以 10 m/s 水平抛出，阻力 f = kv，k = 2 kg/s，g 取 10 m/s²。竖直方向配一个 v_1，让 kv_1 与 mg 平衡，v_1 = 10 m/s。再对水平方向用动量定理，求得水平射程 x = 5 m，与微积分解法的结果相同。",
+      "emphasis": "kv_1 = mg，v_1 = 10 m/s，x = 5 m",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "已知",
+              "items": [
+                "m = 2 kg，v_0 = 10 m/s",
+                "f = kv，k = 2 kg/s",
+                "g = 10 m/s²"
+              ]
+            },
+            "right": {
+              "h": "配速",
+              "items": [
+                "kv_1 向上，mg 向下",
+                "v_1 = 10 m/s",
+                "(1 − b)v_1 = bv_0 ⇒ b = 1/2"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "mv_0 − Σkv_0Δt = (1/2)mv_0  ⇒  x = 5 m",
+            "note": "微积分解法：v_x = 10e^(−t)，由 v_x = −v_y 得 t = ln2 s，x = 5 m"
+          }
+        }
+      ]
+    }
+  ]
+}

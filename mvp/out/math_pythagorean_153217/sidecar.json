@@ -1,0 +1,115 @@
+{
+  "steps": {
+    "retrieve": 0.01,
+    "storyboard": 0.0,
+    "narration": 16.65,
+    "render": 141.73,
+    "mux": 10.16,
+    "selfcheck": 517.58
+  },
+  "tts": {
+    "rate": 0,
+    "natural_seconds": 120.12,
+    "actual_seconds": 120.12,
+    "chars": 407,
+    "natural_chars_per_second": 3.39,
+    "chars_per_second": 3.39
+  },
+  "duration": {
+    "actual": 120.12,
+    "target": 120,
+    "deviation": 0.001
+  },
+  "rendered": {
+    "seconds": 120.09,
+    "plan": 120.12,
+    "drift": 0.0002
+  },
+  "audio_align": [
+    {
+      "shot_start": 0.0,
+      "expect": 0.45,
+      "actual": 0.57,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 15.91,
+      "expect": 16.36,
+      "actual": 16.5,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 24.11,
+      "expect": 24.56,
+      "actual": 24.7,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 39.69,
+      "expect": 40.14,
+      "actual": 40.29,
+      "delta": 0.15
+    },
+    {
+      "shot_start": 57.42,
+      "expect": 57.87,
+      "actual": 58.0,
+      "delta": 0.13
+    },
+    {
+      "shot_start": 77.76,
+      "expect": 78.21,
+      "actual": 78.35,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 91.56,
+      "expect": 92.01,
+      "actual": 92.21,
+      "delta": 0.2
+    },
+    {
+      "shot_start": 110.75,
+      "expect": 111.2,
+      "actual": 111.34,
+      "delta": 0.14
+    }
+  ],
+  "burn": {
+    "attempted": false,
+    "ok": false,
+    "detail": "字幕已由渲染层排在画面内，未做烧录（要外挂/烧录版加 --burn）"
+  },
+  "boundary_scan": {
+    "unexpected": false,
+    "any_blank": false
+  },
+  "artifact": "math-G8-勾股定理-120s-fb4416a8.mp4",
+  "size_mb": 5.9,
+  "cleaned_mb": 20.0,
+  "mb_per_min": 2.9,
+  "subtitles": 34,
+  "knowledge_id": "kp.math.pythagorean",
+  "refs": [
+    {
+      "source": "人教版数学八年级下册",
+      "locator": "第十七章 勾股定理（17.1 勾股定理）"
+    },
+    {
+      "source": "义务教育数学课程标准（2022年版）",
+      "locator": "第四学段内容要求：探索勾股定理"
+    }
+  ],
+  "budget": {
+    "kind": "storyboard_budget",
+    "source": "A3 分镜预算",
+    "locator": "target=120s",
+    "narration_chars": 424,
+    "natural_seconds": 116.01,
+    "budgeted_seconds": 120.0,
+    "fits_natural": true,
+    "min_seconds_for_natural": 117
+  },
+  "shots": 8,
+  "wall_seconds": 686.4
+}

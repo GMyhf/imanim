@@ -1,0 +1,111 @@
+{
+  "steps": {
+    "retrieve": 0.0,
+    "storyboard": 0.0,
+    "narration": 9.58,
+    "render": 105.76,
+    "mux": 13.97,
+    "selfcheck": 384.92
+  },
+  "tts": {
+    "rate": 0,
+    "natural_seconds": 122.66,
+    "actual_seconds": 122.66,
+    "chars": 416,
+    "natural_chars_per_second": 3.39,
+    "chars_per_second": 3.39
+  },
+  "duration": {
+    "actual": 122.66,
+    "target": 120,
+    "deviation": 0.022
+  },
+  "rendered": {
+    "seconds": 122.66,
+    "plan": 122.66,
+    "drift": 0.0
+  },
+  "audio_align": [
+    {
+      "shot_start": 0.0,
+      "expect": 0.45,
+      "actual": 0.57,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 15.98,
+      "expect": 16.43,
+      "actual": 16.62,
+      "delta": 0.19
+    },
+    {
+      "shot_start": 29.57,
+      "expect": 30.02,
+      "actual": 30.16,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 49.96,
+      "expect": 50.41,
+      "actual": 50.53,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 66.92,
+      "expect": 67.37,
+      "actual": 67.52,
+      "delta": 0.15
+    },
+    {
+      "shot_start": 94.52,
+      "expect": 94.97,
+      "actual": 95.11,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 111.87,
+      "expect": 112.32,
+      "actual": 112.44,
+      "delta": 0.12
+    }
+  ],
+  "burn": {
+    "attempted": false,
+    "ok": false,
+    "detail": "字幕已由渲染层排在画面内，未做烧录（要外挂/烧录版加 --burn）"
+  },
+  "boundary_scan": {
+    "unexpected": false,
+    "any_blank": false,
+    "backfilled": true,
+    "first_attempt_error": "抓帧失败 @ 122.560s：..\\.local\\batch_v8\\physics_acceleration_154344\\physics-H1-加速度-122s-295f9ffe.mp4"
+  },
+  "artifact": "physics-H1-加速度-122s-295f9ffe.mp4",
+  "size_mb": 7.5,
+  "cleaned_mb": 22.6,
+  "mb_per_min": 3.7,
+  "subtitles": 41,
+  "knowledge_id": "kp.physics.acceleration",
+  "refs": [
+    {
+      "source": "人教版高中物理必修第一册",
+      "locator": "第一章 1.4 速度变化快慢的描述——加速度"
+    },
+    {
+      "source": "普通高中物理课程标准（2017年版2020年修订）",
+      "locator": "内容要求 1.1.3：理解位移、速度和加速度"
+    }
+  ],
+  "budget": {
+    "kind": "storyboard_budget",
+    "source": "A3 分镜预算",
+    "locator": "target=120s",
+    "narration_chars": 436,
+    "natural_seconds": 117.85,
+    "budgeted_seconds": 120.0,
+    "fits_natural": true,
+    "min_seconds_for_natural": 118
+  },
+  "shots": 7,
+  "wall_seconds": 514.8
+}

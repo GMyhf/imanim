@@ -1,0 +1,14 @@
+{
+  "subject": "math",
+  "grade": "G9",
+  "topic": "二次函数a、b、c对图像的影响",
+  "target_seconds": 120,
+  "style": "clean",
+  "narration": true,
+  "prior_knowledge": true,
+  "resolution": "1920x1080",
+  "fps": 30,
+  "subtitles": true,
+  "language": "zh",
+  "raw_text": ""
+}

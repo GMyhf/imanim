@@ -1,0 +1,119 @@
+{
+  "steps": {
+    "retrieve": 0.01,
+    "storyboard": 0.0,
+    "narration": 12.73,
+    "render": 169.99,
+    "mux": 7.65,
+    "selfcheck": 346.3
+  },
+  "tts": {
+    "rate": 0,
+    "natural_seconds": 122.95,
+    "actual_seconds": 122.95,
+    "chars": 402,
+    "natural_chars_per_second": 3.27,
+    "chars_per_second": 3.27
+  },
+  "duration": {
+    "actual": 122.95,
+    "target": 120,
+    "deviation": 0.025
+  },
+  "rendered": {
+    "seconds": 122.93,
+    "plan": 122.95,
+    "drift": 0.0002
+  },
+  "audio_align": [
+    {
+      "shot_start": 0.0,
+      "expect": 0.45,
+      "actual": 0.57,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 18.23,
+      "expect": 18.68,
+      "actual": 18.84,
+      "delta": 0.16
+    },
+    {
+      "shot_start": 27.73,
+      "expect": 28.18,
+      "actual": 28.3,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 43.92,
+      "expect": 44.37,
+      "actual": 44.49,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 62.01,
+      "expect": 62.46,
+      "actual": 62.62,
+      "delta": 0.16
+    },
+    {
+      "shot_start": 79.53,
+      "expect": 79.98,
+      "actual": 80.12,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 91.5,
+      "expect": 91.95,
+      "actual": 92.07,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 113.48,
+      "expect": 113.93,
+      "actual": 114.05,
+      "delta": 0.12
+    }
+  ],
+  "burn": {
+    "attempted": false,
+    "ok": false,
+    "detail": "字幕已由渲染层排在画面内，未做烧录（要外挂/烧录版加 --burn）"
+  },
+  "boundary_scan": {
+    "unexpected": false,
+    "any_blank": false
+  },
+  "artifact": "physics-H1-匀变速直线运动的位移与时间的关系-122s-0e9e07da.mp4",
+  "size_mb": 7.6,
+  "cleaned_mb": 22.8,
+  "mb_per_min": 3.7,
+  "subtitles": 45,
+  "knowledge_id": "kp.physics.uniform_acceleration",
+  "refs": [
+    {
+      "source": "人教版高中物理必修第一册",
+      "locator": "第二章 第3节 匀变速直线运动的位移与时间的关系"
+    },
+    {
+      "source": "人教版高中物理必修第一册",
+      "locator": "第二章 第2节 匀变速直线运动的速度与时间的关系（v_t = v_0 + a t）"
+    },
+    {
+      "source": "普通高中物理课程标准（2017年版2020年修订）",
+      "locator": "内容要求 1.1.3：通过实验，探究匀变速直线运动的特点，能用公式、图像等方法描述匀变速直线运动（课标 PDF 第 20～21 页，正文第 11～12 页）"
+    }
+  ],
+  "budget": {
+    "kind": "storyboard_budget",
+    "source": "A3 分镜预算",
+    "locator": "target=120s",
+    "narration_chars": 428,
+    "natural_seconds": 116.62,
+    "budgeted_seconds": 120.0,
+    "fits_natural": true,
+    "min_seconds_for_natural": 117
+  },
+  "shots": 8,
+  "wall_seconds": 536.9
+}

@@ -1,0 +1,23 @@
+{
+  "checked": [
+    "AXIS_LABEL",
+    "COUNT",
+    "DUR_SHARE",
+    "DUR_SHORT",
+    "GLYPH",
+    "KIND",
+    "LEGIBLE",
+    "MISSING_QUALIFIER",
+    "NO_FIGURE",
+    "NO_REF",
+    "OVERLOAD",
+    "PACING",
+    "QUALIFIER_LOSS",
+    "SAFE_AREA",
+    "SUB_RANGE",
+    "SUB_WIDTH",
+    "TARGET",
+    "TERM"
+  ],
+  "violations": []
+}

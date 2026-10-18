@@ -1,0 +1,227 @@
+{
+  "id": "kp.chemistry.latimer_diagram",
+  "subject": "chemistry",
+  "grade": "H2",
+  "topic": "Latimer图",
+  "aliases": [
+    "元素电势图",
+    "拉蒂默图",
+    "Latimer 图",
+    "Latimer diagram",
+    "电势图"
+  ],
+  "refs": [
+    {
+      "source": "Atkins 等《Inorganic Chemistry》第5版（Oxford University Press）",
+      "locator": "§5.12 电势数据的图示：(a) 构造 (b) 非相邻物种 (c) 歧化；例题 5.9"
+    },
+    {
+      "source": "Miessler、Fischer、Tarr《Inorganic Chemistry》第5版（Pearson）",
+      "locator": "第8章 §8.1.4 化学性质：Latimer 图与 Frost 图"
+    }
+  ],
+  "prior": [
+    "电极电势与标准电极电势",
+    "氧化数的概念",
+    "吉布斯自由能与电动势 ΔG = −nFE"
+  ],
+  "forbidden": [
+    "电势直接相加就得到",
+    "左边的电势更高就会歧化",
+    "氧化数越高越稳定",
+    "酸碱性下的电势相同"
+  ],
+  "must_say": [
+    "氧化数从左到右依次降低",
+    "吉布斯自由能可以相加",
+    "右边的电势高于左边的电势"
+  ],
+  "sequence": [
+    {
+      "title": "把一串电势排成一条链",
+      "seconds": 12,
+      "narration": "同一种元素常有多种氧化数，电势散落各处难查。按氧化数排成一条链，箭头上写标准电极电势，就是元素电势图，又称拉蒂默图。",
+      "emphasis": "同一元素各氧化态的电势排成一条链",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "Latimer 图（元素电势图）",
+            "sub": "怎么读，怎么算，怎么判断歧化"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "先修回顾：标准电极电势与氧化数",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "怎么读：以酸性溶液中的氯为例",
+      "seconds": 16,
+      "narration": "以酸性溶液中的氯为例。氧化数从左到右依次降低，从正七到负一。相邻两物种之间的箭头上，写着这一对的标准电极电势。酸性溶液按 pH 为零算。",
+      "emphasis": "氧化数从左到右依次降低",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "heading": "酸性溶液中的氯：氧化数 +7 到 −1",
+            "lines": [
+              "ClO₄⁻ → ClO₃⁻　1.20 V",
+              "ClO₃⁻ → HClO₂　1.18 V",
+              "HClO₂ → HClO　1.65 V",
+              "HClO → Cl₂　1.67 V",
+              "Cl₂ → Cl⁻　1.36 V"
+            ]
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "箭头上的数字是该电对的 E°",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "酸碱不同，电势不同",
+      "seconds": 15,
+      "narration": "酸碱不同，电势也不同。含氢离子的半反应，电势随 pH 变。碱性溶液 pH 十四，高氯酸根到氯酸根只有零点三七伏。氯气到氯离子不含质子，两边都是一点三六伏。",
+      "emphasis": "含 H⁺ 的电对，电势随 pH 变",
+      "visuals": [
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "酸性溶液 pH 为零",
+              "items": [
+                "ClO₄⁻ → ClO₃⁻　1.20 V",
+                "Cl₂ → Cl⁻　1.36 V"
+              ]
+            },
+            "right": {
+              "h": "碱性溶液 pH 为十四",
+              "items": [
+                "ClO₄⁻ → ClO₃⁻　0.37 V",
+                "Cl₂ → Cl⁻　1.36 V"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "半反应不含 H⁺，电势就不随 pH 变",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "不相邻的两物种：加的是能量",
+      "seconds": 16,
+      "narration": "不相邻两物种之间的电势，不能把电势直接相加。先按负 n F E 换成吉布斯自由能，吉布斯自由能可以相加，再除以总电子数换回电势。",
+      "emphasis": "ΔG° 可相加，E° 不可直接相加",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "E°(a+b) = (n_a · E°_a + n_b · E°_b) / (n_a + n_b)",
+            "note": "n 是各步转移的电子数；由 ΔG° = −nFE° 且 ΔG° 相加得到"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "能量相加，电势要按电子数加权",
+            "tone": "warn"
+          }
+        }
+      ]
+    },
+    {
+      "title": "算一算：碱性溶液中的 ClO₂⁻ 到 Cl₂",
+      "seconds": 16,
+      "narration": "例：碱性溶液中，亚氯酸根到氯气。第一步零点六八伏，转移两个电子；第二步零点四二伏，转移一个电子。按电子数加权平均，得零点五九伏。",
+      "emphasis": "E° = 按电子数加权平均",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "E° = (2 · 0.68 + 1 · 0.42) / 3 ≈ 0.59 V",
+            "note": "碱性溶液，298 K，标准状态"
+          }
+        },
+        {
+          "kind": "graph_vt",
+          "props": {
+            "points": [
+              [0, 0],
+              [2, 1.36],
+              [3, 1.78]
+            ],
+            "x_label": "转移电子数 n",
+            "y_label": "n · E° / V",
+            "label": "分段斜率 0.68 与 0.42",
+            "cases": [
+              {
+                "points": [
+                  [0, 0],
+                  [3, 1.78]
+                ],
+                "label": "总斜率 0.59 V",
+                "at": "加权平均",
+                "tone": "accent"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "歧化：右边比左边高",
+      "seconds": 17,
+      "narration": "再看歧化。酸性溶液里的过氧化氢，右边一点七六伏，左边零点七零伏。右边的电势高于左边的电势，它就会歧化成氧气和水，总电势一点零六伏。",
+      "emphasis": "右边高于左边 → 歧化",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "O₂ → H₂O₂ → H₂O　（0.70 V，1.76 V）",
+            "note": "酸性溶液；右边 1.76 V，左边 0.70 V"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "E°_{总} = 1.76 − 0.70 = 1.06 V",
+            "note": "2H₂O₂ → 2H₂O + O₂，E° 为正"
+          }
+        }
+      ]
+    },
+    {
+      "title": "一句话记住",
+      "seconds": 12,
+      "narration": "按氧化数排成链，箭头上写电势；能量相加，电势要加权；右边高过左边，就会歧化。",
+      "emphasis": "排链 → 加权 → 歧化",
+      "visuals": [
+        {
+          "kind": "summary",
+          "props": {
+            "points": [
+              "氧化数从左到右依次降低",
+              "含 H⁺ 的电对，电势随 pH 变",
+              "非相邻电对按电子数加权",
+              "右边的电势高过左边，歧化"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

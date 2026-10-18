@@ -1,0 +1,432 @@
+{
+  "id": "kp.chemistry.entropy",
+  "subject": "chemistry",
+  "grade": "H2",
+  "topic": "熵",
+  "aliases": [
+    "entropy",
+    "熵变",
+    "热力学第二定律",
+    "吉布斯自由能"
+  ],
+  "refs": [
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 Thermodynamics: The Second and Third Laws：9.1 自发变化（p.318）。页码为印刷页码；PDF 页序 = 印刷页码 + 141。"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.2 熵与无序（p.319-320，式1 ΔS=q_rev/T、孤立体系熵增判据）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.3 熵变（p.321-325，式2 加热 ΔS=C·ln(T2/T1)、式3a 等温膨胀 ΔS=nR·ln(V2/V1)、例9.3（题 p.323、解 p.324））"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.4 相变熵（p.326-329，表9.1 p.328）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.5 熵的分子解释（p.330-332，图9.7 p.331 四个CO分子16种排法，S=k ln W 例9.7 p.332）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.6 统计熵与热力学熵的等价（p.333-335）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.10 总熵变（p.343-346，表9.4 自发性判据 p.345、例9.12 p.346）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.12 聚焦体系（p.348，G=H−TS 式14）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.12 聚焦体系（p.348，ΔG=ΔH−TΔS 式15）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.12 聚焦体系（p.348-350，ΔG=−TΔS_tot 式16）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.12 聚焦体系（p.349，平衡判据 ΔG=0 式17）"
+    },
+    {
+      "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
+      "locator": "第9章 9.12 聚焦体系（p.349，表9.5 有利于自发的因素）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 What makes a reaction go?：2.2 熵与热力学第二定律（p.7-8，「产物更稳定所以反应发生」被放弃；「熵总是增加」需表述为宇宙）。"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.3 熵与热（p.9-10，NH3+HCl→NH4Cl 例）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.4 温度的作用（p.11-12，式2.1 ΔS_surr=q_surr/T_surr，单位 J·K⁻¹）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.4 温度的作用（p.11-12，水结冰 ΔS_sys=−22.0 J·K⁻¹·mol⁻¹，冰的熔化热 6010 J·mol⁻¹）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.5 放热与吸热（p.13-14，−5 °C 下 ΔS_univ=+0.4 J·K⁻¹·mol⁻¹ 水可结冰）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.6 依据（p.15-16）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.7 第二定律与吉布斯能（p.17，ΔS_univ=−ΔG_sys/T_sys）"
+    },
+    {
+      "source": "Keeler、Wothers《Why Chemical Reactions Happen》（Oxford University Press）",
+      "locator": "第2章 2.8 吉布斯能与反应方向（p.18，判据是 ΔS_univ 的符号、体现在 ΔG 的符号）"
+    }
+  ],
+  "prior": [
+    "温度与分子运动（Keeler p.11）",
+    "热传递方向（Atkins p.318）",
+    "能量守恒（Atkins p.273）"
+  ],
+  "forbidden": [
+    "反应只朝放热、朝能量降低的方向进行",
+    "熵总是增加（不限定孤立体系）",
+    "体系的熵减小，过程就一定不会发生",
+    "吸热反应不可能自发进行",
+    "只要放热，反应就一定自发"
+  ],
+  "must_say": [
+    "在孤立体系中，任何自发变化都伴随熵的增加",
+    "熵 S 等于玻尔兹曼常数 k 乘微观态数 W 的对数",
+    "吉布斯能减小的方向就是自发变化的方向"
+  ],
+  "sequence": [
+    {
+      "title": "什么变化会自己发生？",
+      "seconds": 15,
+      "narration": "热金属块自发冷却到室温，反向没人见过；气体自发充满容器，不会缩回一角。",
+      "emphasis": "自发变化：有发生的倾向、无需外力驱动",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "熵：从微观态到吉布斯能",
+            "sub": "孤立体系的自发变化判据"
+          }
+        },
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "自发",
+              "items": [
+                "热金属块冷却到室温",
+                "气体充满整个容器"
+              ]
+            },
+            "right": {
+              "h": "不自发",
+              "items": [
+                "金属块自己变热",
+                "气体自己缩回一角"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "先修：温度与分子的运动",
+      "seconds": 14,
+      "narration": "要学会熵，我们之前得先学会：物体越冷，分子越不动；越热，运动越剧烈。",
+      "emphasis": "温度高 = 分子运动剧烈；热自发从高温传向低温",
+      "visuals": [
+        {
+          "kind": "callout",
+          "props": {
+            "text": "先修回顾：温度与分子热运动、热传递方向",
+            "tone": "key"
+          }
+        },
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "冷的物体",
+              "items": [
+                "分子几乎不动",
+                "供热后明显动起来"
+              ]
+            },
+            "right": {
+              "h": "热的物体",
+              "items": [
+                "分子已在剧烈运动",
+                "同量热，变化不大"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "particle_box",
+          "props": {
+            "count": 12,
+            "mode": "slow",
+            "note": "冷：分子几乎不动；热：分子剧烈运动"
+          }
+        }
+      ]
+    },
+    {
+      "title": "熵：能量与物质趋于分散",
+      "seconds": 15,
+      "narration": "能量和物质倾向于无序地分散。熵量度这种无序。",
+      "emphasis": "熵 = 无序的量度；能量与物质趋于分散",
+      "visuals": [
+        {
+          "kind": "particle_box",
+          "props": {
+            "count": 12,
+            "mode": "spread",
+            "note": "分子随机运动，散布到整个容器"
+          }
+        },
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "低熵",
+              "items": [
+                "无序小",
+                "分子挤在一角"
+              ]
+            },
+            "right": {
+              "h": "高熵",
+              "items": [
+                "无序大",
+                "分子散布全容器"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "熵 S：无序的量度；低熵 = 无序小，高熵 = 无序大",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "孤立体系的熵增判据",
+      "seconds": 15,
+      "narration": "在孤立体系中，任何自发变化都伴随熵的增加。孤立体系指金属块连同它的周围环境；说熵增加，必须限定在孤立体系。",
+      "emphasis": "孤立体系中，自发变化伴随熵增加",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "heading": "熵增判据",
+            "lines": [
+              "孤立体系 = 金属块 + 周围环境",
+              "任何自发变化，熵增加"
+            ]
+          }
+        },
+        {
+          "kind": "particle_box",
+          "props": {
+            "count": 6,
+            "mode": "heat_flow",
+            "note": "孤立体系 = 热金属块 + 它的周围环境"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "「熵总是增加」须限定：说的是孤立体系（宇宙）",
+            "tone": "warn"
+          }
+        }
+      ]
+    },
+    {
+      "title": "微观态：数一数排法",
+      "seconds": 15,
+      "narration": "四个一氧化碳分子，每个头朝左或头朝右，十六种排法都是微观态；微观态越多，熵越大。",
+      "emphasis": "微观态数 W：排法越多，熵越大",
+      "visuals": [
+        {
+          "kind": "microstate",
+          "props": {
+            "cells": 2,
+            "particles": 1,
+            "note": "枚举示范：1 个分子 2 种取向 → 2 种微观态；4 个 CO 分子 → 16 种"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "W = 16",
+            "note": "四个 CO 分子，每种具体排法是一个微观态"
+          }
+        }
+      ]
+    },
+    {
+      "title": "S = k ln W：玻尔兹曼公式",
+      "seconds": 16,
+      "narration": "熵 S 等于玻尔兹曼常数 k 乘微观态数 W 的对数。k 等于一点三八零七乘十的负二十三次方焦每开。代入算得五点七六焦每开。",
+      "emphasis": "S = k ln W；微观态越多，熵越大",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "S = k ln W",
+            "note": "玻尔兹曼公式"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "k = 1.3807 × 10^{-23} J/K",
+            "note": "玻尔兹曼常数"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "W = 2^N，N = 6.02 × 10^{23} → S = 5.76 J/K",
+            "note": "1.00 mol CO；接近 T = 0 实测残熵 4.6 J/K"
+          }
+        }
+      ]
+    },
+    {
+      "title": "盒子拉长，能级变密，W 变大",
+      "seconds": 16,
+      "narration": "盒子里分子能级分立；盒子拉长，能级变密，可及能级变多，W 变大，熵也变大。等温膨胀：ΔS 等于 n R 乘 ln V2/V1。",
+      "emphasis": "可及能级变多 → W 变大 → 熵变大；ΔS = nR·ln(V2/V1)",
+      "visuals": [
+        {
+          "kind": "energy_dist",
+          "props": {
+            "levels": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "note": "盒子拉长 → 能级变密 → 可及能级变多 → W 变大"
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "ΔS = n R · ln(V2/V1)",
+            "note": "等温膨胀；体积翻倍时 1 mol 气体 ΔS = 8.3145 J/K × ln 2 = 5.76 J/K"
+          }
+        }
+      ]
+    },
+    {
+      "title": "体系的熵可以减小：看总量",
+      "seconds": 14,
+      "narration": "水结冰，体系熵减小，过程照样发生。判据要看总量：总熵等于体系熵加环境熵。环境熵增盖过体系熵减，总熵仍增。",
+      "emphasis": "判据是总熵（体系+环境）增加，不是体系能量降低",
+      "visuals": [
+        {
+          "kind": "table",
+          "props": {
+            "caption": "自发性判据",
+            "headers": [
+              "ΔS_tot",
+              "结果"
+            ],
+            "rows": [
+              [
+                "大于 0",
+                "自发"
+              ],
+              [
+                "小于 0",
+                "逆过程自发"
+              ],
+              [
+                "等于 0",
+                "无倾向"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "compare",
+          "props": {
+            "left": {
+              "h": "体系（水 → 冰）",
+              "items": [
+                "熵减小 −22.0 J/(K·mol)"
+              ]
+            },
+            "right": {
+              "h": "环境",
+              "items": [
+                "吸热，熵增加",
+                "低温下增量更大，足以补偿"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "吸热反应也能自发：靠体系自身的无序增大驱动",
+            "tone": "warn"
+          }
+        }
+      ]
+    },
+    {
+      "title": "收进一个数：吉布斯能",
+      "seconds": 15,
+      "narration": "吉布斯引入吉布斯能 G。恒温恒压下，ΔG 等于 ΔH 减 T ΔS，ΔG 小于零自发，等于零平衡。吉布斯能减小的方向就是自发变化的方向。",
+      "emphasis": "ΔG = ΔH − T·ΔS；ΔG < 0 自发，ΔG = 0 平衡",
+      "visuals": [
+        {
+          "kind": "mind_map",
+          "props": {
+            "root": "熵",
+            "branches": [
+              "微观态 W",
+              "S = k ln W",
+              "孤立体系熵增判据",
+              "吉布斯能 G = H − T S",
+              "ΔG = ΔH − T·ΔS"
+            ]
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "G = H − T S",
+            "note": "恒温恒压：ΔG = ΔH − T·ΔS；ΔG < 0 自发，ΔG = 0 平衡"
+          }
+        }
+      ]
+    }
+  ]
+}

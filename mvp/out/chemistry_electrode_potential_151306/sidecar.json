@@ -1,0 +1,115 @@
+{
+  "steps": {
+    "retrieve": 0.0,
+    "storyboard": 0.0,
+    "narration": 10.04,
+    "render": 134.53,
+    "mux": 10.28,
+    "selfcheck": 582.06
+  },
+  "tts": {
+    "rate": 0,
+    "natural_seconds": 142.57,
+    "actual_seconds": 142.57,
+    "chars": 478,
+    "natural_chars_per_second": 3.35,
+    "chars_per_second": 3.35
+  },
+  "duration": {
+    "actual": 142.57,
+    "target": 140,
+    "deviation": 0.018
+  },
+  "rendered": {
+    "seconds": 142.56,
+    "plan": 142.57,
+    "drift": 0.0001
+  },
+  "audio_align": [
+    {
+      "shot_start": 0.0,
+      "expect": 0.45,
+      "actual": 0.57,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 18.57,
+      "expect": 19.02,
+      "actual": 19.17,
+      "delta": 0.15
+    },
+    {
+      "shot_start": 33.53,
+      "expect": 33.98,
+      "actual": 34.12,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 49.49,
+      "expect": 49.94,
+      "actual": 50.1,
+      "delta": 0.16
+    },
+    {
+      "shot_start": 75.26,
+      "expect": 75.71,
+      "actual": 75.85,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 95.07,
+      "expect": 95.52,
+      "actual": 95.64,
+      "delta": 0.12
+    },
+    {
+      "shot_start": 106.87,
+      "expect": 107.32,
+      "actual": 107.46,
+      "delta": 0.14
+    },
+    {
+      "shot_start": 130.26,
+      "expect": 130.71,
+      "actual": 130.83,
+      "delta": 0.12
+    }
+  ],
+  "burn": {
+    "attempted": false,
+    "ok": false,
+    "detail": "字幕已由渲染层排在画面内，未做烧录（要外挂/烧录版加 --burn）"
+  },
+  "boundary_scan": {
+    "unexpected": false,
+    "any_blank": false
+  },
+  "artifact": "chemistry-H2-电极电势的微观原理-142s-7d003ae6.mp4",
+  "size_mb": 10.0,
+  "cleaned_mb": 28.1,
+  "mb_per_min": 4.2,
+  "subtitles": 50,
+  "knowledge_id": "kp.chemistry.electrode_potential",
+  "refs": [
+    {
+      "source": "天津大学物理化学教研室编《物理化学》（天津大学出版社）",
+      "locator": "「电化学」章：可逆电池的电动势、电极电势与能斯特方程"
+    },
+    {
+      "source": "人教版普通高中教科书选择性必修1《化学反应原理》",
+      "locator": "第四章 化学反应与电能 第1节 原电池"
+    }
+  ],
+  "budget": {
+    "kind": "storyboard_budget",
+    "source": "A3 分镜预算",
+    "locator": "target=140s",
+    "narration_chars": 508,
+    "natural_seconds": 137.09,
+    "budgeted_seconds": 140.0,
+    "fits_natural": true,
+    "min_seconds_for_natural": 138
+  },
+  "shots": 8,
+  "wall_seconds": 737.2
+}

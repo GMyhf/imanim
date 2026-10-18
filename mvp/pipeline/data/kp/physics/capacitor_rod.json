@@ -1,0 +1,277 @@
+{
+  "id": "kp.physics.capacitor_rod",
+  "subject": "physics",
+  "grade": "H2",
+  "topic": "电容-单杆模型",
+  "aliases": [
+    "电容器+单杆模型",
+    "单杆+电容器",
+    "I = CBL·a",
+    "含电容器的单杆切割模型"
+  ],
+  "refs": [
+    {
+      "source": "高中物理笔记（Self_Edit/高中物理笔记/md，主出处）",
+      "locator": "物理_Page139_Image1.md「(4) C」段（单杆+电容器完整推导链）：C = Q/U；u = ε；I = dQ/dt = C·du/dt = BLCa；受力分析 a = (−ILB + F)/m；I = F/(BL + m/(BLC))；a = F/(m + B²L²C)（手写批注「电磁惯性」）；动量定理段：FΔt − BĪLΔt = mΔv，I·dt = q ⇒ Ft − BLq = mv，q = CBLv ⇒ v = Ft/(m+B²L²C)；插图3「平行板电容器与导体棒电路图：电容器符号在左，与水平导体棒串联成回路，磁场竖直，外力 F 向右拉杆」；页内自查：「关键在于电流 I = dQ/dt = C·dU/dt = BLCa。利用牛顿第二定律 F − BIL = ma 解得恒定加速度 a = F/(m + B²L²C)」"
+    },
+    {
+      "source": "高中物理笔记（Self_Edit/高中物理笔记/md，储能与 Q-U 图出处）",
+      "locator": "物理_Page140_Image1.md 第一部分：Q-U 坐标图（纵轴 Q、横轴 U、过原点斜线、标注 k = C）；公式 Q = CU；W = QU = ½CU² = ½(CBl)²·v²（页内自查注：结合上下文 U = Blv，严谨代入应为 W = ½C(Blv)²）"
+    },
+    {
+      "source": "高中物理笔记（Self_Edit/高中物理笔记/md，装置与受力参照）",
+      "locator": "物理_Page138_Image1.md「单杆模型」：装置描述「导轨、导体棒 cd、磁场 B（垂直向上）、运动速度 v0（水平向右）」；受力标记「向左的安培力 F_A、向下的重力 G、向上的支持力 F_N」；电阻版对照 a = B²L²v/(m(R+r))（变加速）"
+    },
+    {
+      "source": "高中物理笔记（Self_Edit/高中物理笔记/md，动生电动势出处）",
+      "locator": "物理_Page135_Image1.md：切割磁感线动生电动势 E = Blv·sinθ（水平切割图旁标注；垂直切割 sinθ = 1 即 E = BLv）"
+    },
+    {
+      "source": "corpus/k12kgraph/subject_specific_KG/physics.json（知识图谱节点定义）",
+      "locator": "节点「电磁感应」(physics_9_rjb_cpt149)：当穿过闭合导体回路的磁通量发生变化时，闭合导体回路中会产生感应电流；节点「电容器」(physics_bx3_rjb_cpt66)：由两个彼此绝缘且相距很近的导体组成、能够储存电荷与电能的重要电学元件，最简单形式是平行板电容器；节点「感应电动势」(physics_xzxbx2_rjb_cpt19)：电磁感应现象中产生的电动势，即使电路不闭合也存在；节点「安培力」：通电导线在磁场中受到的力，大小为 F = ILB（导线与磁场垂直时），是洛伦兹力的宏观表现"
+    },
+    {
+      "source": "普通高中物理课程标准（2017年版2020年修订）（corpus/ictr/derived/senior-high-physics-2017-2020rev.extracted.txt）",
+      "locator": "必修三 3.1.6「观察常见的电容器，了解电容器的电容，观察电容器的充、放电现象」（提取文本第 672～673 行）；选择性必修二 2.2 电磁感应及其应用：2.2.1「探究影响感应电流方向的因素，理解楞次定律」、2.2.2「通过实验，理解法拉第电磁感应定律」（提取文本第 950～952 行）"
+    }
+  ],
+  "figure_refs": [],
+  "prior": [
+    "电容的定义 C = Q/U（Page139「C = Q/U」；Page140 Q-U 图斜率 k = C）",
+    "动生电动势：导体棒垂直切割磁感线 E = BLv（Page135「E = Blv·sinθ」，θ = 90° 时 sinθ = 1）",
+    "安培力 F = BIL，导线与磁场垂直时（KG 节点「安培力」；Page138 受力图 F_A 向左）",
+    "牛顿第二定律 F合 = ma（Page139「受力分析：a = (−ILB + F)/m」）",
+    "动量定理与电荷量 q = ∫I·dt（Page139「FΔt − BĪLΔt = mΔv」「I·dt = q」）"
+  ],
+  "forbidden": [
+    "电容版单杆会像电阻版那样趋近收尾速度做匀速运动（Page139 电阻版 v-t 图渐近 E/BL；电容版 a = F/(m+B²L²C) 恒定，v = at 一直均匀增大，没有渐近线）",
+    "回路电流随速度增大而增大（Page139：I = dQ/dt = CBL·a = F/(BL + m/(BLC))，全是常量，电流恒定，与 v 无关）",
+    "电容器充电电流最终会减小到零（Page139：I 恒为常量，极板电荷 q = CBLv 随速度线性持续累积，笔记推导中没有充电停止的时刻）",
+    "安培力随速度越来越大（Page139 插图2 物理含义里「安培力随速度增加而增大」是电阻版单杆的特征；电容版 F_A = BIL 中 I 恒定，安培力恒定）"
+  ],
+  "must_say": [
+    "电流的最终表达式：I = dQ/dt = CBL·a = F/(BL + m/(BLC))，电流恒定",
+    "a = F/(m + B²L²C)，全是常量，所以加速度 a 恒定，杆做匀加速运动，v = at",
+    "电容器电压等于电动势 u = ε = BLv，极板电荷 q = CU = CBLv 随速度同步累积"
+  ],
+  "sequence": [
+    {
+      "title": "装置：导轨、杆、电容器",
+      "seconds": 14,
+      "narration": "两条平行导轨上横放一根导体棒，回路里串一个平行板电容器，匀强磁场垂直于回路平面。一个恒定的外力 F 水平向右拉杆，杆从静止开始运动。这套装置和电阻版单杆几乎一样，只是把电阻换成了电容器。",
+      "emphasis": "装置：导轨 + 导体棒 + 电容器串联，恒力 F 拉杆（Page139 插图3）",
+      "visuals": [
+        {
+          "kind": "title",
+          "props": {
+            "main": "电容-单杆模型",
+            "sub": "把电阻换成电容器，运动完全不同"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "电路图规范渲染：两条平行导轨线、可动导体棒（粗线段）、电容器符号（两条等长平行短板）串联成回路；磁场 B 用垂直纸面箭头；恒力 F 箭头水平向右（Page139 插图3 描述）",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "第①步：切割磁感线，产生电动势",
+      "seconds": 13,
+      "narration": "杆以速度 v 垂直切割磁感线，产生动生电动势 E 等于 B、L、v 三者相乘。B 是磁感应强度，单位特斯拉；L 是切割磁感线的有效长度，单位米；v 是杆的速度，单位米每秒。笔记给出限定：电容器两极板间电压 u 就等于这个电动势。",
+      "emphasis": "E = BLv，且 u = ε（Page139 限定）",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "E = BLv",
+            "note": "B：磁感应强度，特斯拉 T；L：有效切割长度，米 m；v：速度，m/s；E：动生电动势，伏特 V（Page135：E = Blv·sinθ，垂直切割 sinθ = 1）"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "限定 u = ε：电动势全部加在电容器上（Page139 原文）",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "第②步：电容器的电荷-电压关系",
+      "seconds": 13,
+      "narration": "电容器带的电荷量 q 等于电容 C 乘两极板电压 U。C 是电容，单位法拉；q 是电荷量，单位库仑；U 是电压，单位伏特。在 Q-U 图上这是一条过原点的斜线，斜率就是 C。",
+      "emphasis": "q = CU，Q-U 图斜率 k = C（Page139、Page140）",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "q = CU",
+            "note": "C：电容，法拉 F；q：极板电荷量，库仑 C；U：极板电压，伏特 V"
+          }
+        },
+        {
+          "kind": "graph_vt",
+          "props": {
+            "points": [[0, 0], [1, 1], [2, 2]],
+            "x_label": "U / V",
+            "y_label": "q / C",
+            "label": "Q-U 图像：过原点斜线，斜率 k = C（Page140）",
+            "dots": true
+          }
+        }
+      ]
+    },
+    {
+      "title": "第③步：电荷变化率就是电流",
+      "seconds": 16,
+      "narration": "电流的定义是电荷量对时间的变化率。对 q 等于 CU 两边求变化率：C 是定值提出来，电流等于 C 乘电压的变化率。而电压 u 等于 BLv，它的变化率就是 B、L 乘加速度 a。于是得到笔记里的关键一行：I 等于 C 乘 B 乘 L 乘 a。",
+      "emphasis": "I = dQ/dt = C·du/dt = CBL·a（Page139 原文 I = dQ/dt = C du/dt = BLCa）",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "lines": [
+              "I = dq/dt：电流是电荷的变化率，I 单位安培 A",
+              "q = CU ⇒ I = C·du/dt（C 为定值，法拉 F）",
+              "u = ε = BLv ⇒ du/dt = BL·a（a：加速度，m/s²）",
+              "⇒ I = CBL·a（逐字母 reveal：C、B、L、a 各指什么）"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "title": "第④步：安培力与牛顿第二定律",
+      "seconds": 14,
+      "narration": "杆里有电流，在磁场中受安培力，大小等于 B、I、L 相乘，方向与运动方向相反。水平方向只有向右的外力 F 和向左的安培力，牛顿第二定律写成：m 乘 a 等于 F 减 BIL。m 是杆的质量，单位千克；F 单位牛顿。",
+      "emphasis": "ma = F − BIL，即 a = (−ILB + F)/m（Page139 原文；受力图参照 Page138：F_A 向左）",
+      "visuals": [
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "ma = F − BIL",
+            "note": "m：杆质量，kg；F：恒定外力，N；B：磁感应强度，T；I：电流，A；L：有效长度，m；F安 = BIL 与 v 反向"
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "受力按 Page139「a = (−ILB + F)/m」：水平方向只有外力 F 与安培力 BIL",
+            "tone": "warn"
+          }
+        }
+      ]
+    },
+    {
+      "title": "第⑤步：联立，a 恒定",
+      "seconds": 18,
+      "narration": "把 I 等于 CBL·a 代进牛顿第二定律：ma 等于 F 减 B 平方 L 平方 C 乘 a。把含 a 的项移到一边，提出 a，得到 a 等于 F 除以 m 加 B 平方 L 平方 C。分子分母全是常量，所以加速度恒定。再回代，电流 I 等于 F 除以括号 BL 加 m 比 BLC，也是常量。笔记给 B 平方 L 平方 C 起了个名字：电磁惯性。",
+      "emphasis": "a = F/(m + B²L²C) 恒定；I = F/(BL + m/(BLC)) 恒定",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "lines": [
+              "代入 I = CBL·a：ma = F − B²L²C·a",
+              "移项：(m + B²L²C)·a = F",
+              "a = F/(m + B²L²C) —— F、m、B、L、C 全是常量 ⇒ a 恒定",
+              "回代：I = CBL·a = F/(BL + m/(BLC)) ⇒ 电流恒定",
+              "量纲：B²L²C 的单位是千克 kg，与 m 同量纲"
+            ]
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "笔记批注：B²L²C 相当于多出来的质量——「电磁惯性」（Page139）",
+            "tone": "key"
+          }
+        }
+      ]
+    },
+    {
+      "title": "运动长什么样：v = at，I-t 是水平直线",
+      "seconds": 18,
+      "narration": "加速度恒定，杆从静止开始做匀加速直线运动，速度 v 等于 a 乘 t，位移按二分之一 a t 平方增长。极板电荷 q 等于 CBLv，随速度线性累积。电流不随时间变，I-t 图是一条水平直线——这和推导出的恒定 I 互相印证。",
+      "emphasis": "渲染挂点：杆的运动由恒定 a 真实驱动（v = at，x = ½at²）；极板电荷按 q = CU 同步累积；I-t 水平直线与推导互证",
+      "visuals": [
+        {
+          "kind": "graph_vt",
+          "props": {
+            "points": [[0, 0], [2, 4], [4, 8]],
+            "x_label": "t / s",
+            "y_label": "v / (m/s)",
+            "label": "v = at：过原点的直线（a 恒定）",
+            "dots": true
+          }
+        },
+        {
+          "kind": "graph_vt",
+          "props": {
+            "points": [[0, 2], [2, 2], [4, 2]],
+            "x_label": "t / s",
+            "y_label": "I / A",
+            "label": "I-t 图：水平直线，I = F/(BL + m/(BLC)) 恒定",
+            "dots": false
+          }
+        }
+      ]
+    },
+    {
+      "title": "动量定理与能量：互证",
+      "seconds": 16,
+      "narration": "换动量定理再走一遍：外力冲量减去安培力冲量等于动量变化。电流对时间的累积就是电荷 q，而 q 等于 CBLv。整理得 v 等于 Ft 除以 m 加 B 平方 L 平方 C——正是恒定加速度下的 v 等于 at，两条路完全一致。能量上，电容器储存的能量 W 等于二分之一 C 乘 BLv 的平方。",
+      "emphasis": "v = Ft/(m + B²L²C) 与 v = at 一致（Page139 自查：逻辑严密）；W = ½CU² = ½C(BLv)²（Page140）",
+      "visuals": [
+        {
+          "kind": "steps",
+          "props": {
+            "lines": [
+              "FΔt − BĪLΔt = mΔv（动量定理，Page139 原文）",
+              "I·dt 累积为电荷 q ⇒ Ft − BLq = mv",
+              "q = CBLv ⇒ Ft = (m + B²L²C)·v",
+              "v = Ft/(m + B²L²C) = at，与恒定 a 结论一致"
+            ]
+          }
+        },
+        {
+          "kind": "formula",
+          "props": {
+            "expr": "W = QU = ½CU² = ½C(BLv)²",
+            "note": "电容器储能，W 单位焦耳 J（Page140；笔记原写 ½(CBl)²·v²，页内自查判定为代入 U = Blv 的连笔笔误）"
+          }
+        }
+      ]
+    },
+    {
+      "title": "适用条件与一句话总结",
+      "seconds": 14,
+      "narration": "限定条件照笔记写：电容器电压等于电动势 u 等于 ε；水平方向只有外力 F 和安培力；杆从静止开始。结论三句话：加速度 a 等于 F 除以 m 加 B 平方 L 平方 C，恒定；电流 I 等于 CBL·a，恒定；电荷 q 等于 CBLv，随速度线性累积。和电阻版对比：电阻版速度趋于收尾值，电容版匀加速没有尽头。",
+      "emphasis": "限定以 Page139 为准：u = ε、水平仅 F 与安培力、由动量定理式从静止开始",
+      "visuals": [
+        {
+          "kind": "summary",
+          "props": {
+            "points": [
+              "a = F/(m + B²L²C)，恒定；杆匀加速，v = at",
+              "I = CBL·a = F/(BL + m/(BLC))，恒定；I-t 是水平直线",
+              "q = CU = CBLv，随速度线性累积",
+              "对比电阻版：v 渐近 E/BL 收尾（Page138/139），电容版无收尾速度",
+              "限定：u = ε；水平仅外力 F 与安培力；从静止开始（Page139）"
+            ]
+          }
+        },
+        {
+          "kind": "callout",
+          "props": {
+            "text": "笔记未讨论摩擦与回路电阻；套用前先核对限定条件",
+            "tone": "warn"
+          }
+        }
+      ]
+    }
+  ]
+}

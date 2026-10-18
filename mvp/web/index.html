@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>澄象 · 知识点动态讲解视频</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- 顶栏：悬浮圆角条（参照竞品 A 节骨架），fixed 所以 main 预留了滚动偏移 -->
+<header class="topbar">
+  <div class="bar-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">澄</span>
+      <span class="brand-name">澄象</span>
+      <span class="brand-sub">知识点 → 动态讲解视频</span>
+    </div>
+    <nav class="bar-right">
+      <span id="serverHint" class="hint">本地渲染 · 无排队 · 无账号</span>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+
+  <section class="hero">
+    <h1>把一个知识点讲清楚、讲完、讲到老师敢直接放进课件</h1>
+    <p class="lede">输入学段与知识点，拿到一支可改分镜的讲解视频。知识点只能从带教材出处的库里选，
+      模型不许自己编。</p>
+  </section>
+
+  <!-- 生成卡片：结构化输入（Spec_Product 第 2 节），这是与竞品「一个文本框」的核心差异
+       呈现上按问答分组（SubTask 51），底层字段与枚举不变，不新增自由文本、不新增账号 -->
+  <section class="card" id="briefCard">
+
+    <div class="qgroup">
+      <div class="qhead">
+        <span class="qnum">1</span>
+        <span class="qtitle">您的身份？</span>
+        <span class="qhint" tabindex="0" role="note" aria-label="提示：身份" aria-describedby="qhintTip1"
+              data-tip="决定知识点库按哪个学段筛选，和讲解的默认深度。">?</span>
+        <span class="sr-only" id="qhintTip1">决定知识点库按哪个学段筛选，和讲解的默认深度。</span>
+      </div>
+      <div class="field-grid two">
+        <label class="field">
+          <span class="flabel">学科 <b>*</b></span>
+          <select id="fSubject"></select>
+        </label>
+        <label class="field">
+          <span class="flabel">学段 <b>*</b></span>
+          <select id="fGrade"></select>
+        </label>
+        <label class="field span-2">
+          <span class="flabel">知识点 <b>*</b></span>
+          <select id="fTopic"></select>
+          <span class="note" id="topicNote">知识点由本地知识库枚举，未命中的请求会被闸门拒绝。</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="qgroup">
+      <div class="qhead">
+        <span class="qnum">2</span>
+        <span class="qtitle">您的风格偏好？</span>
+        <span class="qhint" tabindex="0" role="note" aria-label="提示：风格偏好" aria-describedby="qhintTip2"
+              data-tip="只影响版式与画质，不影响知识点内容与科学性判定。">?</span>
+        <span class="sr-only" id="qhintTip2">只影响版式与画质，不影响知识点内容与科学性判定。</span>
+      </div>
+      <div class="field-grid two">
+        <label class="field">
+          <span class="flabel">版式风格</span>
+          <select id="fStyle"></select>
+        </label>
+        <label class="field">
+          <span class="flabel">出片画质</span>
+          <select id="fQuality"></select>
+        </label>
+        <label class="field">
+          <span class="flabel">目标时长</span>
+          <select id="fSeconds"></select>
+        </label>
+      </div>
+    </div>
+
+    <div class="qgroup">
+      <div class="qhead">
+        <span class="qnum">3</span>
+        <span class="qtitle">用途？</span>
+        <span class="qhint" tabindex="0" role="note" aria-label="提示：用途" aria-describedby="qhintTip3"
+              data-tip="当前仅影响配音与先修说明；可视化为主/细致讲解两档正在设计中（SubTask 52），尚未接入生成逻辑。">?</span>
+        <span class="sr-only" id="qhintTip3">当前仅影响配音与先修说明；可视化为主/细致讲解两档正在设计中（SubTask 52），尚未接入生成逻辑。</span>
+      </div>
+      <div class="field-grid two">
+        <div class="field checks">
+          <label class="check"><input type="checkbox" id="fNarration" checked> 配音（Windows 离线 TTS）</label>
+          <label class="check"><input type="checkbox" id="fPrior" checked> 自动补先修说明</label>
+          <label class="check readonly"><input type="checkbox" id="fSubs" checked disabled> 字幕（可达性要求，不可关）</label>
+        </div>
+        <p class="note span-2">「可视化为主 / 需要细致有声讲解」两档用途即将上线，接入后会影响镜头版式配比与口播详略（当前阶段：设计中，不影响本次生成）。</p>
+      </div>
+    </div>
+
+    <label class="field" for="fRaw">
+      <span class="flabel">补充要求（选填）</span>
+      <textarea id="fRaw" placeholder="例：结尾多留一行易错提醒；把例题换成斜面场景。只影响有对应开关的环节，不会覆盖知识点库内容。"></textarea>
+      <span class="note">对应 Brief.raw_text；分镜正文仍由知识点库的 sequence 决定，改正文请去下面的分镜编辑器。</span>
+    </label>
+
+    <div class="btn-row">
+      <button type="button" class="btn ghost" id="btnClear">清空</button>
+      <button type="button" class="btn ghost" id="btnReset">恢复默认</button>
+      <button type="button" class="btn primary" id="btnGenerate">
+        <span class="btn-label">开始生成视频</span>
+        <span class="btn-spin" aria-hidden="true"></span>
+      </button>
+    </div>
+    <p class="errbox" id="briefError" role="alert" aria-live="assertive" hidden></p>
+  </section>
+
+  <!-- 进度：竞品被批评「四态、无进度、无预计」，这里至少给阶段名 + 已用秒数 -->
+  <section class="card hidden" id="progressCard">
+    <h2>生成进度</h2>
+    <p class="hint" id="jobHint">—</p>
+    <div class="stagebar" id="stageBar" aria-hidden="true" hidden><div class="stagebar-fill" id="stageBarFill"></div></div>
+    <div class="stages" id="stageList"></div>
+    <div class="elapsed">已用 <b id="elapsedSec">0</b> 秒</div>
+    <div class="logbox" id="jobError" role="alert" aria-live="assertive" hidden></div>
+  </section>
+
+  <!-- 结果：播放器 + 四个必取产物 + 分镜可改 -->
+  <section class="card hidden" id="resultCard">
+    <h2>成片</h2>
+    <p class="hint" id="resultMeta">—</p>
+    <p class="hint warn" id="resultTts">—</p>
+    <div class="player-wrap">
+      <video id="player" controls playsinline preload="metadata"></video>
+    </div>
+    <div class="dl-row" id="downloads"></div>
+
+    <div class="plan-head">
+      <h3>分镜脚本（可改）<span class="pill">Plan JSON 是一等公民</span></h3>
+      <p class="hint">改镜头时长（含淡入/淡出留白）或口播文本后重出片 —— 竞品的「调整」是拿自由文本整体重抽一次，这里改的是中间产物本身。
+        时长以实测语音时长为准，字幕按镜头内绝对时间落在口播窗口 [淡入, 时长-淡出] 内。
+        改完会重新过一遍静态监督闸门（单镜头时长、语速、版面安全区、上下标字形、字幕落点、总时长偏差），
+        再走渲染时长一致性（G2）与音画同轴（G4）两道出片闸门；被打回时不烧录半成品，原因会显示在这里。</p>
+      <div class="btn-row">
+        <button type="button" class="btn ghost" id="btnReloadPlan">放弃修改</button>
+        <button type="button" class="btn primary" id="btnRegenerate">按修改重出片</button>
+      </div>
+    </div>
+    <div id="shots" class="shots"></div>
+    <p class="errbox" id="planError" role="alert" aria-live="assertive" hidden></p>
+  </section>
+
+  <!-- 作品墙：结构与竞品一致（标题 + 学科 tab + 1→3 列网格），卡片带结构化元数据 -->
+  <section class="wall">
+    <h2 class="wall-title">探索灵感 · 已生成的作品</h2>
+    <div class="tabs" id="wallTabs">
+      <button type="button" class="tab active" data-subject="">全部</button>
+    </div>
+    <p class="hint" id="wallHint">加载中…</p>
+    <div class="grid" id="wallGrid"></div>
+  </section>
+
+  <footer class="foot">
+    <span class="brand-name">澄象</span>
+    <span class="foot-tag">ChengXiang · structured inputs, inspectable storyboards, verifiable sources</span>
+    <button type="button" class="btn ghost foot-fb" id="btnFeedback">问题反馈</button>
+  </footer>
+
+  <!-- 问题反馈：本地演示无账号，只落盘本机 feedback/ 目录（不发任何第三方服务） -->
+  <section class="card hidden" id="feedbackCard">
+    <h2>问题反馈</h2>
+    <p class="hint">内容错误、画面问题、功能建议都可以写。反馈只保存在本机 <code>feedback/</code> 目录，不联网、不需要账号。</p>
+    <div class="field-grid two">
+      <label class="field">
+        <span class="flabel">类型</span>
+        <select id="fFbType">
+          <option value="bug">功能问题 / 报错</option>
+          <option value="content">内容 / 科学性</option>
+          <option value="suggestion">功能建议</option>
+          <option value="other">其他</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="flabel">联系方式（选填）</span>
+        <input type="text" id="fFbContact" maxlength="200" placeholder="邮箱 / 微信，仅用于回复">
+      </label>
+      <label class="field span-2">
+        <span class="flabel">反馈内容 <b>*</b></span>
+        <textarea id="fFbText" maxlength="5000" rows="4" placeholder="例：熵那支片第 3 镜的旁白说「孤立体系」，但画面上没有标明条件。"></textarea>
+      </label>
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn ghost" id="btnFeedbackCancel">取消</button>
+      <button type="button" class="btn primary" id="btnFeedbackSubmit">提交反馈</button>
+    </div>
+    <p class="errbox" id="fbError" role="alert" aria-live="assertive" hidden></p>
+    <p class="hint ok" id="fbDone" hidden>已收到，谢谢！</p>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
