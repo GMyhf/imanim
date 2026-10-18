@@ -1589,6 +1589,7 @@ class Explainer(Scene):
         if is_last:
             refs = shot.get("kp_refs") or [
                 f"{r.get('source', '')} {r.get('locator', '')}".strip() for r in plan.get("refs", [])
+                if r.get("kind") != "storyboard_budget"
             ]
             if refs:
                 # 出处行是"可追溯"这一维唯一的屏上证据，只显 refs[0] 等于把另外几条擦掉

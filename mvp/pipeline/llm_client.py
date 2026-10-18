@@ -111,7 +111,7 @@ def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *
         except (KeyError, IndexError, json.JSONDecodeError) as e:
             last = f"响应格式异常 {type(e).__name__}"
         if attempt < retries:
-            time.sleep(2 * (attempt + 1))
+            time.sleep(5 * (attempt + 1) ** 2)
     raise LLMError(f"[{stage}/{model_for(stage)}] 调用失败：{last}")
 
 

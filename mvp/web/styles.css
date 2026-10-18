@@ -53,6 +53,7 @@ body {
 .brand-name { font-weight: 700; }
 .brand-sub { color: var(--ink-2); font-size: 13px; }
 .bar-right { color: var(--ink-2); font-size: 13px; }
+.bar-fb { padding: 5px 14px; font-size: 13px; }
 
 /* ---- 主区 */
 .page {

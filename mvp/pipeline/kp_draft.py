@@ -13,17 +13,19 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 
-from . import knowledge, llm_client, llm_prompts
-from .ir import NATURAL_CPS
+from . import knowledge, llm_client, llm_prompts, review
+from .ir import NAME_MAX_SHARE, NATURAL_CPS, naming_narration, naming_shot_seconds
 
 # 与 render/scene.py 的 Scene.BUILDERS 同一份清单（tests/test_kp_draft.py 里做了比对，防漂移）。
 VISUAL_KINDS = ("axis_graph", "callout", "compare", "energy_dist", "figure", "formula", "graph_vt",
                 "microstate", "mind_map", "particle_box", "stat_chart", "steps", "summary",
                 "table", "title")
 
-MAX_ATTEMPTS = 2       # 第一版 + 一次带问题清单的重写
+MAX_ATTEMPTS = 3       # 第一版 + 两次带问题清单的重写
 MIN_SHOTS, MAX_SHOTS = 4, 10
+MAX_PRIOR_CHARS = 12  # 点名镜头把它们逐条念出来并整行上屏，整句会爆字数与字号
 
 
 class DraftError(RuntimeError):
@@ -31,7 +33,8 @@ class DraftError(RuntimeError):
 
 
 def _norm(s: str) -> str:
-    return re.sub(r"\s+", "", str(s or ""))
+    """与 review._flat 同口径：去空白与标点再比，两道闸不能一松一紧。"""
+    return review._flat(str(s or ""))
 
 
 def _texts(entry: dict) -> str:
@@ -71,6 +74,11 @@ def _check_shape(entry: dict, topic: str) -> list[str]:
         v = entry.get(k)
         if not isinstance(v, list) or not v:
             errs.append(f"{k} 必须是非空字符串数组")
+    prior = entry.get("prior")
+    if not isinstance(prior, list) or len(prior) > 3 or any(
+            not isinstance(p, str) or not p.strip() or len(p) > MAX_PRIOR_CHARS for p in prior):
+        errs.append(f"prior 必须是最多 3 条的字符串数组，每条是不超过 {MAX_PRIOR_CHARS} 字的名词短语"
+                    "（如「磁通量的含义」），不要写成整句")
     seq = entry.get("sequence")
     if not isinstance(seq, list) or not (MIN_SHOTS <= len(seq) <= MAX_SHOTS):
         errs.append(f"sequence 必须是 {MIN_SHOTS}~{MAX_SHOTS} 个镜头")
@@ -107,10 +115,33 @@ def _check_content(entry: dict, target_seconds: float) -> list[str]:
             errs.append(f"forbidden 里的「{word}」出现在了成片文字里——必须改写口播/屏上内容，不能把它从 forbidden 删掉来蒙过检查")
     seq = entry.get("sequence") or []
     chars = sum(len(str(b.get("narration") or "")) for b in seq)
-    budget = max(1.0, target_seconds - len(seq) * 1.15) * NATURAL_CPS
+    # 开了「先修」时，分镜会在正片前加一段点名镜头（storyboard.build），它先吃掉自己的秒数
+    prior = [p for p in (entry.get("prior") or []) if isinstance(p, str) and p.strip()]
+    naming = 0.0
+    if prior:
+        need, cap = naming_shot_seconds(naming_narration(prior)), NAME_MAX_SHARE * target_seconds
+        if need > cap:
+            # 点名镜头最多占全片 15%，超出部分闸门会判 OVERLOAD；短片只能少点几条或不点
+            errs.append(f"prior 太长：点名镜头念完要 {need:.1f}s，{target_seconds:g}s 的片子只给它 {cap:.1f}s；"
+                        "删掉次要的条目、缩短措辞，或直接给空数组")
+        naming = min(need, cap)
+    budget = max(1.0, target_seconds - naming - len(seq) * 1.15) * NATURAL_CPS
     if chars > budget:
         errs.append(f"口播总字数 {chars} 超过目标时长允许的约 {int(budget)} 字，请精简口播（宁少勿多）")
     return errs
+
+
+def _keep_rejected(subject: str, topic: str, raw: str, problems: list[str]) -> None:
+    """起草失败时留下模型原始输出，事后才分得清是标点差异还是模型真的改写了。
+    放在 AUTO_DIR/_rejected 下、扩展名 .txt：knowledge 只读 AUTO_DIR/<学科>/*.json，读不到它。"""
+    try:
+        d = knowledge.AUTO_DIR / "_rejected"
+        d.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        (d / f"{stamp}-{_id(subject, '', topic)[-10:]}.txt").write_text(
+            "问题：\n" + "\n".join(problems) + "\n\n模型原始输出：\n" + raw, encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _id(subject: str, grade: str, topic: str) -> str:
@@ -131,18 +162,26 @@ def draft(subject: str, grade: str, topic: str, target_seconds: float = 120.0,
     topic = str(topic).strip()
     entry: dict = {}
     problems: list[str] = []
+    raw = ""
     for attempt in range(MAX_ATTEMPTS):
         raw = llm_client.chat("K0", llm_prompts.K0_SYSTEM,
                               _user_message(subject, grade, topic, target_seconds, raw_text, problems),
                               max_tokens=8000, json_mode=True)
-        entry = llm_client.extract_json(raw)
+        try:
+            entry = llm_client.extract_json(raw)
+        except llm_client.LLMError:
+            entry = None
+        if not isinstance(entry, dict):
+            problems = ["输出不是一个合法的 JSON 对象，请只输出完整 JSON"]
+            continue
         entry["topic"] = topic          # 归一：topic 永远以用户原文为准
         entry["refs"] = []              # 铁律：草稿不写出处
         problems = _check_shape(entry, topic) + _check_content(entry, target_seconds)
         if not problems:
             break
     if problems:
-        raise DraftError("知识点起草未通过自检（已重写一次）：" + "；".join(problems[:6]))
+        _keep_rejected(subject, topic, raw, problems)
+        raise DraftError(f"知识点起草未通过自检（已重试 {MAX_ATTEMPTS - 1} 次）：" + "；".join(problems[:6]))
 
     entry.update({"id": _id(subject, grade, topic), "subject": subject,
                   "grade": grade, "origin": "model_draft"})

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 
 from .ir import (ACCEPTABLE_RATE, BUDGET_REF_KIND, FAST_CPS, GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
                  MIN_SHOT_SECONDS, NATURAL_CPS, RATE_FACTOR, SHOT_HEAD, SHOT_TAIL, SPEED_LADDER,
@@ -133,9 +134,14 @@ def _text(v) -> str:
     return v if isinstance(v, str) else ("" if v is None else str(v))
 
 
+_KEEP_PUNCT = set("-−–—/%‰^")
+
+
 def _flat(v: str) -> str:
-    """去掉所有空白：口播里写「a 不等于零」、条目里声明「a不等于零」，应当算说过。"""
-    return re.sub(r"\s+", "", v)
+    """去掉空白与标点再比：「a 不等于零。」与「a不等于零，」应当算说过。
+    数学符号（= ≠ + < > 等不属于标点类）和 - / % ^ 保留，免得「a≠0」与「a=0」被压成同一串。"""
+    return "".join(c for c in v
+                   if not c.isspace() and (c in _KEEP_PUNCT or not unicodedata.category(c).startswith("P")))
 
 
 _CN_NUM = {"两": 2, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6}
@@ -217,6 +223,8 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
 
     total = _num(plan.total_seconds)
     forbidden = _seq((kp or {}).get("forbidden"))
+    # 模型起草的库外条目本来就没有教材出处（sidecar 的 kp_origin 如实标注），不按缺出处打回。
+    draft_kp = bool(kp) and kp.get("origin") == "model_draft"
 
     # 同片"写全了限定"的那几句（结论 emphasis / 屏上正文 / 条目声明的 must_say）。
     # 第四轮 F-3：chem 末镜「一句话记住」把 shot6 的 emphasis「氧化型浓度升高，电极电势增大」压成
@@ -262,7 +270,7 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
             add(s.index, "OVERLOAD", f"口播 {words} 字，本镜可说窗口只有 {window:.1f}s → {cps:.1f} 字每秒，"
                                      f"{ceiling}也念不完，必须精简或给这一镜更多秒数")
 
-        if not s.kp_refs:
+        if not s.kp_refs and not draft_kp:
             add(s.index, "NO_REF", "该镜头没有出处引用，科学性不可追溯")
 
         for word in forbidden:

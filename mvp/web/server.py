@@ -57,7 +57,7 @@ FEEDBACK_MAX_CONTACT = 200
 GENERATE_DISABLED = os.environ.get("MVP_GENERATE_DISABLED") == "1"
 GENERATE_DISABLED_MSG = (
     "在线生成在当前部署里已关闭：未配置模型网关密钥或网络，文案与配音生成不可用。"
-    "本空间提供已渲染成片的画廊、分镜脚本与全部技术文档；本地跑一条命令的说明见 README。")
+    "本空间提供已渲染成片的画廊、分镜脚本与全部技术文档。")
 
 # 复用管线的输入契约层做「单一真源」校验：知识点检索走 knowledge.load(subject, topic, grade)（带学段过滤），
 # Brief 校验走 Brief.validate()（返回错误清单而非抛异常，__post_init__ 会把字符串数字归一化）。

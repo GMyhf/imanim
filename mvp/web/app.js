@@ -27,7 +27,7 @@ const DEFAULTS = { subject: "physics", grade: "H1", seconds: "120", style: "clea
 
 /* 错误人话映射（SubTask 63）：结论用人话说，原始错误文本保留在 details 折叠里，不吞信息。 */
 const NET_MSG = "无法连接到渲染服务：服务可能没有启动，或中途退出了。请确认服务正在运行后刷新页面。";
-const DISABLED_MSG = "当前部署已关闭在线生成（409）：这里只浏览已生成的作品墙、分镜脚本与技术文档。本地跑一条命令即可自行出片，见 README。";
+const DISABLED_MSG = "当前部署已关闭在线生成（409）：这里只浏览已生成的作品墙、分镜脚本与技术文档。";
 const JOB_FAIL_MSG = "生成失败：作业在执行中出错，未产出成片。原始错误见下方详情。";
 const GATE_FAIL_MSG = "生成被静态监督闸门打回：分镜未通过检查，未烧录半成品。可在下方修改分镜后重出片。";
 
@@ -149,7 +149,7 @@ function startJob(jobId, kindLabel) {
   state.busy = true;
   setBusy(true);
   $("#progressCard").classList.remove("hidden");
-  $("#jobHint").textContent = `${kindLabel} · 任务 ${jobId} · 本地 CPU 渲染，开始计时`;
+  $("#jobHint").textContent = `${kindLabel} · 任务 ${jobId} · 云端生成中，用时见下方计时`;
   $("#stageList").textContent = "";
   $("#stageBar").hidden = true;
   $("#stageBarFill").style.width = "0";
@@ -387,7 +387,7 @@ async function loadGallery() {
     r = await fetch("/api/gallery");
     d = await r.json();
   } catch (e) {
-    $("#wallHint").textContent = "作品墙加载失败：无法连接本地服务，请确认 server.py 正在运行后刷新。";
+    $("#wallHint").textContent = "作品墙加载失败：无法连接服务，请稍后刷新重试。";
     return;
   }
   if (!r.ok || d.error) {  // 接口 5xx/4xx 时不能冒充「新作品制作中」的空态
@@ -560,11 +560,18 @@ $("#btnRegenerate").addEventListener("click", regenerate);
 $("#btnReloadPlan").addEventListener("click", () => state.plan && renderShots(state.plan));
 
 /* ------------------------------------------------------------------ 问题反馈 */
-$("#btnFeedback").addEventListener("click", () => {
-  $("#feedbackCard").classList.toggle("hidden");
+function toggleFeedback() {
+  const card = $("#feedbackCard");
+  card.classList.toggle("hidden");
   hideError($("#fbError"));
   $("#fbDone").hidden = true;
-});
+  if (!card.classList.contains("hidden")) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    $("#fFbText").focus({ preventScroll: true });
+  }
+}
+$("#btnFeedback").addEventListener("click", toggleFeedback);
+$("#btnFeedbackTop").addEventListener("click", toggleFeedback);
 $("#btnFeedbackCancel").addEventListener("click", () => {
   $("#feedbackCard").classList.add("hidden");
   hideError($("#fbError"));
