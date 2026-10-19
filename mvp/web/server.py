@@ -59,6 +59,11 @@ GENERATE_DISABLED_MSG = (
     "在线生成在当前部署里已关闭：未配置模型网关密钥或网络，文案与配音生成不可用。"
     "本空间提供已渲染成片的画廊、分镜脚本与全部技术文档。")
 
+# 并发上限：generate/improve 都会连发 claude-opus-5-5（K0 起草 + A3 分镜），同时跑多条会把
+# 同一个网关打到上游 120s 内回不完（Cloudflare 524）。这里按在跑任务数拦一道，宁可让新任务
+# 排队失败也不让用户自伤式并发。regenerate 只走 TTS+渲染、不打 LLM 文案模型，不占这个名额。
+MAX_LLM_JOBS = int(os.environ.get("QX_MAX_LLM_JOBS", "2"))
+
 # 复用管线的输入契约层做「单一真源」校验：知识点检索走 knowledge.load(subject, topic, grade)（带学段过滤），
 # Brief 校验走 Brief.validate()（返回错误清单而非抛异常，__post_init__ 会把字符串数字归一化）。
 # 只 import 纯标准库的 ir/knowledge，不会把 manim/渲染依赖拖进 HTTP 线程。
@@ -86,6 +91,12 @@ MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=ut
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _llm_busy() -> int:
+    """在跑的 LLM 型任务数（generate/improve）。regenerate 只走 TTS+渲染、不发文案模型，不占名额。"""
+    return sum(1 for j in _jobs.values()
+               if j.get("kind") in ("generate", "improve") and j.get("state") == "running")
 
 
 # --------------------------------------------------------------------------- 知识点库
@@ -308,6 +319,11 @@ def start_generate(brief: dict, quality: str) -> str:
     job_dir.mkdir(parents=True, exist_ok=True)
     (job_dir / "brief.json").write_text(json.dumps(brief, ensure_ascii=False, indent=2), encoding="utf-8")
     with _lock:
+        busy = _llm_busy()
+        if busy >= MAX_LLM_JOBS:
+            raise ValueError(
+                f"已有 {busy} 个生成/改进任务在跑（上限 {MAX_LLM_JOBS}），并发会把模型网关打到超时；"
+                "请等它们完成后再发新的")
         _jobs[job_id] = {"id": job_id, "kind": "generate", "key": f"job:{job_id}",
                          "state": "running", "created": time.time(), "brief": brief, "quality": quality}
         persist(job_id)
@@ -369,6 +385,11 @@ def start_improve(source_key: str, instruction: str, quality: str) -> str:
     plan_file.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     (job_dir / "instruction.txt").write_text(instruction, encoding="utf-8")
     with _lock:
+        busy = _llm_busy()
+        if busy >= MAX_LLM_JOBS:
+            raise ValueError(
+                f"已有 {busy} 个生成/改进任务在跑（上限 {MAX_LLM_JOBS}），并发会把模型网关打到超时；"
+                "请等它们完成后再发新的")
         _jobs[job_id] = {"id": job_id, "kind": "improve", "key": f"job:{job_id}", "state": "running",
                          "created": time.time(), "source_key": source_key, "quality": quality,
                          "brief": plan.get("brief", {}), "instruction": instruction}

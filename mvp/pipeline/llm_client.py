@@ -20,6 +20,12 @@ from pathlib import Path
 BASE_URL = os.environ.get("QX_LLM_BASE_URL", "https://api.openai-next.com").rstrip("/")
 DEFAULT_KEY_FILE = r"D:\Desktop\key.txt"
 
+# 可重试的 HTTP 状态码：网关/上游瞬时故障。520~527 是 Cloudflare 系（524=代理读超时，
+# 上游在 120s 内没回完），530=源站错误，599=某些 CDN 的网络连接超时——这些都不该一次定生死，
+# 退避重试往往能赶上上游缓过劲。不在列表里的（400/401/403/404…）是请求本身的问题，重试无益。
+RETRYABLE_HTTP = (408, 429, 500, 502, 503, 504,
+                  520, 521, 522, 523, 524, 525, 526, 527, 530, 599)
+
 # 模型 ID 一律照 guide/resources 原样复制，不按版本号改写。各环节任务性质不同，模型分开选。
 # flow v2（Spec_AgentFlow_v2.md §2）：生成型棒次钉死 claude-opus-5-5；核对/视觉棒异构 gemini；S22 异构 opus-4-8。
 MODELS = {
@@ -104,7 +110,7 @@ def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")[:300]
             last = f"HTTP {e.code} {detail}"
-            if e.code not in (408, 429, 500, 502, 503, 504):
+            if e.code not in RETRYABLE_HTTP:
                 break
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last = f"网络错误 {type(e).__name__}"
