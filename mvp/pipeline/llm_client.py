@@ -76,6 +76,54 @@ def image_part(png: Path) -> dict:
     return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
 
 
+def _choice_content(msg: dict) -> str:
+    """从一个 choice 的 message/delta 里取文本内容（网关有的给 str、有的给 list）。"""
+    c = msg.get("content") if isinstance(msg, dict) else None
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return "".join(p.get("text", "") for p in c if isinstance(p, dict))
+    return ""
+
+
+def _read_body(r) -> str:
+    """读网关响应：优先按 SSE 流式逐 chunk 拼 content；网关无视 stream 直接回整段 JSON 时退回整段解析。
+
+    流式是 Cloudflare 524 的解法：慢模型（opus 长 thinking + 大 JSON）非流式时网关要等全部生成完
+    才回第一个字节，Cloudflare 的 120s 读超时先到、直接 524；流式则边生成边回、字节不断，读超时不触发。
+    """
+    parts: list[str] = []
+    raw = b""
+    sse = False
+    for line in r:
+        raw += line
+        text = line.decode("utf-8", "replace").strip()
+        if text.startswith("data:"):
+            sse = True
+            data = text[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                obj = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            try:
+                choice = obj["choices"][0]
+            except (KeyError, IndexError, TypeError):
+                continue
+            parts.append(_choice_content(choice.get("delta") or choice.get("message") or {}))
+    if sse:
+        return "".join(parts)
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return ""
+    try:
+        return _choice_content(payload["choices"][0].get("message") or {})
+    except (KeyError, IndexError, TypeError):
+        return ""
+
+
 def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *,
          max_tokens: int = 8000, timeout: float = 300.0, retries: int = 2,
          json_mode: bool = False) -> str:
@@ -87,6 +135,7 @@ def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *
         "model": model_for(stage),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
         "max_tokens": max_tokens,
+        "stream": True,
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
@@ -100,10 +149,7 @@ def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *
                      "User-Agent": "chengxiang-mvp/1.0", "Accept": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                payload = json.loads(r.read().decode("utf-8"))
-            text = payload["choices"][0]["message"]["content"]
-            if isinstance(text, list):
-                text = "".join(p.get("text", "") for p in text if isinstance(p, dict))
+                text = _read_body(r)
             if not text or not text.strip():
                 raise LLMError(f"[{stage}] 模型返回空内容")
             return text
