@@ -8,4 +8,10 @@ cd /app
 # 库外知识点由 K0 起草，需 QX_LLM_K0=1。
 export QX_LLM_K0="${QX_LLM_K0:-1}"
 
+# 阻断项③运行时化：起服务前量一次当前字体栈（Noto Serif CJK SC + TeX Gyre Termes）的字距，
+# 落盘 font_metrics_cache.json，font_metrics.metrics_for 未标定时读它。量不出来就如实保持
+# "重测前只当画廊"（生成照旧报 FontMetricsError），画廊不受影响。
+python mvp/tools_fontmetrics.py --out mvp/font_metrics_cache.json \
+  || echo "[fontmetrics] 标定失败：在线生成保持关闭（画廊不受影响）" >&2
+
 exec python mvp/web/server.py --host 0.0.0.0 --port "${PORT:-7860}"

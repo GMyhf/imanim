@@ -20,10 +20,13 @@ ENV PYTHONUNBUFFERED=1 \
     #   SimSun（中文宋体）      → Noto Serif CJK SC（fonts-noto-cjk）
     #   Times New Roman（拉丁） → TeX Gyre Termes（fonts-texgyre，Times 度量兼容）
     # ★ 换字体是硬依赖触发器：scene.py 的 _DELTA_* 与 review.py 的 UNIT_CJK/UNIT_ASCII
-    #   都标定在 SimSun+Times 上，必须先在容器里重跑字距 probe 重测（README 阻断项③），
-    #   重测前不要开生成入口（start.sh 默认 MVP_GENERATE_DISABLED=1 压着这件事）。
+    #   都标定在 SimSun+Times 上，容器换字体后由 start.sh 起服务前自动跑一次字距探针
+    #   （tools_fontmetrics.py --out font_metrics_cache.json），font_metrics.metrics_for
+    #   未标定时读这份缓存注册进来；探针跑不出就如实保持"重测前只当画廊"（生成报
+    #   FontMetricsError），不用人进容器手填表。
     MVP_TEXT_FONT="Noto Serif CJK SC" \
-    MVP_LATIN_FONT="TeX Gyre Termes"
+    MVP_LATIN_FONT="TeX Gyre Termes" \
+    MVP_SUB_FONT="Noto Serif CJK SC"
     # 在线生成还需要（在创空间"环境变量"页配置，不写在这里）：
     #   QX_LLM_API_KEY=<网关密钥>        —— 或 QX_LLM_KEY_FILE=<容器内密钥文件路径>
     #   QX_LLM_BASE_URL                  —— 可选，默认 https://api.openai-next.com，容器需出网可达

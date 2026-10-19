@@ -15,7 +15,9 @@ Noto Serif CJK SC 之后，代码仍会静默沿用 SimSun 的旧值，闸门估
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 DEFAULT_TEXT_FONT = "SimSun"
 DEFAULT_LATIN_FONT = "Times New Roman"
@@ -46,10 +48,45 @@ def current_pair() -> tuple[str, str]:
             os.environ.get("MVP_LATIN_FONT", DEFAULT_LATIN_FONT))
 
 
+# 容器启动时量好的标定缓存（tools_fontmetrics.py --out 的产物，deploy/start.sh 起服务前生成）。
+# 本机开发不会生成它（SimSun/Times 已在 CALIBRATED，走不到这里）；Linux 容器换字体后由它
+# 在运行时把 Noto/Termes 的实测值注册进来，免掉"人进容器重测再手填表"这一步。
+CACHE_FILE = Path(__file__).with_name("font_metrics_cache.json")
+
+
+def load_cache(path: str | Path | None = None) -> bool:
+    """读容器启动时量好的标定缓存并注册进 CALIBRATED；读不到/损坏返回 False。
+
+    纯读 JSON、不 import manim——review.py「不拉 manim」的纪律不受影响。缓存缺失时不放水：
+    调用方仍按未标定拒绝（阻断项③要拦的正是"静默沿用别家值"）。
+    """
+    p = Path(path) if path is not None else CACHE_FILE
+    if not p.is_file():
+        return False
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    pair = tuple(data.get("pair") or [data.get("text_font"), data.get("latin_font")])
+    m = data.get("metrics")
+    if len(pair) != 2 or not isinstance(m, dict):
+        return False
+    try:
+        entry = {k: float(m[k]) for k in
+                 ("DELTA_DESC", "DELTA_CJK", "DELTA_PAREN", "UNIT_CJK", "UNIT_ASCII")}
+    except (KeyError, ValueError, TypeError):
+        return False
+    CALIBRATED[pair] = entry
+    return True
+
+
 def metrics_for(pair: tuple[str, str] | None = None) -> dict[str, float]:
-    """按字体对取标定值；表里没有就抛 FontMetricsError（带重测命令），绝不回退到别家的值。"""
+    """按字体对取标定值；表里没有先读容器启动时量好的缓存，仍没有就抛 FontMetricsError。"""
     p = pair if pair is not None else current_pair()
     m = CALIBRATED.get(p)
+    if m is None:
+        load_cache()          # 容器启动时已量好落盘；量到就注册，量不到仍按未标定拒绝
+        m = CALIBRATED.get(p)
     if m is None:
         raise FontMetricsError(
             f"字体对 {p[0]!r} + {p[1]!r} 尚无字距标定（阻断项③）：估宽/基线拼接与字体强绑定，"
