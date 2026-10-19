@@ -27,7 +27,9 @@ from manim import (
     UP,
     BLUE_C,
     Arrow,
+    Circle,
     DashedLine,
+    DashedVMobject,
     Dot,
     Rectangle,
     Sector,
@@ -103,7 +105,8 @@ CALLOUT_PAD = 0.6              # 内宽预算两侧余量（= review.CALLOUT_PAD
 FX_MAX_SEC = 0.5               # 单个强调动画最多借用的秒数
 # 这些版式是"本镜主角"（图形类）：出场/揭示时挂 Indicate 点名。
 FX_GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate",
-                    "energy_dist", "stat_chart", "mind_map", "table")
+                    "energy_dist", "stat_chart", "mind_map", "table",
+                    "force_diagram", "field", "circuit", "optics", "incline", "trajectory")
 # 角标（首镜 id / 末镜出处）到画框边的距离：让外缘正好落在安全宽边界上。
 # 原来写死 0.4，两条角标分别顶到 x=1866 / x=54，超出本项目自己的 123–1797 安全区（评审 A4）。
 EDGE_BUFF = config.frame_width / 2 - SAFE_WIDTH / 2
@@ -767,6 +770,23 @@ def _ref_texts(refs, color) -> list:
                 ln.scale_to_fit_width(REF_WIDE)
             out.append(ln)
     return out
+
+
+# ---- 物理图示方向字典（受力分析 / 光路共用）----
+# 方向词 → 单位向量；角度度数（0=右、逆时针为正）由 _dir_vec 现算。
+_FORCE_DIRS = {
+    "up": UP, "down": DOWN, "left": LEFT, "right": RIGHT,
+    "upleft": UP + LEFT, "upright": UP + RIGHT,
+    "downleft": DOWN + LEFT, "downright": DOWN + RIGHT,
+}
+
+
+def _dir_vec(d) -> np.ndarray:
+    """force_diagram 的 dir：方向词 → 单位向量；角度度数 → (cos, sin, 0)。"""
+    if isinstance(d, (int, float)) and not isinstance(d, bool):
+        a = math.radians(float(d))
+        return np.array([math.cos(a), math.sin(a), 0.0])
+    return np.array(_FORCE_DIRS.get(str(d).strip().lower(), DOWN))
 
 
 def _halo_ring(mob, color, buff=0.22, width=8, opacity=0.3):
@@ -1492,19 +1512,25 @@ class Explainer(Scene):
         root[1].move_to(root[0])
         if root[1].width > 2.1:
             root[1].scale_to_fit_width(2.1)
-        sides = {1: [], -1: []}
-        for i, b in enumerate(branches):
-            sides[1 if i % 2 == 0 else -1].append((i, b))
+        # 行 = 左右一对（分支 0/1 同排、2/3 同排……），每排高度取这对里较高者。
+        # 原先左右两列各算各的堆高、各自由 y=0 向上下铺：一列有个高分支就把整列顶偏，
+        # 分支 1 会飘到分支 0 上头，视觉顺序和分镜顺序反过来（用户实报「思维导图有时画反的」）。
+        heights = [max(0.8, 0.46 * len(b.get("children", []))) for b in branches]
+        rows = [max(heights[r:r + 2]) for r in range(0, len(branches), 2)]
+        total = sum(rows) + 0.2 * (len(rows) - 1)
         tags = []
         g = VGroup(root)
-        for sgn, lst in sides.items():
-            heights = [max(0.8, 0.46 * len(b.get("children", []))) for _, b in lst]
-            total = sum(heights) + 0.2 * (len(lst) - 1)
-            y = total / 2
-            for (i, b), h in zip(lst, heights):
-                cy = y - h / 2
-                y -= h + 0.2
-                col = (th["accent"], th["key"], th["warn"], GREEN_C)[i % 4]
+        y = total / 2
+        for r, rh in enumerate(rows):
+            cy = y - rh / 2
+            y -= rh + 0.2
+            for k in (0, 1):
+                idx = r * 2 + k
+                if idx >= len(branches):
+                    continue
+                b = branches[idx]
+                sgn = 1 if k == 0 else -1
+                col = (th["accent"], th["key"], th["warn"], GREEN_C)[idx % 4]
                 head = rich(str(b.get("h", "")), 26, col)
                 box = RoundedRectangle(width=head.width + 0.4, height=0.62, corner_radius=0.12, color=col, stroke_width=3)
                 node = VGroup(box, head)
@@ -1518,7 +1544,7 @@ class Explainer(Scene):
                     t.move_to([sgn * 4.0 + sgn * t.width / 2, ky, 0])
                     grp.add(t, Line(node[0].get_edge_center(RIGHT * sgn), [sgn * 3.9, ky, 0], color=col, stroke_width=1.5))
                 g.add(grp)
-                tags.append((i, grp))
+                tags.append((idx, grp))
         if len(tags) >= 2:
             keys = reveal_keys(p.get("at"), len(branches))
             for i, grp in tags:
@@ -1565,6 +1591,425 @@ class Explainer(Scene):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
 
+    # ---------------- 物理图示原语（受力 / 场 / 电路 / 光路） ----------------
+    # 画法口径全部取自 Projrct_Plan/Ref_Physics_Diagram_Standards.txt：物理图示用明文规定画，
+    # 不用数学语言（角度弧线、网格坐标图）。
+    def _v_force_diagram(self, p, th):
+        """受力分析：真实力箭头从对象（方块/质点）中心沿方向画出，标签在箭头端，逐条揭示。
+
+        dir 接受方向词（up/down/left/right/upleft/upright/downleft/downright）或角度度数
+        （0=右、逆时针为正）。箭长固定、以对象中心为起点，学生看到的是"合外力从哪来、指向哪"。
+        """
+        obj = str(p.get("object") or "box")
+        forces = [f for f in p.get("forces", []) if isinstance(f, dict)]
+        if obj == "point":
+            body = VGroup(Dot([0, 0, 0], radius=0.1, color=th["key"]))
+        else:
+            frame = Rectangle(width=1.5, height=1.0, color=th["key"], stroke_width=4).set_fill(th["key"], 0.12)
+            body = VGroup(frame)
+            if p.get("label_in"):
+                lab = rich(str(p["label_in"]), 30, th["fg"])
+                lab.move_to(frame)
+                body.add(lab)
+        L = 1.25
+        units = []
+        for f in forces:
+            d = _dir_vec(f.get("dir"))
+            color = th.get(str(f.get("tone") or "key"), th["key"])
+            arrow = Arrow([0, 0, 0], np.array(d) * L, color=color, buff=0, stroke_width=5)
+            unit = VGroup(arrow)
+            label = str(f.get("label") or f.get("name") or "")
+            if label:
+                lab = rich(label, 26, color)
+                lab.next_to(arrow.get_end(), d, buff=0.08)
+                unit.add(lab)
+            units.append(unit)
+        if len(units) >= 2:
+            for u, key in zip(units, reveal_keys(p.get("at"), len(units))):
+                tag_reveal(u, key)
+        g = VGroup(body, *units)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _v_field(self, p, th):
+        """场图示：region（垂直纸面向里×/向外·）、wire（通电导线截面+安培定则环绕磁感线）、
+        magnet（条形磁铁 N→S 闭合磁感线）。"""
+        mode = str(p.get("mode") or "region")
+        if mode == "wire":
+            return self._f_field_wire(p, th)
+        if mode == "magnet":
+            return self._f_field_magnet(p, th)
+        return self._f_field_region(p, th)
+
+    def _f_field_region(self, p, th):
+        """垂直纸面方向的均匀场：一屏（或左右各半屏）的 ×（纸面向里）/ ·（纸面向外）。"""
+        sym = str(p.get("symbols") or "cross")
+
+        def panel(kind):
+            marks = VGroup()
+            for r in range(4):
+                for c in range(5):
+                    x, y = (c - 2) * 0.66, (1.5 - r) * 0.66
+                    marks.add(T("×", font_size=36, color=th["warn"]).move_to([x, y, 0]) if kind == "cross"
+                              else Dot([x, y, 0], radius=0.09, color=th["accent"]))
+            box = Rectangle(width=marks.width + 0.8, height=marks.height + 0.8,
+                            color=th["dim"], stroke_width=2)
+            return VGroup(box, marks)
+
+        if sym == "both":
+            g = VGroup(panel("cross"), panel("dot")).arrange(RIGHT, buff=1.0)
+        else:
+            g = panel("cross" if sym == "cross" else "dot")
+        cap = {"cross": "垂直纸面向里 ×", "dot": "垂直纸面向外 ·",
+               "both": "左：纸面向里 ×　　右：纸面向外 ·"}.get(sym, "")
+        if cap:
+            g = VGroup(g, rich(cap, 24, th["fg"])).arrange(DOWN, buff=0.25)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_field_wire(self, p, th):
+        """通电直导线截面：圆心标电流 ×（进纸面）/ ·（出纸面），同心圆是磁感线，
+        切向小箭头按安培定则示环绕方向（出=逆时针、进=顺时针）。"""
+        into = str(p.get("current") or "out") == "in"
+        conductor = Circle(radius=0.32, color=th["key"], stroke_width=4).set_fill(th["key"], 0.25)
+        cur = T("×" if into else "·", font_size=40,
+                color=th["warn"] if into else th["accent"]).move_to([0, 0, 0])
+        g = VGroup(conductor, cur)
+        for r in (0.9, 1.5, 2.1):
+            g.add(Circle(radius=r, color=th["dim"], stroke_width=2))
+        sgn = -1 if into else 1
+        for r, ang in ((1.5, 60), (1.5, 200), (2.1, 130)):
+            a = math.radians(ang)
+            pos = np.array([r * math.cos(a), r * math.sin(a), 0.0])
+            t = sgn * np.array([-math.sin(a), math.cos(a), 0.0])
+            g.add(Arrow(pos - t * 0.28, pos + t * 0.28, color=th["warn"], buff=0, stroke_width=5))
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_field_magnet(self, p, th):
+        """条形磁铁：左 S 右 N，磁感线为穿过两极的闭合椭圆，顶部/底部箭头示外磁路方向 N→S。"""
+        bar = VGroup(
+            Rectangle(width=1.5, height=0.9, color=th["dim"]).set_fill(th["dim"], 0.85).move_to(LEFT * 0.75),
+            Rectangle(width=1.5, height=0.9, color=th["warn"]).set_fill(th["warn"], 0.85).move_to(RIGHT * 0.75),
+            T("S", font_size=30, color=WHITE).move_to(LEFT * 0.75),
+            T("N", font_size=30, color=WHITE).move_to(RIGHT * 0.75),
+        )
+        g = VGroup(bar)
+        heights = [1.3, 2.1, 2.9]
+        for i, h in enumerate(heights):
+            g.add(Ellipse(width=3.0, height=h, color=th["accent"],
+                          stroke_width=3 if i == len(heights) - 1 else 2))
+            if i >= 1:  # 最外两条标方向：外磁路 N→S，顶部/底部都朝左
+                b = h / 2
+                for s in (1, -1):
+                    g.add(Arrow([0.35, s * b, 0], [-0.35, s * b, 0], color=th["warn"], buff=0, stroke_width=5))
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _v_circuit(self, p, th):
+        """单回路电路图（GB/T 4728 符号）：元件沿顶边排开，其余三边是导线，连接点实心圆点。
+
+        符号：电池=长线正极+短线负极、电阻=矩形、开关=断开斜刃、灯泡=圆圈内×、
+        电表=圆圈内 A/V；导线横平竖直拐直角。
+        """
+        elems = [e for e in p.get("elements", []) if isinstance(e, dict)]
+        n = max(len(elems), 1)
+        W = max(4.0, 1.7 * n + 0.8)
+        H = 1.6
+        hw, hh = W / 2, H / 2
+        wire = th["dim"]
+        g = VGroup()
+        g.add(Line([-hw, hh, 0], [-hw, -hh, 0], color=wire, stroke_width=3))
+        g.add(Line([-hw, -hh, 0], [hw, -hh, 0], color=wire, stroke_width=3))
+        g.add(Line([hw, -hh, 0], [hw, hh, 0], color=wire, stroke_width=3))
+        xs = [-hw + (i + 1) * W / (n + 1) for i in range(n)]
+        gw = 0.55
+
+        def junction(x):
+            g.add(Dot([x, hh, 0], radius=0.055, color=wire).set_fill(wire, 1.0))
+
+        def wire_to(a, b):
+            g.add(Line([a, hh, 0], [b, hh, 0], color=wire, stroke_width=3))
+
+        prev = -hw
+        for x in xs:
+            wire_to(prev, x - gw)
+            junction(x - gw)
+            junction(x + gw)
+            prev = x + gw
+        wire_to(prev, hw)
+        for cx, cy in ((-hw, hh), (hw, hh), (hw, -hh), (-hw, -hh)):
+            g.add(Dot([cx, cy, 0], radius=0.055, color=wire).set_fill(wire, 1.0))
+
+        def symbol(e, x):
+            ty = str(e.get("type"))
+            y = hh
+            col = th["key"]
+            sg = VGroup()
+            if ty == "battery":
+                sg.add(Line([x - gw, y - 0.28, 0], [x - gw, y + 0.28, 0], color=col, stroke_width=5))
+                sg.add(Line([x + gw, y - 0.16, 0], [x + gw, y + 0.16, 0], color=col, stroke_width=5))
+                sg.add(rich("+", 22, col).next_to([x - gw, y + 0.28, 0], UP, buff=0.04))
+                sg.add(rich("−", 22, col).next_to([x + gw, y + 0.16, 0], UP, buff=0.04))
+            elif ty == "resistor":
+                sg.add(Rectangle(width=2 * gw, height=0.5, color=col, stroke_width=3).move_to([x, y, 0]))
+            elif ty == "switch":
+                sg.add(Line([x - gw, y, 0], [x + gw * 0.55, y + 0.5, 0], color=col, stroke_width=3))
+                sg.add(Dot([x + gw, y, 0], radius=0.055, color=wire).set_fill(wire, 1.0))
+            elif ty == "bulb":
+                c = Circle(radius=0.3, color=col, stroke_width=3).move_to([x, y, 0])
+                sg.add(c, Line([x - 0.21, y - 0.21, 0], [x + 0.21, y + 0.21, 0], color=col, stroke_width=3),
+                       Line([x - 0.21, y + 0.21, 0], [x + 0.21, y - 0.21, 0], color=col, stroke_width=3))
+            else:  # ammeter / voltmeter
+                c = Circle(radius=0.3, color=col, stroke_width=3).move_to([x, y, 0])
+                sg.add(c, T("A" if ty == "ammeter" else "V", font_size=26, color=col).move_to(c))
+            if e.get("label"):
+                sg.add(rich(str(e["label"]), 22, col).next_to([x, y, 0], UP, buff=0.34))
+            return sg
+
+        syms = [symbol(e, x) for e, x in zip(elems, xs)]
+        if len(syms) >= 2:
+            for s, key in zip(syms, reveal_keys(p.get("at"), len(syms))):
+                tag_reveal(s, key)
+        for s in syms:
+            g.add(s)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _v_optics(self, p, th):
+        """光路图：法线画虚线、光线画实线带箭头；镜面=线段+背面斜线；折射=界面+折向法线。
+
+        入射角/反射角/折射角都标在光线上（不画角度弧线——那是数学记号，物理用物理图示）。
+        """
+        mode = str(p.get("mode") or "mirror")
+        ang = math.radians(max(1.0, min(float(p.get("angle", 30)), 80.0)))
+        r = 2.2
+        show_normal = bool(p.get("show_normal", True))
+        g = VGroup()
+        if mode in ("lens", "image"):
+            g = self._optics_imaging(mode, p, th)
+        elif mode == "refract":
+            # 水平界面 + 竖直法线（虚线）；入射自上左，折射折向法线入下右。
+            n2 = float(p.get("n", 1.5))
+            ang2 = math.asin(max(-1.0, min(1.0, math.sin(ang) / n2)))
+            g.add(Line([-r, 0, 0], [r, 0, 0], color=th["key"], stroke_width=4))
+            if show_normal:
+                g.add(DashedLine([0, -1.7, 0], [0, 1.7, 0], dash_length=0.12, color=th["dim"], stroke_width=3))
+            inc = Arrow([-r * math.sin(ang), r * math.cos(ang), 0], [0, 0, 0], color=th["accent"], buff=0, stroke_width=5)
+            ref = Arrow([0, 0, 0], [r * math.sin(ang2), -r * math.cos(ang2), 0], color=th["warn"], buff=0, stroke_width=5)
+            g.add(inc, ref)
+            g.add(rich("入射光线", 22, th["accent"]).move_to([-r * math.sin(ang) / 2 - 0.1, r * math.cos(ang) / 2 + 0.25, 0]))
+            g.add(rich("折射光线", 22, th["warn"]).move_to([r * math.sin(ang2) / 2 + 0.1, -r * math.cos(ang2) / 2 - 0.25, 0]))
+            if show_normal:
+                g.add(rich("法线", 22, th["dim"]).next_to([0, 1.7, 0], UP, buff=0.08))
+            g.add(rich("空气", 22, th["dim"]).move_to([-r + 0.6, 0.55, 0]),
+                  rich("玻璃", 22, th["dim"]).move_to([-r + 0.6, -0.55, 0]))
+        else:
+            # 竖直镜面 + 水平法线（虚线）；背面斜线示镜面；入射上左 → 反射上右（对称）。
+            mh = 1.7
+            g.add(Line([0, -mh, 0], [0, mh, 0], color=th["key"], stroke_width=5))
+            for yy in (-1.2, -0.6, 0.0, 0.6, 1.2):
+                g.add(Line([0.14, yy - 0.12, 0], [0.32, yy + 0.12, 0], color=th["dim"], stroke_width=3))
+            if show_normal:
+                g.add(DashedLine([-1.8, 0, 0], [1.8, 0, 0], dash_length=0.12, color=th["dim"], stroke_width=3))
+            inc = Arrow([-r * math.cos(ang), r * math.sin(ang), 0], [0, 0, 0], color=th["accent"], buff=0, stroke_width=5)
+            ref = Arrow([0, 0, 0], [r * math.cos(ang), r * math.sin(ang), 0], color=th["warn"], buff=0, stroke_width=5)
+            g.add(inc, ref)
+            g.add(rich("入射光线", 22, th["accent"]).move_to([-r * math.cos(ang) / 2 - 0.1, r * math.sin(ang) / 2 + 0.28, 0]))
+            g.add(rich("反射光线", 22, th["warn"]).move_to([r * math.cos(ang) / 2 + 0.1, r * math.sin(ang) / 2 + 0.28, 0]))
+            g.add(rich("i", 24, th["accent"]).move_to([-0.5, 0.32, 0]))
+            g.add(rich("r", 24, th["warn"]).move_to([0.5, 0.32, 0]))
+            if show_normal:
+                g.add(rich("法线", 22, th["dim"]).next_to([1.8, 0, 0], RIGHT, buff=0.08))
+            g.add(rich("镜面", 22, th["dim"]).next_to([0.32, -1.6, 0], RIGHT, buff=0.1))
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _optics_imaging(self, mode, p, th):
+        """成像作图：实物/实光线画实线，虚像与反向延长线画虚线；物、光线、像依次揭示。"""
+        body, units = VGroup(), []
+
+        def dashed(a, b):
+            return DashedLine(a, b, dash_length=0.12, color=th["dim"], stroke_width=3)
+
+        if mode == "image":
+            # 平面镜成像：物像关于镜面对称、连线垂直镜面；两条反射光线的反向延长线交于虚像。
+            d, oh = 1.6, 1.1
+            body.add(Line([0, -1.6, 0], [0, 1.6, 0], color=th["key"], stroke_width=5))
+            for yy in (-1.2, -0.6, 0.0, 0.6, 1.2):
+                body.add(Line([0.14, yy - 0.12, 0], [0.32, yy + 0.12, 0], color=th["dim"], stroke_width=3))
+            obj = VGroup(Arrow([-d, -0.6, 0], [-d, -0.6 + oh, 0], color=th["accent"], buff=0, stroke_width=6),
+                         rich("物", 22, th["accent"]).next_to([-d, -0.6, 0], DOWN, buff=0.1))
+            top, img_top = np.array([-d, -0.6 + oh, 0]), np.array([d, -0.6 + oh, 0])
+            rays = VGroup()
+            for hy in (1.3, -0.3):
+                hit = np.array([0, hy, 0])
+                out = hit + (hit - img_top) / np.linalg.norm(hit - img_top) * 1.3
+                rays.add(Arrow(top, hit, color=th["warn"], buff=0, stroke_width=4),
+                         Arrow(hit, out, color=th["warn"], buff=0, stroke_width=4),
+                         dashed(hit, img_top))
+            img = VGroup(DashedLine([d, -0.6, 0], img_top, dash_length=0.12, color=th["accent"], stroke_width=5),
+                         dashed(top, img_top),
+                         rich("像（虚像）", 22, th["accent"]).next_to([d, -0.6, 0], DOWN, buff=0.1))
+            units = [obj, rays, img]
+        else:
+            # 凸透镜：平行主轴的光线折射后过焦点；过光心的光线方向不变；两线交点即像。
+            f = 1.0
+            # u 限在 1.5f~3f：像距 v=uf/(u-f) 落在 1.5f~3f，整图不出框且光线几何保持精确
+            u = max(1.5 * f, min(float(p.get("u", 2.0 * f)), 3.0 * f))
+            oh = 0.9
+            v = u * f / (u - f)
+            vx, ih = v, -oh * v / u
+            body.add(Line([-u - 0.4, 0, 0], [v + 0.4, 0, 0], color=th["dim"], stroke_width=2),
+                     Ellipse(width=0.32, height=2.8, color=th["key"], stroke_width=4))
+            for x in (-f, f):
+                body.add(Dot([x, 0, 0], radius=0.05, color=th["dim"]),
+                         rich("F", 22, th["dim"]).next_to([x, 0, 0], DOWN, buff=0.12))
+            body.add(rich("O", 22, th["dim"]).next_to([0, 0, 0], DOWN + RIGHT, buff=0.08))
+            top = np.array([-u, oh, 0])
+            obj = VGroup(Arrow([-u, 0, 0], top, color=th["accent"], buff=0, stroke_width=6),
+                         rich("物", 22, th["accent"]).next_to([-u, 0, 0], DOWN, buff=0.12))
+            img_top = np.array([vx, ih, 0])
+            rays = VGroup(Line(top, [0, oh, 0], color=th["warn"], stroke_width=4),
+                          Arrow([0, oh, 0], img_top, color=th["warn"], buff=0, stroke_width=4),
+                          Arrow(top, img_top, color=th["warn"], buff=0, stroke_width=4))
+            img = VGroup(Arrow([vx, 0, 0], img_top, color=th["accent"], buff=0, stroke_width=6),
+                         rich("像（倒立实像）", 22, th["accent"]).next_to([vx, 0, 0], UP, buff=0.12))
+            units = [obj, rays, img]
+        for un, k in zip(units, reveal_keys(p.get("at"), len(units))):
+            tag_reveal(un, k)
+        return VGroup(body, *units)
+
+    def _v_incline(self, p, th):
+        """斜面滑块：斜面三角 + 贴面方块 + 受力箭头（逐条揭示）。
+
+        力的 dir 除 force_diagram 的绝对方向词/角度外，还认斜面相对方向：
+        normal（垂直斜面向外）、into（垂直斜面向里，压力）、along_up / along_down（沿斜面）。
+        倾角只在底角写 θ，不画角度弧线（弧线是数学记号）。
+        """
+        deg = max(10.0, min(float(p.get("angle", 30)), 60.0))
+        a = math.radians(deg)
+        base = 4.4
+        h = base * math.tan(a)
+        if h > 2.6:
+            h = 2.6
+            base = h / math.tan(a)
+        x0, y0 = -base / 2, -h / 2
+        ramp = Polygon([x0, y0, 0], [x0 + base, y0, 0], [x0 + base, y0 + h, 0],
+                       color=th["dim"], stroke_width=4).set_fill(th["dim"], 0.12)
+        g = VGroup(ramp)
+        for i in range(7):
+            xx = x0 - 0.3 + i * (base + 0.6) / 6
+            g.add(Line([xx, y0, 0], [xx - 0.22, y0 - 0.22, 0], color=th["dim"], stroke_width=2))
+        g.add(rich("θ", 26, th["fg"]).move_to([x0 + 0.75, y0 + 0.2, 0]))
+        u_along = np.array([math.cos(a), math.sin(a), 0.0])
+        u_norm = np.array([-math.sin(a), math.cos(a), 0.0])
+        bw, bh = 1.0, 0.66
+        foot = np.array([x0, y0, 0.0]) + u_along * (base / math.cos(a)) * 0.55
+        center = foot + u_norm * (bh / 2)
+        block = Rectangle(width=bw, height=bh, color=th["key"], stroke_width=4).set_fill(th["key"], 0.15)
+        block.rotate(a).move_to(center)
+        g.add(block)
+        if p.get("label_in"):
+            g.add(rich(str(p["label_in"]), 26, th["fg"]).move_to(center))
+        rel = {"normal": u_norm, "into": -u_norm, "along_up": u_along, "along_down": -u_along}
+        L = 1.2
+        units = []
+        for f in (x for x in p.get("forces", []) if isinstance(x, dict)):
+            key = str(f.get("dir")).strip().lower()
+            d = rel[key] if key in rel else _dir_vec(f.get("dir"))
+            d = d / (np.linalg.norm(d) or 1.0)
+            start = foot if key == "into" else center
+            color = th.get(str(f.get("tone") or "key"), th["key"])
+            arrow = Arrow(start, start + d * L, color=color, buff=0, stroke_width=5)
+            unit = VGroup(arrow)
+            label = str(f.get("label") or f.get("name") or "")
+            if label:
+                unit.add(rich(label, 24, color).next_to(arrow.get_end(), d, buff=0.08))
+            units.append(unit)
+        if len(units) >= 2:
+            for u, k in zip(units, reveal_keys(p.get("at"), len(units))):
+                tag_reveal(u, k)
+        g.add(*units)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _v_trajectory(self, p, th):
+        """运动轨迹（频闪照片式）：虚线轨迹 + 等时间间隔位置点 + 切向速度箭头，点逐个揭示。
+
+        mode: projectile（抛体，angle=0 即平抛）/ circle（匀速圆周，速度沿切线）/
+        cycloid（配速法：静止释放的匀速直线+匀速圆周合成摆线，arches 1~3 拱）。
+        不画网格坐标——物理过程用物理模型图，读图象才用 graph_vt/axis_graph。
+        """
+        mode = str(p.get("mode") or "projectile")
+        n = max(3, min(int(p.get("n", 6)), 9))
+        show_v = bool(p.get("show_velocity", True))
+        g = VGroup()
+        if mode == "circle":
+            R = 1.9
+            g.add(DashedLine([0, 0, 0], [R, 0, 0], dash_length=0.1, color=th["dim"], stroke_width=2))
+            g.add(Circle(radius=R, color=th["dim"], stroke_width=2))
+            g.add(Dot([0, 0, 0], radius=0.06, color=th["dim"]), rich("O", 22, th["dim"]).move_to([-0.22, -0.22, 0]))
+            pts = [(R * math.cos(t), R * math.sin(t), -math.sin(t), math.cos(t))
+                   for t in (2 * math.pi * k / n for k in range(n))]
+        elif mode == "cycloid":
+            # 配速法：静止释放 → 匀速直线(圆心平移) + 匀速圆周 合成摆线；x=R(φ-sinφ)，y=-R(1-cosφ)
+            arches = max(1, min(int(p.get("arches", 2)), 3))
+            span = 2 * math.pi * arches
+            s = 5.6 / span
+            R = s
+            ox = -span * s / 2
+            def at(ph):
+                return ox + R * (ph - math.sin(ph)), R * (1 - math.cos(ph)) * -1 + R
+            g.add(Line([ox - 0.3, R, 0], [ox + span * s + 0.3, R, 0], color=th["dim"], stroke_width=3))
+            path = VMobject(color=th["dim"], stroke_width=2)
+            path.set_points_smoothly([[*at(ph), 0] for ph in np.linspace(0, span, 80)])
+            g.add(DashedVMobject(path, num_dashes=40))
+            pts = [(*at(ph), 1 - math.cos(ph), -math.sin(ph))
+                   for ph in (span * k / (n - 1) for k in range(n))]
+        else:
+            ang = math.radians(max(0.0, min(float(p.get("angle", 0)), 75.0)))
+            vx, vy, gacc = math.cos(ang), math.sin(ang), 1.0
+            T = (2 * vy / gacc) if vy > 0 else 1.6
+            raw = [(vx * t, vy * t - 0.5 * gacc * t * t, vx, vy - gacc * t)
+                   for t in (T * k / (n - 1) for k in range(n))]
+            xs = [q[0] for q in raw]
+            ys = [q[1] for q in raw]
+            sx = 5.6 / max(max(xs) - min(xs), 1e-6)
+            sy = 3.2 / max(max(ys) - min(ys), 1e-6)
+            s = min(sx, sy)
+            ox, oy = -(max(xs) + min(xs)) / 2 * s, -(max(ys) + min(ys)) / 2 * s
+            pts = [(x * s + ox, y * s + oy, vxx, vyy) for x, y, vxx, vyy in raw]
+            ground = min(q[1] for q in pts) - 0.1
+            g.add(Line([pts[0][0] - 0.5, ground, 0], [pts[-1][0] + 0.5, ground, 0], color=th["dim"], stroke_width=3))
+            path = VMobject(color=th["dim"], stroke_width=2)
+            path.set_points_smoothly([[vx * t * s + ox, (vy * t - 0.5 * gacc * t * t) * s + oy, 0]
+                                      for t in np.linspace(0, T, 40)])
+            g.add(DashedVMobject(path, num_dashes=30))
+        units = []
+        for x, y, ux, uy in pts:
+            u = VGroup(Dot([x, y, 0], radius=0.11, color=th["key"]))
+            sp = math.hypot(ux, uy)
+            if show_v and sp > 1e-6:  # 摆线尖点速度为 0：只画点，不画零长箭头
+                d = np.array([ux / sp, uy / sp, 0.0]) * (0.45 + 0.4 * sp if mode != "circle" else 0.8)
+                u.add(Arrow([x, y, 0], [x + d[0], y + d[1], 0], color=th["warn"], buff=0, stroke_width=4))
+            units.append(u)
+        for u, k in zip(units, reveal_keys(p.get("at"), len(units))):
+            tag_reveal(u, k)
+        g.add(*units)
+        if show_v:
+            g.add(rich(str(p.get("v_label") or "v"), 24, th["warn"]).next_to(units[0], UP, buff=0.1))
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
     BUILDERS = {
         "axis_graph": "_v_axis_graph",
         "particle_box": "_v_particle_box",
@@ -1573,6 +2018,12 @@ class Explainer(Scene):
         "stat_chart": "_v_stat_chart",
         "mind_map": "_v_mind_map",
         "table": "_v_table",
+        "force_diagram": "_v_force_diagram",
+        "field": "_v_field",
+        "circuit": "_v_circuit",
+        "optics": "_v_optics",
+        "incline": "_v_incline",
+        "trajectory": "_v_trajectory",
         "title": "_v_title",
         "formula": "_v_formula",
         "callout": "_v_callout",

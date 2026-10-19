@@ -19,6 +19,7 @@ SubTask #60-A 实测口径（照此实现，勿凭文档改）：
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -108,7 +109,7 @@ def _post(body: dict) -> bytes:
             last = f"HTTP {e.code}：{e.read().decode('utf-8', 'replace')[:200]}"
             if e.code not in RETRYABLE:
                 break
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as e:
             last = f"网络错误 {type(e).__name__}"
         if attempt < MAX_ATTEMPTS - 1:
             time.sleep(BACKOFF_BASE * (2 ** attempt))
@@ -138,9 +139,38 @@ def _speak_formula(seg: str) -> str:
     return re.sub(r"\s+", " ", s)
 
 
+# 多音字：TTS 只按字形猜读音，数学语境里的「奇」（jī，奇数/奇函数/奇偶）常被念成 qí。
+# 只改发给 TTS 的文本；字幕走原始 narration（ir.Shot.subtitles），屏上仍是「奇函数」。
+# 「积」只有 jī 一个读音，且逐整词替换，不会误伤「积分」里的积。
+_POLYPHONE = {
+    "奇函数": "积函数",
+    "奇偶": "积偶",
+    "奇数": "积数",
+    "奇次": "积次",
+}
+
+
+def _fix_polyphone(text: str) -> str:
+    for src, dst in _POLYPHONE.items():
+        text = text.replace(src, dst)
+    return text
+
+
+# 化学名里的定位连字符（如 2-碘辛烷、1,3-丁二烯）不念「减」：数字与汉字之间的短杠直接去掉。
+# 只碰「数字—汉字」相邻这一种，破折号（汉字—汉字）与字母键（C–Br）不动——后者要靠朗读稿（pipeline/voiceover.py）。
+_LOCANT = re.compile(r"(?<=\d)\s*[-–−]\s*(?=[\u4e00-\u9fff])")
+_LOCANT_REV = re.compile(r"(?<=[\u4e00-\u9fff])\s*[-–−]\s*(?=\d)")
+
+
 def speakable(text: str) -> str:
-    """把口播里的公式改写成按上下文的中文念法（a+bi → a 加 b i），其余文字原样。"""
-    return _FORMULA.sub(lambda m: _speak_formula(m.group(0)), text)
+    """把口播里的公式改写成按上下文的中文念法（a+bi → a 加 b i），其余文字原样。
+
+    这是离线兜底：真正的朗读稿（化学式、σ*、SN2 等正则认不出的记号）由网关模型按整镜上下文
+    生成（pipeline/voiceover.py），TTS 优先用那个，这里只负责没有网关时的降级。
+    """
+    text = _LOCANT.sub("", text)
+    text = _LOCANT_REV.sub("", text)
+    return _FORMULA.sub(lambda m: _speak_formula(m.group(0)), _fix_polyphone(text))
 
 
 def synth(text: str, out_wav: Path, workdir: Path, rate: int = 0) -> float:

@@ -224,21 +224,26 @@ function finishJob(error, d) {
   loadGallery();
 }
 
-/* 作业失败的人话映射：闸门打回 / 生成被禁用 / 一般失败三类；原始错误进 details 折叠。 */
+/* 作业失败的人话映射：闸门打回 / 口播装不下 / 生成被禁用 / 一般失败四类；原始错误进 details 折叠。
+ * 带 suggestion（GenerationError / 时长不可行）时单独亮一行"接下来怎么办"，不吞原错误。 */
 function renderJobError(error) {
   const box = $("#jobError");
   const raw = typeof error === "string" ? error : JSON.stringify(error, null, 2);
-  let friendly = JOB_FAIL_MSG, detail = raw;
-  if (error && typeof error === "object" && error.findings_raw) {
-    friendly = GATE_FAIL_MSG;
-    detail = formatError(error);
+  let friendly = JOB_FAIL_MSG, suggest = "";
+  if (error && typeof error === "object") {
+    suggest = error.suggestion || "";
+    if (error.findings_raw) {
+      friendly = GATE_FAIL_MSG;
+    } else if (error.kind === "duration_infeasible") {
+      friendly = "口播放不进目标时长，请按建议调整后重试。";
+    }
   } else if (raw.includes("在线生成在当前部署里已关闭")) {
     friendly = DISABLED_MSG;
-  } else {
-    detail = formatError(error);
   }
+  const detail = formatError(error);
   box.textContent = "";
   box.append(el("p", "err-msg", friendly));
+  if (suggest) box.append(el("p", "err-suggest", suggest));
   const det = el("details", "err-raw");
   det.append(el("summary", "", "原始错误详情"));
   det.append(el("pre", "", String(detail)));

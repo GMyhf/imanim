@@ -99,6 +99,14 @@ def _llm_busy() -> int:
                if j.get("kind") in ("generate", "improve") and j.get("state") == "running")
 
 
+def _check_llm_slots() -> None:
+    busy = _llm_busy()
+    if busy >= MAX_LLM_JOBS:
+        raise ValueError(
+            f"已有 {busy} 个生成/改进任务在跑（上限 {MAX_LLM_JOBS}），并发会把模型网关打到超时；"
+            "请等它们完成后再发新的")
+
+
 # --------------------------------------------------------------------------- 知识点库
 def kp_entries(subject: str | None = None) -> list[dict]:
     out = []
@@ -319,11 +327,7 @@ def start_generate(brief: dict, quality: str) -> str:
     job_dir.mkdir(parents=True, exist_ok=True)
     (job_dir / "brief.json").write_text(json.dumps(brief, ensure_ascii=False, indent=2), encoding="utf-8")
     with _lock:
-        busy = _llm_busy()
-        if busy >= MAX_LLM_JOBS:
-            raise ValueError(
-                f"已有 {busy} 个生成/改进任务在跑（上限 {MAX_LLM_JOBS}），并发会把模型网关打到超时；"
-                "请等它们完成后再发新的")
+        _check_llm_slots()
         _jobs[job_id] = {"id": job_id, "kind": "generate", "key": f"job:{job_id}",
                          "state": "running", "created": time.time(), "brief": brief, "quality": quality}
         persist(job_id)
@@ -385,11 +389,7 @@ def start_improve(source_key: str, instruction: str, quality: str) -> str:
     plan_file.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     (job_dir / "instruction.txt").write_text(instruction, encoding="utf-8")
     with _lock:
-        busy = _llm_busy()
-        if busy >= MAX_LLM_JOBS:
-            raise ValueError(
-                f"已有 {busy} 个生成/改进任务在跑（上限 {MAX_LLM_JOBS}），并发会把模型网关打到超时；"
-                "请等它们完成后再发新的")
+        _check_llm_slots()
         _jobs[job_id] = {"id": job_id, "kind": "improve", "key": f"job:{job_id}", "state": "running",
                          "created": time.time(), "source_key": source_key, "quality": quality,
                          "brief": plan.get("brief", {}), "instruction": instruction}
@@ -673,7 +673,7 @@ class Handler(BaseHTTPRequestHandler):
                 # 生成开关如实下发：前端据此在表单里显示「仅展映 / 生成未开放」横幅，不在前端特判环境变量。
                 "generate_disabled": GENERATE_DISABLED,
                 "generate_disabled_msg": GENERATE_DISABLED_MSG if GENERATE_DISABLED else "",
-                "note": "知识点可自由填写：库内命中走库内条目，库外由模型起草（未核对教材出处，成片会如实标注）。"})
+                "note": "知识点可自由填写：库内命中走库内条目，库外由模型起草（有教材检索命中时标注命中出处，未经人工核对；没命中则如实标注未核对出处）。"})
         if sub[0] == "gallery":
             return self.send_json({"items": gallery()})
         if sub[0] == "feedback":

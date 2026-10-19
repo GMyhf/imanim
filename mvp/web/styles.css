@@ -166,6 +166,12 @@ select:focus, textarea:focus, input:focus { outline: 2px solid #bcd4f7; border-c
 }
 /* 错误详情折叠：人话结论在外，原始错误保留在 details 里不吞信息（SubTask 63） */
 .err-msg { margin: 0; white-space: pre-wrap; }
+/* 错误后的行动建议：单独一行"接下来怎么办"，比正文结论更醒目（韧性硬化三层①） */
+.err-suggest {
+  margin: 0 0 8px; padding: 8px 10px;
+  border: 1px solid #f0d9a0; border-radius: 6px;
+  background: #fffbf0; color: #8a6d1a; white-space: pre-wrap;
+}
 .err-raw { margin-top: 8px; }
 .err-raw summary { cursor: pointer; font-size: 12px; opacity: .85; }
 .err-raw pre {

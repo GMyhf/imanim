@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 from audio import tts  # noqa: E402
 from pipeline import (knowledge, kp_draft, llm_client, mux, requirement_llm, review, scoring_llm,  # noqa: E402
-                      selfcheck, storyboard, storyboard_llm, visual_review_llm)
+                      selfcheck, storyboard, storyboard_llm, visual_review_llm, voiceover)
 from pipeline import ir
 from pipeline.ir import MAX_SHOT_IDLE, SHOT_HEAD, SHOT_TAIL, Brief  # noqa: E402
 
@@ -72,6 +72,44 @@ class DurationNotFeasible(RuntimeError):
         self.natural, self.fastest, self.target = natural, fastest, target
 
 
+class GenerationError(RuntimeError):
+    """生成链路上的失败，按「内容问题 vs 工具问题」分类并带一句可直接照做的建议。
+
+    kind: content —— 分镜/口播本身过不去（改内容能救）；tool —— 渲染/合成/探测这类工具性
+    故障（重试后仍不行）。前端据此把结论用人话说出来，而不是只给一句「生成失败」让人猜。
+    """
+
+    def __init__(self, kind: str, message: str, suggestion: str, **extra):
+        super().__init__(message)
+        self.kind = kind
+        self.suggestion = suggestion
+        self.extra = extra
+
+
+def _retry(fn, attempts: int = 3, desc: str = ""):
+    """机械重试：工具性步骤（渲染/合成）的偶发故障很常见，按固定间隔重试几次，仍不行才归类为 tool。
+
+    TTS 自己内部已经带 4 次退避重试（audio/tts.py），不在这里再套一层；这里只管渲染与合成。
+    """
+    last = None
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001 这里就是要把一切工具性故障兜住、统一归类
+            last = e
+            if i < attempts - 1:
+                time.sleep(1.5 * (i + 1))
+    raise GenerationError(
+        "tool", f"{desc or '工具性步骤'} 重试 {attempts} 次后仍失败：{last}",
+        "服务端工具偶发故障。请稍后重试；若持续失败，请反馈这条知识点并附上 plan.json。",
+        detail=str(last))
+
+
+# 出片前最后一道闸门的内容缺陷，回灌 A3 最多改这一轮（改完再配音再复查）。再多轮子边际收益低、
+# 耗时线性涨，一轮已经是"自愈"与"别让用户等太久"的折中。
+FINAL_HEAL_ROUNDS = 1
+
+
 def _spread_surplus(spoken: list[float], floors: list[float]) -> list[float]:
     """把 A3 的预算富余按**各镜自己的缺口**封顶，而不是堆在个别镜头上（第四轮 F-4 / 评审 A D2、B D-07）。
 
@@ -96,7 +134,7 @@ def _synthesize(plan, audio_dir: Path, rate: int, floors=None) -> list[tuple[flo
     spoken: list[float] = []
     for s in plan.shots:
         wav = audio_dir / f"shot_{s.index:02d}.wav"
-        dur = tts.synth(s.narration, wav, audio_dir, rate=rate)
+        dur = tts.synth(s.voiceover or s.narration, wav, audio_dir, rate=rate)
         s.spoken = round(SHOT_HEAD + dur + SHOT_TAIL, 2)
         spoken.append(s.spoken)
     seconds = _spread_surplus(spoken, list(floors) if floors is not None else [0.0] * len(spoken))
@@ -116,6 +154,50 @@ def _pick_rate(natural: float, target: float) -> int:
     want = target / natural
     r = round(math.log(max(want, 1e-6)) / math.log(RATE_FACTOR))
     return max(0, min(MAX_TTS_RATE, r))
+
+
+def _voice_and_align(plan, audio_dir: Path, brief: Brief, log: dict) -> list[tuple[float, Path]]:
+    """配音 → 用实测语音反写每镜秒数 → 语速记账。主路径与 A3 自愈路径共用这一份，保证两侧
+    的 sidecar 口径一致（别一个记提速、一个记自然）。超长按 DurationNotFeasible 报"至少要多少秒"；
+    反向超差不拦出片，只记 shortfall_note（内容就这么长，硬摊只会造冻屏）。"""
+    step = time.time()
+    # floors 必须在第一遍之前取：_synthesize 会就地改掉 s.seconds，第二遍不能再拿改后的值当下限。
+    floors = [float(s.seconds) for s in plan.shots]
+    shot_wavs = _synthesize(plan, audio_dir, 0, floors)
+    natural = plan.total_seconds
+    target = brief.target_seconds
+    rate = _pick_rate(natural, target)
+    if rate and tts.SPEED_SUPPORTED:
+        shot_wavs = _synthesize(plan, audio_dir, rate, floors)
+    dev = (plan.total_seconds - target) / target if target else 0
+    spoken = sum(len("".join(c["text"] for c in s.subtitles())) for s in plan.shots)
+    log["steps"]["narration"] = round(time.time() - step, 2)
+    # 字/秒是给老师看的实测数：提速档到底把语速推到哪儿，比"rate=+3"好判断。
+    log["tts"] = {"rate": rate, "natural_seconds": round(natural, 2),
+                  "actual_seconds": round(plan.total_seconds, 2), "chars": spoken,
+                  "natural_chars_per_second": round(spoken / natural, 2) if natural else None,
+                  "chars_per_second": round(spoken / plan.total_seconds, 2)}
+    if rate:
+        if tts.SPEED_SUPPORTED:
+            # C13 待判项的产品口径：提速照做，但代价要说给老师听，不能默默把语速推快。
+            log["tts"]["note"] = (f'自然语速需 {natural:.0f}s，讲不进 {target}s，已提速到第 {rate} 档'
+                                  f'（实测 {log["tts"]["chars_per_second"]} 字/秒）；'
+                                  f'想更从容可把时长放宽到 ≥{natural:.0f}s')
+        else:
+            log["tts"]["note"] = "当前 TTS 模型不支持提速档，按自然语速合成。"
+    if dev > 0.10:
+        fastest = (plan.total_seconds
+                   if rate >= MAX_TTS_RATE or not tts.SPEED_SUPPORTED
+                   else natural * RATE_FACTOR ** MAX_TTS_RATE)
+        raise DurationNotFeasible(natural, fastest, target, speed_supported=tts.SPEED_SUPPORTED)
+    if dev < -0.10:
+        # 反向超差不拦出片：内容就这么长，配音又没有提速档可以把它"讲满"，
+        # 硬把每镜富余摊到目标秒数只会造出冻屏（第四轮 F-4）——照内容长度交付，
+        # 但差额必须说给老师听，不能让人以为 120s 的目标真能讲出 120s 的东西。
+        log["tts"]["shortfall_note"] = (
+            f"这条知识点的口播按自然语速只需 {plan.total_seconds:.0f}s，比目标 {target:.0f}s 短 "
+            f"{-dev * 100:.0f}%，成片按内容长度交付；想讲满目标时长请把目标收紧或补充例题。")
+    return shot_wavs
 
 
 def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = False) -> dict:
@@ -145,7 +227,9 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
                             brief.target_seconds, brief.raw_text)
         log["kp_draft"] = {"id": kp["id"], "topic": kp["topic"],
                            "model": llm_client.model_for("K0"),
-                           "note": "知识点库里没有这一条，内容由模型起草，未核对教材出处"}
+                           "note": ("知识点库里没有这一条，内容由模型起草，出处来自教材检索命中（未经人工核对）"
+                                    if kp.get("refs") else
+                                    "知识点库里没有这一条，内容由模型起草，未核对教材出处")}
     log["steps"]["retrieve"] = round(time.time() - step, 2)
 
     # A3 分镜（先按文本长度估时长）
@@ -183,65 +267,59 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
             if fastest > brief.target_seconds * 1.10:
                 raise DurationNotFeasible(natural, fastest, float(brief.target_seconds),
                                           speed_supported=bool(tts.SPEED_SUPPORTED))
-        raise RuntimeError("静态监督未通过（预算态，尚未配音/渲染）：\n"
-                           + "\n".join(f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard))
+        raise GenerationError(
+            "content",
+            "静态监督未通过（预算态，尚未配音/渲染）：\n"
+            + "\n".join(f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard),
+            "分镜在预算阶段就被静态闸门打回：按上面清单精简口播、补限定语或图形原语，再重试。",
+            findings=[{"shot": f["shot"], "code": f["code"], "msg": f["msg"]} for f in hard])
 
-    # A6 配音 → 用实测语音时长反推镜头时长（时长对齐回路）
+    # 配音稿（朗读稿）：把混着公式/化学式的口播改写成朗读员照念的中文。正则分不清
+    # 「2-碘辛烷」的定位连字符（不念减）和「a-b」的减号，也认不得化学式，所以交给网关模型
+    # 按整镜上下文生成、写进 shot.voiceover 随 plan 落盘；网关关闭/失败则回退 tts.speakable 正则。
     step = time.time()
+    log["voiceover"] = voiceover.apply(plan)
+    log["steps"]["voiceover"] = round(time.time() - step, 2)
+
+    # A6 配音 → 用实测语音时长反推镜头时长（时长对齐回路）。_voice_and_align 同时负责语速记账：
+    # 第一遍按自然语速实测；落在目标 ±10% 内就直接用，超了才按语速-时长模型估一档提速重合成。
+    # 提速是否真的会发生由 tts.SPEED_SUPPORTED 决定（网关 TTS 实测不支持 speed，见 audio/tts.py）。
     audio_dir = out_dir / "audio"
     audio_dir.mkdir(exist_ok=True)
-    # 第一遍按自然语速实测；落在目标 ±10% 内就直接用，超了才按语速-时长模型估一档提速重合成。
-    # 提速是否真的会发生由 tts.SPEED_SUPPORTED 决定（网关 TTS 实测不支持 speed，见 audio/tts.py）：
-    # 不支持时跳过第二遍并按自然语速如实记账；支持时最多两遍，提速后仍不达标就报"至少要多少秒"。
-    # floors 必须在第一遍之前取：_synthesize 会就地改掉 s.seconds，第二遍不能再拿改后的值当下限。
-    floors = [float(s.seconds) for s in plan.shots]
-    shot_wavs = _synthesize(plan, audio_dir, 0, floors)
-    natural = plan.total_seconds
-    target = brief.target_seconds
-    rate = _pick_rate(natural, target)
-    if rate and tts.SPEED_SUPPORTED:
-        shot_wavs = _synthesize(plan, audio_dir, rate, floors)
-    dev = (plan.total_seconds - target) / target if target else 0
-    spoken = sum(len("".join(c["text"] for c in s.subtitles())) for s in plan.shots)
-    log["steps"]["narration"] = round(time.time() - step, 2)
-    # 字/秒是给老师看的实测数：提速档到底把语速推到哪儿，比"rate=+3"好判断。
-    log["tts"] = {"rate": rate, "natural_seconds": round(natural, 2),
-                  "actual_seconds": round(plan.total_seconds, 2), "chars": spoken,
-                  "natural_chars_per_second": round(spoken / natural, 2) if natural else None,
-                  "chars_per_second": round(spoken / plan.total_seconds, 2)}
-    if rate:
-        if tts.SPEED_SUPPORTED:
-            # C13 待判项的产品口径：提速照做，但代价要说给老师听，不能默默把语速推快。
-            log["tts"]["note"] = (f'自然语速需 {natural:.0f}s，讲不进 {target}s，已提速到第 {rate} 档'
-                                  f'（实测 {log["tts"]["chars_per_second"]} 字/秒）；'
-                                  f'想更从容可把时长放宽到 ≥{natural:.0f}s')
-        else:
-            log["tts"]["note"] = "当前 TTS 模型不支持提速档，按自然语速合成。"
-    if dev > 0.10:
-        fastest = (plan.total_seconds
-                   if rate >= MAX_TTS_RATE or not tts.SPEED_SUPPORTED
-                   else natural * RATE_FACTOR ** MAX_TTS_RATE)
-        raise DurationNotFeasible(natural, fastest, target, speed_supported=tts.SPEED_SUPPORTED)
-    if dev < -0.10:
-        # 反向超差不拦出片：内容就这么长，配音又没有提速档可以把它"讲满"，
-        # 硬把每镜富余摊到目标秒数只会造出冻屏（第四轮 F-4）——照内容长度交付，
-        # 但差额必须说给老师听，不能让人以为 120s 的目标真能讲出 120s 的东西。
-        log["tts"]["shortfall_note"] = (
-            f"这条知识点的口播按自然语速只需 {plan.total_seconds:.0f}s，比目标 {target:.0f}s 短 "
-            f"{-dev * 100:.0f}%，成片按内容长度交付；想讲满目标时长请把目标收紧或补充例题。")
+    shot_wavs = _voice_and_align(plan, audio_dir, brief, log)
 
     plan.brief.target_seconds = brief.target_seconds
+
+    # A4 静态监督闸门（最后一关，配音之后）：实测时长暴露的内容问题（超字/丢限定/缺图）先回灌
+    # A3 自愈一轮（FINAL_HEAL_ROUNDS），改完再重写朗读稿、再配音、再复查；仍不过才打回。
+    # 不因为一个镜头的问题让整段生成直接崩掉——能自愈的自愈，自愈不了的给人话清单。
+    findings = review.check(plan, kp)
+    hard = review.blocking(findings)
+    if hard and llm_client.enabled("A3"):
+        for _ in range(FINAL_HEAL_ROUNDS):
+            plan, info = storyboard_llm.adjust(brief, kp, plan, hard)
+            if info["source"] != "llm":
+                break
+            log["storyboard_heal"] = {"model": info["model"], "attempts": info["attempts"]}
+            log["voiceover"] = voiceover.apply(plan)
+            shot_wavs = _voice_and_align(plan, audio_dir, brief, log)
+            findings = review.check(plan, kp)
+            hard = review.blocking(findings)
+            if not hard:
+                break
+    (out_dir / "review.json").write_text(
+        json.dumps(review.report(plan, kp), ensure_ascii=False, indent=2), encoding="utf-8")
+    if hard:
+        raise GenerationError(
+            "content",
+            "静态监督未通过：\n"
+            + "\n".join(f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard),
+            "可在下方修改分镜后重出片；或按上面清单精简口播、补限定语、把目标时长放宽。",
+            findings=[{"shot": f["shot"], "code": f["code"], "msg": f["msg"]} for f in hard])
+
     total = plan.total_seconds
     dev = abs(total - brief.target_seconds) / brief.target_seconds
     log["duration"] = {"actual": total, "target": brief.target_seconds, "deviation": round(dev, 3)}
-
-    # A4 静态监督闸门
-    findings = review.check(plan, kp)
-    (out_dir / "review.json").write_text(json.dumps(review.report(plan, kp), ensure_ascii=False, indent=2), encoding="utf-8")
-    hard = review.blocking(findings)
-    if hard:
-        raise RuntimeError("静态监督未通过：\n"
-                           + "\n".join(f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard))
 
     plan_path = out_dir / "plan.json"
     plan.save(plan_path)
@@ -251,24 +329,30 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     env = dict(os.environ, PATH=str(FFMPEG_DIR) + os.pathsep + os.environ["PATH"], PLAN_JSON=str(plan_path))
     media = out_dir / "media"
     step = time.time()
-    _run([MANIM, *QUALITY[quality], "--media_dir", str(media), "-o", "silent.mp4", "--disable_caching",
-          str(ROOT / "render" / "scene.py"), "Explainer"], env=env)
+    _retry(lambda: _run([MANIM, *QUALITY[quality], "--media_dir", str(media), "-o", "silent.mp4",
+                         "--disable_caching", str(ROOT / "render" / "scene.py"), "Explainer"], env=env),
+           desc="画面渲染")
     silent = next(iter(sorted(media.glob("**/silent.mp4"))), None)
     if silent is None:
-        raise RuntimeError(f"渲染未产出 silent.mp4（media 目录：{media}）")
+        raise GenerationError(
+            "tool", f"渲染未产出 silent.mp4（media 目录：{media}）",
+            "manim 渲染异常退出、未产出画面轨。请检查分镜里的版式原语是否受支持，或稍后重试。")
     shutil.move(str(silent), out_dir / "silent.mp4")
     log["steps"]["render"] = round(time.time() - step, 2)
 
     # G2 时长闸门：成片必须与 Plan 时长一致（±10%），否则渲染层的时间记账又漏了东西。
     rendered = mux.probe_duration(out_dir / "silent.mp4")
     if rendered is None:
-        raise RuntimeError("无法读取渲染产物时长（ffmpeg 未返回 Duration）")
+        raise GenerationError(
+            "tool", "无法读取渲染产物时长（ffmpeg 未返回 Duration）",
+            "ffmpeg 无法读取渲染产物时长，环境可能异常。请稍后重试，或联系维护者。")
     drift = abs(rendered - total) / total
     log["rendered"] = {"seconds": rendered, "plan": total, "drift": round(drift, 4)}
     if drift > 0.10:
-        raise RuntimeError(
-            f"渲染时长 {rendered}s 与 Plan {total}s 偏差 {drift:.1%} > 10%（Spec_Scale G2），出片中止"
-        )
+        raise GenerationError(
+            "tool",
+            f"渲染时长 {rendered}s 与 Plan {total}s 偏差 {drift:.1%} > 10%（Spec_Scale G2），出片中止",
+            "渲染层的时间记账与分镜不一致，成片可能卡顿或冻屏。请反馈这条知识点并附上 plan.json。")
 
     # A7 合成
     step = time.time()
@@ -286,13 +370,16 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     log["audio_align"] = align
     bad = [a for a in align if a["delta"] is None or abs(a["delta"]) > 0.35]
     if bad:
-        raise RuntimeError(f"音画时间轴错位（>0.35s）：{bad}")
+        raise GenerationError(
+            "tool", f"音画时间轴错位（>0.35s）：{bad}",
+            "音画时间轴错位，成片会声画不同步。请反馈这条知识点并附上 plan.json。")
     n_subs = mux.write_srt(plan_dict, out_dir / "subs.srt")
     # 音效（SubTask #60-E）：默认关，MVP_SFX=1 才在每个镜头切换点混转场音、片尾混提示音。
     # 切换点用反写后的**实际**镜长累加，不能用预算值——预算和实测差 20% 时音效会错半拍。
-    final = mux.mux(out_dir / "silent.mp4", out_dir / "track.wav", out_dir / "final.mp4",
-                    out_dir / "subs.srt" if burn else None,
-                    shot_seconds=[float(s["seconds"]) for s in plan_dict["shots"]])
+    final = _retry(lambda: mux.mux(out_dir / "silent.mp4", out_dir / "track.wav", out_dir / "final.mp4",
+                                   out_dir / "subs.srt" if burn else None,
+                                   shot_seconds=[float(s["seconds"]) for s in plan_dict["shots"]]),
+                   desc="音画合成")
     log["steps"]["mux"] = round(time.time() - step, 2)
     log["sfx"] = os.environ.get("MVP_SFX", "0")
     log["burn"] = dict(mux.last_burn) if burn else {

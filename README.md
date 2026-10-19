@@ -98,6 +98,8 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 2. **[前置] 网关密钥注入**：在创空间"环境变量"里配 `QX_LLM_API_KEY`（或 `QX_LLM_KEY_FILE`
    指向挂载的密钥文件）——**密钥只经 env 注入，绝不写进镜像/仓库/日志**；配好后在容器内
    跑一次最短文本的 TTS 合成验证出网与密钥（阻断项 ① 的三个前提逐项打勾）。
+   朗读稿改写与 TTS 同网关：`start.sh` 已默认 `QX_LLM_VOICEOVER=1`（可 env 覆盖为 0 关闭），
+   未配密钥/改写失败时自动回退 tts 正则兜底，画廊与出片不受影响。
    反馈持久化（创空间无持久盘，容器重建会丢本地文件）：另配 `QX_FEEDBACK_REPO`（私有 ModelScope
    数据集 id）与 `QX_FEEDBACK_REPO_TOKEN`（该数据集写 token），两者同时设置才启用写穿——
    提交时异步传到数据集 `feedback/`，启动时回拉缺失条目；可选 `QX_FEEDBACK_TOKEN` 让

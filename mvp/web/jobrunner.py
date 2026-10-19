@@ -33,6 +33,7 @@ import run as cli  # noqa: E402  mvp/run.py：复用 QUALITY / MANIM / _run / ge
 from audio import tts  # noqa: E402
 from pipeline import knowledge, kp_draft, llm_client, mux, review, selfcheck, storyboard  # noqa: E402
 from pipeline import storyboard_llm  # noqa: E402
+from pipeline import voiceover  # noqa: E402
 from pipeline.ir import SHOT_HEAD, SHOT_TAIL, Brief, Plan  # noqa: E402
 
 # 阶段中文名（对应 Spec_Workflow 的 A2~A7，前端按这个顺序画进度条）
@@ -178,11 +179,18 @@ def do_generate(brief_data: dict, out_dir: Path, quality: str, pg: Progress) -> 
 def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source_key: str = "") -> dict:
     """分镜改完之后：按新 narration 重测语音时长 → 过闸门 → 重渲 → 重合成。"""
     plan = Plan.load(plan_file)
+    # 字幕只允许一层（与 run.py `if burn: brief.subtitles=False` 同源）：重渲/改进这条路径
+    # 稍后必然把 subs.srt 烧进成片（mux 固定传 srt 路径），若画面层再画一遍字幕就叠成两行
+    # 互相打架（用户实报「字幕重叠」）。关掉画面内字幕后，揭示节奏仍按口播字幕时间轴走，
+    # 不受影响——scene._render_shot 在 show_caps=False 时只跳过画字幕、不跳过时间记账。
+    plan.brief.subtitles = False
     t0 = time.time()
     out_dir.mkdir(parents=True, exist_ok=True)
     log = {"steps": {}, "brief": plan.brief.__dict__}
 
     # 配音：时长以实测语音时长为准；用户手写的 seconds 只作下限（否则口播会被截断）
+    # 用户改过 narration 后，旧 voiceover 已失效，先重写配音稿再配音（网关关闭则回退正则）。
+    log["voiceover"] = voiceover.apply(plan)
     pg.begin("narration")
     step = time.time()
     audio_dir = out_dir / "audio"
@@ -193,7 +201,7 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
         wav = audio_dir / f"shot_{s.index:02d}.wav"
         user_secs = round(float(s.seconds), 2)
         if plan.brief.narration:
-            dur = tts.synth(s.narration, wav, audio_dir)
+            dur = tts.synth(s.voiceover or s.narration, wav, audio_dir)
             # 镜头总时长 = 淡入留白 + 实测口播 + 淡出留白；与 run.py / IR 用同一组常量。
             need = round(SHOT_HEAD + dur + SHOT_TAIL, 2)
         else:
@@ -224,8 +232,12 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     pg.end("review")
     hard = review.blocking(findings)
     if hard:
-        raise RuntimeError("静态监督未通过：\n" + "\n".join(
-            f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard))
+        raise cli.GenerationError(
+            "content",
+            "静态监督未通过：\n" + "\n".join(
+                f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard),
+            "可在下方修改分镜后重出片；或按上面清单精简口播、补限定语、把目标时长放宽。",
+            findings=[{"shot": f["shot"], "code": f["code"], "msg": f["msg"]} for f in hard])
 
     plan_path = out_dir / "plan.json"
     plan.save(plan_path)
@@ -238,11 +250,14 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
                PLAN_JSON=str(plan_path))
     media = out_dir / "media"
     step = time.time()
-    cli._run([cli.MANIM, *cli.QUALITY[quality], "--media_dir", str(media), "-o", "silent.mp4",
-              "--disable_caching", str(cli.ROOT / "render" / "scene.py"), "Explainer"], env=env)
+    cli._retry(lambda: cli._run([cli.MANIM, *cli.QUALITY[quality], "--media_dir", str(media), "-o", "silent.mp4",
+                                 "--disable_caching", str(cli.ROOT / "render" / "scene.py"), "Explainer"], env=env),
+               desc="画面渲染")
     silent = next(iter(sorted(media.glob("**/silent.mp4"))), None)
     if silent is None:
-        raise RuntimeError(f"渲染未产出 silent.mp4（media 目录：{media}）")
+        raise cli.GenerationError(
+            "tool", f"渲染未产出 silent.mp4（media 目录：{media}）",
+            "manim 渲染异常退出、未产出画面轨。请检查分镜里的版式原语是否受支持，或稍后重试。")
     shutil.move(str(silent), out_dir / "silent.mp4")
     log["steps"]["render"] = round(time.time() - step, 2)
     pg.end("render")
@@ -250,11 +265,16 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     # G2 时长闸门（与 run.py 一致）：成片时长必须与 Plan 时长 ±10% 内，否则渲染层时间记账漏了东西。
     rendered = mux.probe_duration(out_dir / "silent.mp4")
     if rendered is None:
-        raise RuntimeError("无法读取渲染产物时长（ffmpeg 未返回 Duration）")
+        raise cli.GenerationError(
+            "tool", "无法读取渲染产物时长（ffmpeg 未返回 Duration）",
+            "ffmpeg 无法读取渲染产物时长，环境可能异常。请稍后重试，或联系维护者。")
     drift = abs(rendered - total) / total
     log["rendered"] = {"seconds": rendered, "plan": total, "drift": round(drift, 4)}
     if drift > 0.10:
-        raise RuntimeError(f"渲染时长 {rendered}s 与 Plan {total}s 偏差 {drift:.1%} > 10%（Spec_Scale G2），出片中止")
+        raise cli.GenerationError(
+            "tool",
+            f"渲染时长 {rendered}s 与 Plan {total}s 偏差 {drift:.1%} > 10%（Spec_Scale G2），出片中止",
+            "渲染层的时间记账与分镜不一致，成片可能卡顿或冻屏。请反馈这条知识点并附上 plan.json。")
 
     # 合成 + G4 音画同轴闸门（与 run.py 一致）：每镜头语音起点必须落在 SHOT_HEAD 附近。
     pg.begin("mux")
@@ -272,10 +292,14 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     log["audio_align"] = align
     bad = [a for a in align if a["delta"] is None or abs(a["delta"]) > 0.35]
     if bad:
-        raise RuntimeError(f"音画时间轴错位（>0.35s）：{bad}")
+        raise cli.GenerationError(
+            "tool", f"音画时间轴错位（>0.35s）：{bad}",
+            "音画时间轴错位，成片会声画不同步。请反馈这条知识点并附上 plan.json。")
     n_subs = mux.write_srt(plan_dict, out_dir / "subs.srt")
-    final = mux.mux(out_dir / "silent.mp4", out_dir / "track.wav", out_dir / "final.mp4", out_dir / "subs.srt",
-                    shot_seconds=[float(s["seconds"]) for s in plan_dict["shots"]])
+    final = cli._retry(lambda: mux.mux(out_dir / "silent.mp4", out_dir / "track.wav", out_dir / "final.mp4",
+                                       out_dir / "subs.srt",
+                                       shot_seconds=[float(s["seconds"]) for s in plan_dict["shots"]]),
+                       desc="音画合成")
     log["steps"]["mux"] = round(time.time() - step, 2)
     log["sfx"] = os.environ.get("MVP_SFX", "0")
     log["burn"] = dict(mux.last_burn)
@@ -399,6 +423,13 @@ def main() -> int:
         if isinstance(e, knowledge.KnowledgeNotFound) or getattr(cause, "candidates", None):
             detail = json.dumps({"error": str(e), "candidates": getattr(cause, "candidates", [])},
                                ensure_ascii=False)
+        if isinstance(e, cli.GenerationError):
+            # 内容 vs 工具两类失败都带一句可直接照做的建议；内容类额外附闸门清单（前端亮人话清单）。
+            body = {"error": str(e), "kind": e.kind, "suggestion": e.suggestion}
+            if e.kind == "content":
+                body["findings_raw"] = str(e)
+                body["findings"] = e.extra.get("findings", [])
+            detail = json.dumps(body, ensure_ascii=False)
         if isinstance(e, RuntimeError) and "静态监督" in str(e):
             detail = json.dumps({"error": "静态监督未通过", "findings_raw": str(e)}, ensure_ascii=False)
         if isinstance(e, cli.DurationNotFeasible):
@@ -407,6 +438,8 @@ def main() -> int:
                 "error": str(e), "kind": "duration_infeasible",
                 "natural": e.natural, "fastest": e.fastest, "target": e.target,
                 "suggest": int(round(e.fastest * 1.05)),
+                "suggestion": (f"这条知识点的口播至少要 {int(round(e.fastest * 1.05))} 秒才讲得完，"
+                               f"请把目标时长放宽，或精简口播。"),
             }, ensure_ascii=False)
         pg.fail(str(e)[:500])
         res_file.write_text(json.dumps({"ok": False, "error": detail, "traceback": _tb()},

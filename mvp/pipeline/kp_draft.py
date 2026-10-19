@@ -1,27 +1,29 @@
 # -*- coding: utf-8 -*-
-"""库外知识点起草（K0）：用户写的知识点不在库里时，由网关模型产出一条「未核对出处」的条目草稿。
+"""库外知识点起草（K0）：用户写的知识点不在库里时，由网关模型产出一条条目草稿。
 
 与 knowledge.py 的分工：knowledge 只读库、自己绝不调模型；起草只在库里没有时发生，
 产出物落进自动库（pipeline/data/kp_auto/），此后每一次读取都走 knowledge.load 的同一道校验——
 单一真源不变，草稿也是文件，可被人逐字改。
 
-诚实口径：草稿的 refs 恒为空（不冒充教材出处），条目带 origin="model_draft"，
-界面上必须标成「模型起草、未核对出处」。
+诚实口径：起草前先做语料检索（pipeline/corpus.py，字面 grep）。命中则把摘录喂给模型、
+refs 只允许照抄命中清单（source=书名、locator=第 N 页），落盘前 save_draft 再复核一遍；
+未命中则 refs 恒空、条目带 origin="model_draft"，界面上标成「模型起草、未核对出处」。
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
 
-from . import knowledge, llm_client, llm_prompts, review
+from . import corpus, knowledge, llm_client, llm_prompts, review
 from .ir import ACCEPTABLE_RATE, NAME_MAX_SHARE, NATURAL_CPS, RATE_FACTOR, naming_narration, naming_shot_seconds
 
 # 与 render/scene.py 的 Scene.BUILDERS 同一份清单（tests/test_kp_draft.py 里做了比对，防漂移）。
-VISUAL_KINDS = ("axis_graph", "callout", "compare", "energy_dist", "figure", "formula", "graph_vt",
-                "microstate", "mind_map", "particle_box", "stat_chart", "steps", "summary",
-                "table", "title")
+VISUAL_KINDS = ("axis_graph", "callout", "circuit", "compare", "energy_dist", "field", "figure",
+                "force_diagram", "formula", "graph_vt", "incline", "microstate", "mind_map", "optics",
+                "particle_box", "stat_chart", "steps", "summary", "table", "title", "trajectory")
 
 MAX_ATTEMPTS = 3       # 第一版 + 两次带问题清单的重写
 MIN_SHOTS, MAX_SHOTS = 4, 10
@@ -51,10 +53,20 @@ def _texts(entry: dict) -> str:
 
 
 def _user_message(subject: str, grade: str, topic: str, target_seconds: float,
-                  raw_text: str, problems: list[str] | None) -> str:
+                  raw_text: str, problems: list[str] | None, hits: list | None) -> str:
     lines = [f"学科：{subject}；学段：{GRADE_ZH.get(grade, grade)}（讲解深度按这个学段控制）；知识点：{topic}",
-             f"目标总时长：{target_seconds:g} 秒（口播总量按这个时长控制）。",
-             "refs 必须是空数组：这条内容还没核对过教材出处，不许编出处。"]
+             f"目标总时长：{target_seconds:g} 秒（口播总量按这个时长控制）。"]
+    if hits:
+        lines.append("【教材检索命中：refs 只能逐字照抄下面清单里的 source 与 locator；"
+                     "每条引用都要在口播里真的讲到对应内容；不要写清单之外的出处】")
+        for h in hits:
+            lines.append(f"- {h.source} 第 {h.page} 页：{h.excerpt}")
+        # 系统提示词示例里写的是 "refs": []，模型会照抄示例；这里给出可直接复制的对象，并明说不许空
+        pairs = list(dict.fromkeys((h.source, f"第 {h.page} 页") for h in hits))
+        lines.append("refs 不许是空数组：从下面挑出口播真正讲到的 1 条或多条，逐字复制整个对象：")
+        lines.append(json.dumps([{"source": s, "locator": loc} for s, loc in pairs], ensure_ascii=False))
+    else:
+        lines.append("refs 必须是空数组：这条内容没检索到可核对的教材出处，不许编出处。")
     if raw_text:
         lines.append(f"用户的补充要求：{raw_text}")
     if problems:
@@ -63,14 +75,25 @@ def _user_message(subject: str, grade: str, topic: str, target_seconds: float,
     return "\n".join(lines)
 
 
-def _check_shape(entry: dict, topic: str) -> list[str]:
+def _check_shape(entry: dict, topic: str, allowed: list[dict] | None = None) -> list[str]:
     errs: list[str] = []
     if not isinstance(entry, dict):
         return ["输出不是 JSON 对象"]
     if _norm(entry.get("topic")) != _norm(topic):
         errs.append(f"topic 必须逐字等于用户写的「{topic}」")
-    if entry.get("refs"):
-        errs.append("refs 必须是空数组（未核对过教材出处，不许写出处）")
+    if allowed is None:
+        if entry.get("refs"):
+            errs.append("refs 必须是空数组（没有教材检索命中，不许写出处）")
+    else:
+        refs = entry.get("refs")
+        if not isinstance(refs, list) or not refs:
+            errs.append("refs 不能为空：教材检索已命中，成片出处必须挂到命中的来源上")
+        else:
+            pairs = {(str(a.get("source")), str(a.get("locator"))) for a in allowed}
+            bad = [r for r in refs if not isinstance(r, dict)
+                   or (str(r.get("source") or ""), str(r.get("locator") or "")) not in pairs]
+            if bad:
+                errs.append(f"refs 里有命中清单之外的出处（{bad[:2]}）——只能逐字照抄清单里的 source 与 locator")
     for k in ("must_say", "forbidden"):
         v = entry.get(k)
         if not isinstance(v, list) or not v:
@@ -98,10 +121,18 @@ def _check_shape(entry: dict, topic: str) -> list[str]:
         for v in b["visuals"]:
             kind = v.get("kind") if isinstance(v, dict) else None
             if kind not in VISUAL_KINDS:
-                errs.append(f"第 {i} 镜的版式 kind={kind!r} 不在渲染层支持的 15 种里")
+                errs.append(f"第 {i} 镜的版式 kind={kind!r} 不在渲染层支持的 {len(VISUAL_KINDS)} 种里")
             elif not isinstance(v.get("props"), dict):
                 errs.append(f"第 {i} 镜 {kind} 的 props 必须是对象")
     return errs
+
+
+def _fold_flat_props(entry: dict) -> None:
+    """模型常把 props 拍平成 {"kind": "summary", "points": [...]}；无歧义，就地收进 props。"""
+    for b in entry.get("sequence") or []:
+        for v in (b.get("visuals") if isinstance(b, dict) else None) or []:
+            if isinstance(v, dict) and "props" not in v and len(v) > 1:
+                v["props"] = {k: v.pop(k) for k in [k for k in v if k != "kind"]}
 
 
 def _check_content(entry: dict, target_seconds: float) -> list[str]:
@@ -169,12 +200,20 @@ def draft(subject: str, grade: str, topic: str, target_seconds: float = 120.0,
             f"知识点库里没有「{topic}」，补这条内容需要模型起草，但生成环节当前未开启"
             "（部署侧需 QX_LLM_K0=1 或 QX_LLM_ALL=1，并配好密钥）")
     topic = str(topic).strip()
+    hits = corpus.search(subject, f"{topic} {raw_text}".strip(), max_hits=5)
+    allowed, seen = [], set()
+    for h in hits:
+        key = (h.source, h.page)
+        if key not in seen:
+            seen.add(key)
+            allowed.append({"source": h.source, "locator": f"第 {h.page} 页"})
     entry: dict = {}
     problems: list[str] = []
     raw = ""
     for attempt in range(MAX_ATTEMPTS):
         raw = llm_client.chat("K0", llm_prompts.K0_SYSTEM,
-                              _user_message(subject, grade, topic, target_seconds, raw_text, problems),
+                              _user_message(subject, grade, topic, target_seconds, raw_text,
+                                            problems or None, hits or None),
                               max_tokens=8000, json_mode=True)
         try:
             entry = llm_client.extract_json(raw)
@@ -184,8 +223,10 @@ def draft(subject: str, grade: str, topic: str, target_seconds: float = 120.0,
             problems = ["输出不是一个合法的 JSON 对象，请只输出完整 JSON"]
             continue
         entry["topic"] = topic          # 归一：topic 永远以用户原文为准
-        entry["refs"] = []              # 铁律：草稿不写出处
-        problems = _check_shape(entry, topic) + _check_content(entry, target_seconds)
+        _fold_flat_props(entry)
+        if not allowed:
+            entry["refs"] = []          # 铁律：没有语料命中就没有出处
+        problems = _check_shape(entry, topic, allowed or None) + _check_content(entry, target_seconds)
         if not problems:
             break
     if problems:

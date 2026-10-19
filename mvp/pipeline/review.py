@@ -44,6 +44,14 @@ REF_MIN_FS = 15.0
 # figure 原语支持的图形；scene._v_figure 一一对应，加一种要两边同步。
 FIGURE_SHAPES = {"ellipse", "right_triangle", "chord"}
 
+# 物理图示的方向词与元件类型（与 render/scene.py 的 _FORCE_DIRS / circuit 符号同源）。
+_FORCE_DIRS = {"up", "down", "left", "right", "upleft", "upright", "downleft", "downright"}
+_FIELD_MODES = {"region", "wire", "magnet"}
+_CIRCUIT_TYPES = {"battery", "resistor", "switch", "bulb", "ammeter", "voltmeter"}
+_OPTICS_MODES = {"mirror", "refract", "lens", "image"}
+_INCLINE_DIRS = {"normal", "into", "along_up", "along_down"}
+_TRAJECTORY_MODES = {"projectile", "circle", "cycloid"}
+
 # 检查码清单（第四轮 F-8）：`review.json = []` 在 v7 里同时可能是"全绿"和"根本没跑"，
 # 两位评审各记一次（A D14 / B D-03）。交付件改成 {checked:[码], violations:[...]}，
 # 空 violations 从此只在"这些码确实跑过"的意义下才算通过。
@@ -224,6 +232,18 @@ def _visual_height(shot: Shot) -> float:
             h += 4.2
         elif v.kind == "table":
             h += 0.66 * (1 + len(_seq(p.get("rows"))))
+        elif v.kind == "force_diagram":
+            h += 2.8
+        elif v.kind == "field":
+            h += 3.0
+        elif v.kind == "circuit":
+            h += 2.4
+        elif v.kind == "optics":
+            h += 3.2
+        elif v.kind == "incline":
+            h += 3.4
+        elif v.kind == "trajectory":
+            h += 3.6
         else:
             h += 1.0
     return h
@@ -348,6 +368,42 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                 add(s.index, "KIND", "mind_map 需要 root 与至少一个 branch")
             if v.kind == "table" and not _seq(props.get("rows")):
                 add(s.index, "KIND", "table 缺 rows")
+            if v.kind == "force_diagram":
+                forces = [f for f in _seq(props.get("forces")) if isinstance(f, dict)]
+                if not forces:
+                    add(s.index, "KIND", "force_diagram 至少要一个力（forces 非空）")
+                for f in forces:
+                    d = f.get("dir")
+                    if d is None or (not isinstance(d, (int, float)) and str(d).strip().lower() not in _FORCE_DIRS):
+                        add(s.index, "KIND", f"force_diagram 的力「{_text(f.get('name'))}」dir 非法（{d}），"
+                                             f"要用 {sorted(_FORCE_DIRS)} 或角度度数")
+            if v.kind == "field":
+                mode = _text(props.get("mode") or "region")
+                if mode not in _FIELD_MODES:
+                    add(s.index, "KIND", f"field 的 mode 只能是 {sorted(_FIELD_MODES)}，当前 {mode}")
+                if mode == "wire" and _text(props.get("current") or "") not in ("in", "out"):
+                    add(s.index, "KIND", "field(wire) 需要 current=in/out（电流进/出纸面）")
+                if mode == "region" and _text(props.get("symbols") or "cross") not in ("cross", "dot", "both"):
+                    add(s.index, "KIND", "field(region) 的 symbols 只能是 cross / dot / both")
+            if v.kind == "circuit":
+                elems = [e for e in _seq(props.get("elements")) if isinstance(e, dict)]
+                if not elems:
+                    add(s.index, "KIND", "circuit 至少要一个元件")
+                for e in elems:
+                    if _text(e.get("type")) not in _CIRCUIT_TYPES:
+                        add(s.index, "KIND", f"circuit 元件 type 只能是 {sorted(_CIRCUIT_TYPES)}，当前 {_text(e.get('type'))}")
+            if v.kind == "optics" and _text(props.get("mode") or "mirror") not in _OPTICS_MODES:
+                add(s.index, "KIND", f"optics 的 mode 只能是 {sorted(_OPTICS_MODES)}")
+            if v.kind == "incline":
+                for f in (x for x in _seq(props.get("forces")) if isinstance(x, dict)):
+                    d = f.get("dir")
+                    ok = isinstance(d, (int, float)) and not isinstance(d, bool) or \
+                        str(d).strip().lower() in (_FORCE_DIRS | _INCLINE_DIRS)
+                    if d is None or not ok:
+                        add(s.index, "KIND", f"incline 的力「{_text(f.get('name'))}」dir 非法（{d}），"
+                                             f"要用 {sorted(_FORCE_DIRS | _INCLINE_DIRS)} 或角度度数")
+            if v.kind == "trajectory" and _text(props.get("mode") or "projectile") not in _TRAJECTORY_MODES:
+                add(s.index, "KIND", f"trajectory 的 mode 只能是 {sorted(_TRAJECTORY_MODES)}")
             if v.kind in ("steps", "summary") and len(_seq(props.get("lines", props.get("points")))) > 6:
                 add(s.index, "KIND", "一屏条目超过 6 条，认知负荷过高")
             # 与渲染层 _v_callout 的断行规则一致：能按「 · 」拆开且每行都够大就放行。
@@ -445,9 +501,17 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
         add(-1, "TARGET", f"目标时长不可用（target_seconds={plan.brief.target_seconds!r}）："
                           f"时长偏差与整片节奏两条闸门无法判定，先修 Brief 再重跑")
     else:
-        dev = abs(total - tgt) / tgt
-        if dev > 0.10:
-            add(-1, "TARGET", f"总时长 {total}s 与目标 {tgt}s 偏差 {dev:.0%} > 10%")
+        # 超长是硬伤（内容讲不进目标时长，得删或提速）；短缺不算违规——内容就这么长，
+        # 配音又没有提速档能把它"讲满"，硬摊只会造出冻屏（run.py 的反向超差不拦出片口径）。
+        # 这里只把超长记为阻断；短缺照 BUDGET_TIGHT 的路子落一条 blocking=False 记账，
+        # 让老师知道差额，但不拦出片（否则 161s vs 180s 这种 10.5% 短缺会在这里被杀掉，
+        # 与 run.py 第 225 行"反向超差不拦"自相矛盾——用户实报的 TARGET 误杀）。
+        over = (total - tgt) / tgt
+        if over > 0.10:
+            add(-1, "TARGET", f"总时长 {total}s 超出目标 {tgt}s {over:.0%} > 10%：内容讲不进目标时长")
+        elif over < -0.10:
+            findings.append({"shot": -1, "code": "TARGET", "blocking": False,
+                             "msg": f"总时长 {total}s 比目标 {tgt}s 短 {-over:.0%}（按内容长度交付，差额在 sidecar 记一笔）"})
 
     # 定义性限定闸门：条目用 must_say 声明"这条知识点必须说出口的那几句"（a ≠ 0、常数须大于焦距、
     # F 是合外力……）。评审 S 维度的失分点全是"少了这个限定就讲错了"，而精简口播时最容易误删它们，

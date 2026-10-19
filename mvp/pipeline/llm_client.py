@@ -40,6 +40,7 @@ MODELS = {
     "V0": "claude-opus-5-5",
     "M1": "claude-opus-5-5",
     "M2": "claude-opus-5-5",
+    "VOICEOVER": "claude-opus-5-5",
 }
 STAGES = tuple(MODELS)
 

@@ -17,10 +17,12 @@ SPEC_VERSION = "S1-2026.10"     # plan.json 里回指规格版本（Spec_Product
 GRADES = ("G8", "G9", "H1", "H2", "H3", "U1", "U2")
 STYLES = ("clean", "board")
 VISUAL_KINDS = ("title", "formula", "compare", "graph_vt", "figure", "steps", "summary", "callout",
-                "axis_graph", "particle_box", "microstate", "energy_dist", "stat_chart", "mind_map", "table")
+                "axis_graph", "particle_box", "microstate", "energy_dist", "stat_chart", "mind_map", "table",
+                "force_diagram", "field", "circuit", "optics", "incline", "trajectory")
 # 以「画」为主的版式：整片至少要有一个（review.NO_FIGURE），讲具体对象的图都算。
 GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate", "energy_dist",
-                 "stat_chart", "mind_map")
+                 "stat_chart", "mind_map", "force_diagram", "field", "circuit", "optics",
+                 "incline", "trajectory")
 
 # A3 分镜预算账本挂在 Plan.refs 末尾的标记（refs[0] 仍是教材出处，片尾卡只读第一条）。
 # 常量住在 ir：storyboard 写、review 读，任何一方都不该私有这份字段名。
@@ -294,6 +296,9 @@ class Shot:
     # A6 实测到的语音秒数（含头尾留白）。镜头可以比语音长——分镜预算没说完的那截是留给学生的
     # 思考时间——但字幕与揭示只铺在真正有声音的那一段里，否则越到镜头末尾字幕越拖后。
     spoken: float = 0.0
+    # 配音稿（朗读稿）：把混着公式/化学式的 narration 改写成朗读员照念的中文，供 TTS 朗读；
+    # 字幕仍用 narration 原文。为空时 TTS 回退到 audio/tts.speakable 的正则朗读。
+    voiceover: str = ""
 
     @property
     def speak_window(self) -> float:
@@ -377,6 +382,7 @@ class Plan:
                     "seconds": s.seconds,
                     "spoken": s.spoken,
                     "narration": s.narration,
+                    "voiceover": s.voiceover,
                     "emphasis": s.emphasis,
                     "kp_refs": s.kp_refs,
                     "visuals": [{"kind": v.kind, "props": v.props} for v in s.visuals],
@@ -403,6 +409,7 @@ class Plan:
                 visuals=[Visual(v["kind"], v.get("props", {})) for v in s["visuals"]],
                 kp_refs=s.get("kp_refs", []),
                 emphasis=s.get("emphasis", ""),
+                voiceover=s.get("voiceover", ""),
             )
             for s in d["shots"]
         ]

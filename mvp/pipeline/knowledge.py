@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import corpus
+
 DATA_DIR = Path(__file__).resolve().parent / "data" / "kp"
 # kp_draft（K0）起草的库外知识点落这里。load 会一起扫，所以下游（storyboard/prereq/jobrunner）
 # 不必知道自己读的是库内条目还是自动条目——单一真源仍是文件。
@@ -79,7 +81,9 @@ def save_draft(entry: dict) -> Path:
     if entry.get("origin") != "model_draft":
         raise ValueError("只有 origin=model_draft 的条目能走 save_draft，库内条目不许被覆盖")
     if entry.get("refs"):
-        raise ValueError("自动草稿不能带 refs（未核对的出处就是编造）")
+        problems = corpus.validate_refs(str(entry["subject"]), entry["refs"])
+        if problems:
+            raise ValueError("refs 未通过语料核对：" + "；".join(problems[:3]))
     _check(entry)
     d = AUTO_DIR / str(entry["subject"])
     d.mkdir(parents=True, exist_ok=True)

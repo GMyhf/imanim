@@ -10,8 +10,8 @@
   ],
   "refs": [
     {
-      "source": "普通高中物理课程标准（2017年版2020年修订）（corpus/ictr/derived/senior-high-physics-2017-2020rev.extracted.txt）",
-      "locator": "第 935~945 行，内容要求 2.1.2、2.1.3"
+      "source": "普通高中物理课程标准（2017年版2020年修订）",
+      "locator": "内容要求 2.1.2、2.1.3"
     },
     {
       "source": "corpus/k12kgraph/subject_specific_KG/physics.json",
@@ -87,10 +87,11 @@
           }
         },
         {
-          "kind": "callout",
+          "kind": "field",
           "props": {
-            "text": "前置：F = qvB sinθ；r = mv/(qB)",
-            "tone": "key"
+            "mode": "region",
+            "symbols": "cross",
+            "label": "垂直纸面向里的匀强磁场 B"
           }
         }
       ]
@@ -102,29 +103,30 @@
       "emphasis": "0 = 向右 v + 向左 v，且 qvB = mg",
       "visuals": [
         {
+          "kind": "force_diagram",
+          "props": {
+            "object": "point",
+            "label_in": "q",
+            "forces": [
+              {
+                "name": "F",
+                "dir": "up",
+                "label": "洛伦兹力 qvB"
+              },
+              {
+                "name": "G",
+                "dir": "down",
+                "label": "重力 mg"
+              }
+            ],
+            "label": "向右的 v：qvB 与 mg 平衡"
+          }
+        },
+        {
           "kind": "formula",
           "props": {
             "expr": "qvB = mg  ⇒  v = mg/(qB)",
             "note": "配出的速度由受力平衡决定"
-          }
-        },
-        {
-          "kind": "compare",
-          "props": {
-            "left": {
-              "h": "向右的 v",
-              "items": [
-                "洛伦兹力 qvB 向上",
-                "重力 mg 向下"
-              ]
-            },
-            "right": {
-              "h": "向左的 v",
-              "items": [
-                "洛伦兹力 qvB 向下",
-                "单独看它的效果"
-              ]
-            }
           }
         }
       ]
@@ -136,22 +138,12 @@
       "emphasis": "向右：匀直；向左：匀圆周",
       "visuals": [
         {
-          "kind": "compare",
+          "kind": "trajectory",
           "props": {
-            "left": {
-              "h": "单看向右",
-              "items": [
-                "qvB 与 mg 平衡",
-                "匀速直线运动"
-              ]
-            },
-            "right": {
-              "h": "单看向左",
-              "items": [
-                "只受洛伦兹力",
-                "匀速圆周运动"
-              ]
-            }
+            "mode": "circle",
+            "n": 8,
+            "v_label": "v",
+            "label": "单看向左的 v：匀速圆周"
           }
         },
         {
@@ -170,24 +162,19 @@
       "emphasis": "v_m = 2v，h_m = 2r",
       "visuals": [
         {
-          "kind": "formula",
+          "kind": "trajectory",
           "props": {
-            "expr": "v_m = 2v = 2mg/(qB)",
-            "note": "最大速度"
+            "mode": "cycloid",
+            "arches": 2,
+            "n": 9,
+            "label": "合成轨迹：摆线 / 滚轮线"
           }
         },
         {
           "kind": "formula",
           "props": {
-            "expr": "h_m = 2r = 2m²g/(q²B²)",
-            "note": "最大高度差"
-          }
-        },
-        {
-          "kind": "callout",
-          "props": {
-            "text": "轨迹：摆线 / 滚轮线",
-            "tone": "key"
+            "expr": "v_m = 2v = 2mg/(qB)    h_m = 2r = 2m²g/(q²B²)",
+            "note": "最大速度、最大高度差"
           }
         }
       ]
@@ -199,17 +186,20 @@
       "emphasis": "最低点 a = −g（竖直）；竖直方向为简谐运动",
       "visuals": [
         {
+          "kind": "trajectory",
+          "props": {
+            "mode": "cycloid",
+            "arches": 1,
+            "n": 5,
+            "show_velocity": true,
+            "label": "最低点：速度最大，a = −g"
+          }
+        },
+        {
           "kind": "formula",
           "props": {
             "expr": "y = r(1 − cosθ)",
             "note": "竖直方向：简谐运动"
-          }
-        },
-        {
-          "kind": "callout",
-          "props": {
-            "text": "最低点加速度为 −g，竖直方向",
-            "tone": "warn"
           }
         }
       ]
@@ -220,6 +210,15 @@
       "narration": "初速度不为零时，同样先配出满足 qvB = mg 的 v，剩下的速度做圆周运动。笔记按 v_0 = v/4、v_0 = 2v、v_0 = v、v_0 = 0 四种情形分别画了轨迹。",
       "emphasis": "先配 v，再看剩余速度",
       "visuals": [
+        {
+          "kind": "trajectory",
+          "props": {
+            "mode": "cycloid",
+            "arches": 2,
+            "n": 7,
+            "label": "情形④ v_0 = 0：摆线"
+          }
+        },
         {
           "kind": "compare",
           "props": {
@@ -248,31 +247,30 @@
       "emphasis": "kv_1 = mg，v_1 = 10 m/s，x = 5 m",
       "visuals": [
         {
-          "kind": "compare",
+          "kind": "force_diagram",
           "props": {
-            "left": {
-              "h": "已知",
-              "items": [
-                "m = 2 kg，v_0 = 10 m/s",
-                "f = kv，k = 2 kg/s",
-                "g = 10 m/s²"
-              ]
-            },
-            "right": {
-              "h": "配速",
-              "items": [
-                "kv_1 向上，mg 向下",
-                "v_1 = 10 m/s",
-                "(1 − b)v_1 = bv_0 ⇒ b = 1/2"
-              ]
-            }
+            "object": "point",
+            "label_in": "m",
+            "forces": [
+              {
+                "name": "f",
+                "dir": "up",
+                "label": "阻力 kv_1"
+              },
+              {
+                "name": "G",
+                "dir": "down",
+                "label": "重力 mg"
+              }
+            ],
+            "label": "竖直配 v_1：kv_1 = mg"
           }
         },
         {
           "kind": "formula",
           "props": {
             "expr": "mv_0 − Σkv_0Δt = (1/2)mv_0  ⇒  x = 5 m",
-            "note": "微积分解法：v_x = 10e^(−t)，由 v_x = −v_y 得 t = ln2 s，x = 5 m"
+            "note": "微积分解法：v_x = 10e^{−t}，由 v_x = −v_y 得 t = ln2 s，x = 5 m"
           }
         }
       ]
