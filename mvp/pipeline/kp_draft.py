@@ -16,7 +16,7 @@ import re
 import time
 
 from . import knowledge, llm_client, llm_prompts, review
-from .ir import NAME_MAX_SHARE, NATURAL_CPS, naming_narration, naming_shot_seconds
+from .ir import ACCEPTABLE_RATE, NAME_MAX_SHARE, NATURAL_CPS, RATE_FACTOR, naming_narration, naming_shot_seconds
 
 # 与 render/scene.py 的 Scene.BUILDERS 同一份清单（tests/test_kp_draft.py 里做了比对，防漂移）。
 VISUAL_KINDS = ("axis_graph", "callout", "compare", "energy_dist", "figure", "formula", "graph_vt",
@@ -130,7 +130,11 @@ def _check_content(entry: dict, target_seconds: float) -> list[str]:
             errs.append(f"prior 太长：点名镜头念完要 {need:.1f}s，{target_seconds:g}s 的片子只给它 {cap:.1f}s；"
                         "删掉次要的条目、缩短措辞，或直接给空数组")
         naming = min(need, cap)
-    budget = max(1.0, target_seconds - naming - len(seq) * 1.15) * NATURAL_CPS
+    # 预算天花板与 review.PACING 硬闸同源：闸门只在语速需提到 ACCEPTABLE_RATE 档以上才拦
+    # （≈NATURAL_CPS / RATE_FACTOR**ACCEPTABLE_RATE 字/秒）。自查若还按自然语速算，会把闸门
+    # 明明放行的稿子误打回（如「口播 526 字 / 允许约 477 字」），让起草无谓重试。共用同一把尺子。
+    ceiling = NATURAL_CPS / RATE_FACTOR ** ACCEPTABLE_RATE
+    budget = max(1.0, target_seconds - naming - len(seq) * 1.15) * ceiling
     if chars > budget:
         errs.append(f"口播总字数 {chars} 超过目标时长允许的约 {int(budget)} 字，请精简口播（宁少勿多）")
     return errs
