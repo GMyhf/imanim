@@ -113,7 +113,11 @@ def _check_content(entry: dict, target_seconds: float) -> list[str]:
             errs.append(f"must_say 里的「{phrase}」在任何一镜的口播/屏上文字里都找不到——要么写进口播，要么从 must_say 删掉")
     for word in entry.get("forbidden") or []:
         if _norm(word) and _norm(word) in texts:
-            errs.append(f"forbidden 里的「{word}」出现在了成片文字里——必须改写口播/屏上内容，不能把它从 forbidden 删掉来蒙过检查")
+            errs.append(
+                f"forbidden 里的「{word}」出现在了成片文字里——一句话不能既禁止又照讲。"
+                "若它确实是错/不该讲的说法，就把它从口播和屏上文字里删掉、改写；"
+                "若它其实是你本来要讲、且自认为对的说法，就把它从 forbidden 里删掉。"
+                "不许两头都占：改完后 forbidden 里剩下的每一条都必须整片不出现。")
     seq = entry.get("sequence") or []
     chars = sum(len(str(b.get("narration") or "")) for b in seq)
     # 开了「先修」时，分镜会在正片前加一段点名镜头（storyboard.build），它先吃掉自己的秒数

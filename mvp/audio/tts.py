@@ -41,7 +41,7 @@ LANGUAGE = "zh"
 SPEED_SUPPORTED = ir.SPEED_LADDER
 MAX_ATTEMPTS = 5            # 首请求 + 4 次重试
 BACKOFF_BASE = 3.0          # 间隔 3s 起翻倍：3 / 6 / 12 / 24
-TIMEOUT = 120.0
+TIMEOUT = 30.0
 RETRYABLE = (403, 408, 429, 500, 502, 503, 504)
 
 

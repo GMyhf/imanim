@@ -129,7 +129,10 @@ def instrument(pg: Progress) -> None:
     wrap(knowledge, "load", "retrieve")
     wrap(kp_draft, "draft", "draft")
     wrap(storyboard, "build", "storyboard")
-    wrap(tts, "synth", "narration")
+    # 配音阶段要包在整段 _synthesize 上，而不是 tts.synth：synth 每镜头都调一次，
+    # 而 Progress.begin/end 幂等，包 synth 会让"配音完成"在第一镜结束就被打上，
+    # 后面几镜还在合成、前端却显示"画面渲染 待开始"，看起来像卡死（用户实测"经常卡"）。
+    wrap(cli, "_synthesize", "narration")
     wrap(review, "check", "review")
     wrap(cli, "_run", "render")
     wrap_begin_only(mux, "build_track", "mux")
