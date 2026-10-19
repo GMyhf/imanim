@@ -22,6 +22,10 @@ iron-rules（违反=返工）:
 4. 桥的机械 bug（路径/字段名/导入/编码）可修 mvp/pipeline/flow/*.py 编排层代码，交回报告写明
    改动（文件+行号+原因）；语义产出不许碰。
 5. 派单里没写的语义判断，一律不做、不自作主张补——记录问题交回，由主 agent 路由。
+6. 本题专题原文（上表 focus）**只走 brief.focus 注入**（`--focus @文件` 逐字读入，桥的
+   `_brief_line`/`concretization_rule` 已自动带进各棒 prompt）。严禁把任何一题的验收点、
+   知识点原文硬编进 stages.py/模板的**公共**常量——那会把它带进别的题（2026-10-18 实发过
+   一次 T4 污染全链），发现即改回 brief 通道。
 
 pitfalls（实测口径）:
 - kp JSON 字段以 knowledge.py 现码为准（sequence，不是 shots）；文件读写一律 utf-8。

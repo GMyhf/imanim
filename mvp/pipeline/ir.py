@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, asdict
 
 SUBJECTS = ("math", "physics", "chemistry")
 SPEC_VERSION = "S1-2026.10"     # plan.json 里回指规格版本（Spec_Product 第 4 节）
-GRADES = ("G8", "G9", "H1", "H2")
+GRADES = ("G8", "G9", "H1", "H2", "H3", "U1", "U2")
 STYLES = ("clean", "board")
 VISUAL_KINDS = ("title", "formula", "compare", "graph_vt", "figure", "steps", "summary", "callout",
                 "axis_graph", "particle_box", "microstate", "energy_dist", "stat_chart", "mind_map", "table")
@@ -74,10 +74,30 @@ NAME_CPS = 4.5
 NAME_MAX_SHARE = 0.15
 
 
+_CITE_RE = re.compile(r"（[^（）]*）")
+
+
+def naming_label(label: str) -> str:
+    """先修标签上屏/上口播的形态：去掉库内条目给编辑看的全角括注（出处页码、课标原文）。
+    半角括号不动——它们常是公式本身，如 r = mv/(qB)。"""
+    prev = None
+    while prev != label:
+        prev, label = label, _CITE_RE.sub("", label)
+    return label.strip(" ，,；;")
+
+
 def naming_narration(labels: list[str]) -> str:
     """点名段的固定文本。三处（storyboard、prereq 的两个函数）都从这里取：
     同一段点名的措辞一旦各写各的，字数就不同，下面的 naming_shot_seconds 也算不出同一个秒数。"""
-    return "开始前先确认一件事：" + "、".join(labels) + "。这几条熟了，下面才跟得上。"
+    return "开始前先确认一件事：" + "、".join(naming_label(x) for x in labels) + "。这几条熟了，下面才跟得上。"
+
+
+def fit_naming_labels(labels: list[str], cap_seconds: float) -> list[str]:
+    """按原顺序保留能在 cap_seconds 内念完的前几条先修；一条都放不下就返回空（不出点名镜）。"""
+    keep = [x for x in (naming_label(x) for x in labels) if x]
+    while keep and naming_shot_seconds(naming_narration(keep)) > cap_seconds + 1e-9:
+        keep.pop()
+    return keep
 
 
 def naming_shot_seconds(narration: str, min_seconds: float = MIN_SHOT_SECONDS) -> float:

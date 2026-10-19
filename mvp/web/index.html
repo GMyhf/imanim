@@ -53,9 +53,8 @@
         </label>
         <label class="field span-2">
           <span class="flabel">知识点 <b>*</b></span>
-          <input type="text" id="fTopic" maxlength="200" autocomplete="off" list="topicSuggest"
+          <input type="text" id="fTopic" maxlength="200" autocomplete="off"
                  placeholder="写下你想看的知识点，例：用面积法理解定积分">
-          <datalist id="topicSuggest"></datalist>
           <span class="note" id="topicNote">库里命中的知识点直接使用库内容（带教材出处）；库外的知识点会由模型先出一份分镜草稿，生成后可以在下面逐镜编辑。</span>
         </label>
       </div>
@@ -151,6 +150,18 @@
     </div>
     <div id="shots" class="shots"></div>
     <p class="errbox" id="planError" role="alert" aria-live="assertive" hidden></p>
+
+    <div class="plan-head" id="improveBox">
+      <h3>不满意？一句话改进<span class="pill">追加给主 agent</span></h3>
+      <p class="hint">在下面写下你想要的样子（比如「例题换成斜面场景」「结尾补一句易错提醒」），
+        会把这一版分镜连同你的意见一起交给主 agent 重写，再按同样流程重出片；改砸了会保留上一版，不毁成片。</p>
+      <textarea id="fImprove" maxlength="200" rows="2"
+                placeholder="例：把例题换成斜面场景；结尾补一句易错提醒。"></textarea>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="btnImprove">按意见重出片</button>
+      </div>
+      <p class="errbox" id="improveError" role="alert" aria-live="assertive" hidden></p>
+    </div>
   </section>
 
   <!-- 作品墙：结构与竞品一致（标题 + 学科 tab + 1→3 列网格），卡片带结构化元数据 -->

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 
-from . import llm_client, llm_prompts, review, storyboard
+from . import kp_draft, llm_client, llm_prompts, review, storyboard
 from .ir import VISUAL_KINDS, Brief, Plan
 
 MAX_FEEDBACK_RETRIES = 2
@@ -51,27 +51,52 @@ def _blocks(data: dict) -> list[dict]:
             for s in data["shots"]]
 
 
-def _user_message(brief: Brief, kp: dict, feedback: list[str] | None, prev: str | None) -> str:
+def _user_message(brief: Brief, kp: dict, feedback: list[str] | None, prev: str | None,
+                  head: str = "【上一版被静态闸门/校验打回的清单，请逐条修正后重新输出完整 JSON】") -> str:
     chars = int(brief.target_seconds * 3.9)
-    msg = (f"学科：{brief.subject}  学段：{brief.grade}  风格：{brief.style}\n"
+    msg = (f"学科：{brief.subject}  学段：{kp_draft.GRADE_ZH.get(brief.grade, brief.grade)}  风格：{brief.style}\n"
            f"目标时长：{brief.target_seconds} 秒（口播总字数建议不超过约 {chars} 字，含所有镜头）\n"
            f"先修点名镜：{'由系统在片头另加，你不要写' if brief.prior_knowledge and kp.get('prior') else '本片不要'}\n\n"
            f"【知识点条目 JSON（唯一事实来源）】\n{json.dumps(kp, ensure_ascii=False, indent=1)}")
     if feedback:
-        msg += ("\n\n【上一版输出】\n" + (prev or "") +
-                "\n\n【上一版被静态闸门/校验打回的清单，请逐条修正后重新输出完整 JSON】\n" + "\n".join(feedback))
+        msg += ("\n\n【上一版输出】\n" + (prev or "") + "\n\n" + head + "\n" + "\n".join(feedback))
     return msg
 
 
-def build(brief: Brief, kp: dict) -> tuple[Plan, dict]:
-    """返回 (Plan, info)。info.source ∈ llm / fallback；fallback 时 info.reason 写明原因。"""
-    info: dict = {"source": "fallback", "model": llm_client.model_for("A3"), "attempts": 0, "reason": "", "history": []}
-    feedback: list[str] | None = None
-    prev: str | None = None
+def _as_json(plan: Plan) -> str:
+    return json.dumps({"shots": [{"title": s.title, "seconds": s.seconds, "narration": s.narration,
+                                  "emphasis": s.emphasis,
+                                  "visuals": [{"kind": v.kind, "props": v.props} for v in s.visuals]}
+                                 for s in plan.shots if s.emphasis != "先修知识"]},
+                      ensure_ascii=False, indent=1)
+
+
+def adjust(brief: Brief, kp: dict, plan: Plan, hard: list[dict]) -> tuple[Plan, dict]:
+    """确定性分镜被闸门判了阻断项时的内部调整：把那一版和打回清单直接回灌给 A3 模型改写。
+    仍不过就把原 plan 原样还回去，由调用方决定是否打回。"""
+    feedback = [f"- shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard]
+    return build(brief, kp, feedback=feedback, prev=_as_json(plan), fallback=plan)
+
+
+DEFAULT_HEAD = "【上一版被静态闸门/校验打回的清单，请逐条修正后重新输出完整 JSON】"
+MIXED_HEAD = "【这一版既有用户的改进要求、又有静态闸门/校验的问题，逐条处理后重新输出完整 JSON】"
+
+
+def build(brief: Brief, kp: dict, *, feedback: list[str] | None = None, prev: str | None = None,
+          fallback: Plan | None = None, head: str | None = None) -> tuple[Plan, dict]:
+    """返回 (Plan, info)。info.source ∈ llm / fallback；fallback 时 info.reason 写明原因。
+
+    feedback/head 是回灌通道：闸门清单和用户的改进意见走同一条路，只是话术不同；
+    改进通道里用户那句在后续每一轮都留着，不能被闸门清单顶掉。
+    """
+    head = head or DEFAULT_HEAD
+    orig = list(feedback or [])
+    info: dict = {"source": "fallback", "model": llm_client.model_for("A3"), "attempts": 0, "reason": "",
+                  "history": [feedback] if feedback else []}
     for attempt in range(MAX_FEEDBACK_RETRIES + 1):
         info["attempts"] = attempt + 1
         try:
-            raw = llm_client.chat("A3", llm_prompts.A3_SYSTEM, _user_message(brief, kp, feedback, prev),
+            raw = llm_client.chat("A3", llm_prompts.A3_SYSTEM, _user_message(brief, kp, feedback, prev, head),
                                   max_tokens=12000, json_mode=True)
             data = llm_client.extract_json(raw)
         except llm_client.LLMError as e:
@@ -80,7 +105,12 @@ def build(brief: Brief, kp: dict) -> tuple[Plan, dict]:
         prev = raw.strip()
         errs = _schema_errors(data)
         if errs:
-            feedback = [f"- [SCHEMA] {m}" for m in errs]
+            bad = [f"- [SCHEMA] {m}" for m in errs]
+            if head != DEFAULT_HEAD:     # 改进通道：用户那句要跟着闸门清单一起留着
+                feedback = orig + bad
+                head = MIXED_HEAD
+            else:
+                feedback = bad
             info["history"].append(feedback)
             continue
         kp2 = deepcopy(kp)
@@ -90,8 +120,25 @@ def build(brief: Brief, kp: dict) -> tuple[Plan, dict]:
         if not hard:
             info["source"] = "llm"
             return plan, info
-        feedback = [f"- shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard]
+        bad = [f"- shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard]
+        if head != DEFAULT_HEAD:          # 改进通道：用户那句要跟着闸门清单一起留着
+            feedback = orig + bad
+            head = MIXED_HEAD
+        else:
+            feedback = bad
         info["history"].append(feedback)
     if not info["reason"]:
         info["reason"] = "回灌 %d 次后仍未过静态闸门：%s" % (MAX_FEEDBACK_RETRIES, "；".join((feedback or [])[:3]))
-    return storyboard.build(brief, kp), info
+    return (fallback if fallback is not None else storyboard.build(brief, kp)), info
+
+
+def improve(brief: Brief, kp: dict, plan: Plan, instruction: str) -> tuple[Plan, dict]:
+    """用户在成片下面写的改进意见：连着上一版分镜一起交给 A3 重写，新版的秒数仍由确定性分配算。
+
+    改进版照样过闸门；模型不可用或改到过不去就原样返回上一版（info.source=fallback），
+    由调用方决定是保留上一版还是报错——绝不因为一句意见把已经出来的片子毁掉。
+    """
+    return build(brief, kp,
+                 feedback=[f"- 用户改进要求：{instruction}"],
+                 prev=_as_json(plan), fallback=plan,
+                 head="【用户对上一版成片的改进要求，请在上一版基础上修改后重新输出完整 JSON】")

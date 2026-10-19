@@ -7,7 +7,12 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 import unicodedata
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import font_metrics as _fm  # noqa: E402  纯标准库：不破坏本文件「不 import scene/manim」的纪律
 
 from .ir import (ACCEPTABLE_RATE, BUDGET_REF_KIND, FAST_CPS, GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
                  MIN_SHOT_SECONDS, NATURAL_CPS, RATE_FACTOR, SHOT_HEAD, SHOT_TAIL, SPEED_LADDER,
@@ -52,8 +57,12 @@ CODES = (
 # 32 号字下 1 个 cap_width 单位的场景单位宽，按新字体栈（SimSun + Times New Roman）分字符实测：
 #   CJK/全角 =0.44（10 汉字实测 4.3958）；ASCII 上包络 0.50（全库 55 行出处折行实测 ≤0.49，
 #   含空格/标点拉低均值）。估算只许偏宽不许偏窄：偏窄会让 A4 漏报，test_refs.py 的实测断言会抓住。
-UNIT_CJK = 0.44
-UNIT_ASCII = 0.50
+# 移植阻断项 ③：估宽与字体强绑定，唯一事实源在 font_metrics.CALIBRATED；下面两个常量只是
+# SimSun 表项别名（本机 Windows 口径不变），_est_width 运行时按 MVP_TEXT_FONT/MVP_LATIN_FONT 查表，
+# 未标定字体直接抛 FontMetricsError——闸门不许拿别家字体的旧值估宽。
+_UNIT_M = _fm.CALIBRATED[(_fm.DEFAULT_TEXT_FONT, _fm.DEFAULT_LATIN_FONT)]
+UNIT_CJK = _UNIT_M["UNIT_CJK"]
+UNIT_ASCII = _UNIT_M["UNIT_ASCII"]
 
 # 出处折行的断点纪律：与 scene._wrap_ref 同源（改一处要改两处）。句读优先、括号内部禁断、
 # 行尾不留开括号或运算符——否则公式被劈开，比缩字号更糟。
@@ -66,10 +75,15 @@ REF_EDGE_BAD = REF_OPEN + "=+_^/·—"
 
 
 def _est_width(txt: str, fs: float) -> float:
-    """分字符宽度估算（纯标准库，不 import scene/manim）：CJK 与 ASCII 各用自己的实测系数。"""
+    """分字符宽度估算（纯标准库，不 import scene/manim）：CJK 与 ASCII 各用自己的实测系数。
+
+    系数按当前字体对查 font_metrics 表（阻断项③）；未标定字体抛 FontMetricsError，
+    闸门宁可拒绝出片也不许用错字体的旧值估宽。
+    """
+    m = _fm.metrics_for()
     cjk = sum(1.0 for c in str(txt) if not c.isascii())
     asc = sum(0.5 for c in str(txt) if c.isascii())
-    return (cjk * UNIT_CJK + asc * UNIT_ASCII) * fs / 32.0
+    return (cjk * m["UNIT_CJK"] + asc * m["UNIT_ASCII"]) * fs / 32.0
 
 
 def _ref_cut(text: str) -> list[str]:

@@ -161,11 +161,28 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     # 按分镜自己的账打回，顺便省掉一条注定出不了片的 TTS+渲染。
     # 记账级发现（blocking=False，如 BUDGET_TIGHT）照旧落盘但不拦：它说的是代价，不是违规。
     budget_findings = review.check(plan, kp)
+    # 内部调整：确定性分镜被判阻断项时，不直接打回，先把清单回灌给 A3 模型改写一轮
+    # （LLM 版 A3 自己已经回灌过，不再重复）。部署侧只要网关可用（开了任一生成环节）就会走这一步。
+    if (review.blocking(budget_findings) and "storyboard_llm" not in log
+            and (llm_client.enabled("A3") or llm_client.enabled("K0"))):
+        step = time.time()
+        plan, log["storyboard_adjust"] = storyboard_llm.adjust(brief, kp, plan, review.blocking(budget_findings))
+        log["steps"]["storyboard_adjust"] = round(time.time() - step, 2)
+        budget_findings = review.check(plan, kp)
     if budget_findings:
         (out_dir / "review.json").write_text(json.dumps(review.report(plan, kp), ensure_ascii=False, indent=2),
                                              encoding="utf-8")
     hard = review.blocking(budget_findings)
     if hard:
+        # 内部调整（拆行 + 按句裁 + 回灌 A3）都走完仍剩下的，如果全是"时长装不下这些内容"这一类，
+        # 就照实测数字报"这条至少要多少秒"，而不是丢一句闸门打回让人猜。
+        acct = storyboard.budget_of(plan)
+        if acct and all(f["code"] in ("OVERLOAD", "PACING", "TARGET") for f in hard):
+            natural = float(acct.get("natural_seconds") or 0.0)
+            fastest = (natural * RATE_FACTOR ** MAX_TTS_RATE if tts.SPEED_SUPPORTED else natural)
+            if fastest > brief.target_seconds * 1.10:
+                raise DurationNotFeasible(natural, fastest, float(brief.target_seconds),
+                                          speed_supported=bool(tts.SPEED_SUPPORTED))
         raise RuntimeError("静态监督未通过（预算态，尚未配音/渲染）：\n"
                            + "\n".join(f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard))
 

@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,7 @@ from .stages import ROOT, HERE, STAGES, RunCtx, Stage, _resolve
 
 MAX_ATTEMPTS = 3          # 首次 + 坏格式回喂重试 ≤2 次（每环 ≤3 轮纪律的单棒内层）
 MAX_ROUNDS = 3            # O 路由表：每个打回环最多 3 轮，仍不过 → BLOCKED 报用户
+SEG_RETRY = 2             # 机械修复（substitution_trial）：单段网关失败（524 等）段内重试次数
 TRUNCATE_HINTS = ("524", "超时", "timeout", "Timeout")
 
 
@@ -41,6 +43,12 @@ TRUNCATE_HINTS = ("524", "超时", "timeout", "Timeout")
 
 def _ctx(run_dir: Path, state: dict) -> RunCtx:
     return RunCtx(run_dir=Path(run_dir), state=state, brief=state.get("brief") or {})
+
+
+def _note(seq: list, item: str) -> None:
+    """审计件登记去重：分段缓存在跨进程续跑时会重新 load handoff，同名响应只记一次。"""
+    if item not in seq:
+        seq.append(item)
 
 
 def _response_name(stage_name: str, attempt: int, part: int | None = None) -> str:
@@ -97,18 +105,41 @@ def _call_segmented(st: Stage, ctx: RunCtx, system: str, attempt: int,
     """分段调用（524/截断兜底）：每段独立落盘 _part<i>.md，机械拼接后返回。
 
     feedback：上一轮合并产物的确定性校验错误清单（机械回喂，与整发路径的 user 附加同构）；
-    不带则分段重试是「盲重试」，同一批 prompt 重跑三次收敛不了格式错。"""
+    不带则分段重试是「盲重试」，同一批 prompt 重跑三次收敛不了格式错。
+
+    机械修复（操作员，2026-10，substitution_trial/M2 实战）：
+    1) 段级断点缓存 reports/<stage>_segcache_part<i>.md（配 .user.md 校验段输入）：
+       后段 524 导致整 attempt 报废时，已成功的先段不再重复调网关——下一 attempt 或
+       下一次 --stage 运行直接复用（段 user 逐字一致才复用；回喂 feedback 变化即失效）。
+    2) 段内重试 SEG_RETRY 次（524 是窗口超时，隔几秒再发常可过）。"""
     segs = st.segments(ctx) if st.segments else None
     if not segs:
         raise llm_client.LLMError(f"[{st.name}] 该棒未注册分段策略，无法从截断中恢复")
     parts, errs = [], []
     for i, seg_user in enumerate(segs):
-        text = llm_client.chat(st.stage_id, system, seg_user + feedback,
-                               images=st.build_images(ctx) if (st.build_images and i == 0) else None,
-                               max_tokens=st.max_tokens)
+        eff = seg_user + feedback
+        cache_rel = f"reports/{st.name}_segcache_part{i}.md"
+        cache_p, user_p = ctx.run_dir / cache_rel, ctx.run_dir / f"reports/{st.name}_segcache_part{i}.user.md"
+        if cache_p.exists() and user_p.exists() and cache_p.stat().st_size > 0 and \
+                user_p.read_text(encoding="utf-8") == eff:
+            parts.append(cache_p.read_text(encoding="utf-8"))   # 断点复用：审计件已在 responses 里
+            continue
+        text, last = None, None
+        for _ in range(SEG_RETRY):
+            try:
+                text = llm_client.chat(st.stage_id, system, eff,
+                                       images=st.build_images(ctx) if (st.build_images and i == 0) else None,
+                                       max_tokens=st.max_tokens)
+                break
+            except llm_client.LLMError as e:
+                last = e
+        if text is None:
+            raise last or llm_client.LLMError(f"[{st.name}] 第 {i} 段调用失败")
         rel = _response_name(st.name, attempt, part=i)
         (ctx.run_dir / rel).write_text(text, encoding="utf-8")
-        handoff.stage(ctx.state, st.name)["responses"].append(rel)
+        cache_p.write_text(text, encoding="utf-8")
+        user_p.write_text(eff, encoding="utf-8")
+        _note(handoff.stage(ctx.state, st.name)["responses"], rel)
         inputs.append(rel)
         parts.append(text)
     joined = "\n\n\n".join(p.strip() for p in parts) if st.stitch == "text" else _stitch_json(parts)
@@ -151,12 +182,19 @@ def run_deterministic_R(st: Stage, ctx: RunCtx) -> tuple[dict, list[str]]:
         return {"adapter": "missing"}, [
             f".local/{ctx.run_dir.name}/produce.py 不存在：R 适配层无可驱动对象。"
             "T0 定稿前该 run 需先有操作员驱动的 produce.py（报 BLOCKED，不伪造产物）"]
-    r = subprocess.run([sys.executable, str(produce), "all"], cwd=str(ROOT / "mvp"),
+    # 渲染子进程必须能把 mvp/ 当包根：M2 场景按契约写 `from render.scene import …` +
+    # `from physics import …`，而 manim 只把**场景文件所在目录**加进 sys.path（实测：cwd=mvp
+    # 但不设 PYTHONPATH 时 ModuleNotFoundError: No module named 'render'，见
+    # .local/physics_probe/render_A.log；设了 PYTHONPATH=mvp 则 8s 探针镜渲出 mp4）。
+    # 各 run 的 produce.py 里那行 PYTHONPATH 属操作员手工兜底，桥不能依赖它——在这里统一注入。
+    env = dict(os.environ, PYTHONPATH=str(ROOT / "mvp") + os.pathsep
+               + os.environ.get("PYTHONPATH", ""))
+    r = subprocess.run([sys.executable, str(produce), "all"], cwd=str(ROOT / "mvp"), env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     log_rel = "reports/R_console.log"
     (ctx.run_dir / log_rel).write_text(
         (r.stdout or "") + "\n=== STDERR ===\n" + (r.stderr or ""), encoding="utf-8")
-    handoff.stage(ctx.state, st.name)["responses"].append(log_rel)
+    _note(handoff.stage(ctx.state, st.name)["responses"], log_rel)
     if r.returncode != 0:
         tail = "\n".join(((r.stderr or r.stdout or "").strip().splitlines())[-30:])
         return {"adapter": str(produce), "returncode": r.returncode}, [f"渲染失败（详见 {log_rel}）:\n{tail}"]
@@ -239,11 +277,15 @@ def run_stage(run_dir, stage_name: str, isolated_ok: bool = False) -> str:
                 continue
             rel = _response_name(st.name, attempt)
             (run_dir / rel).write_text(text, encoding="utf-8")
-            slot["responses"].append(rel)
+            _note(slot["responses"], rel)
             inputs.append(rel)
             obj, errors = st.validate(text, ctx)
             if not errors:
                 outputs = st.save_output(ctx, obj, text) if st.save_output else []
+                break
+            # 编排层/环境级故障（如 physics 引擎导入不了）不是模型的错：
+            # 回喂重试只会白烧额度，直接停手报 BLOCKED。
+            if any("BLOCKED" in e for e in errors):
                 break
             # 截断疑似（JSON 坏）且有分段策略 → 下一轮转分段（Spec 第 11 节第 2 条）
             if st.segments and any("JSON" in e for e in errors):

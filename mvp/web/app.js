@@ -70,7 +70,6 @@ async function loadTopics() {
   fill($("#fQuality"), d.qualities, pref.quality || DEFAULTS.quality);
   $("#fSeconds").append(...d.durations.map((s) => opt(String(s), s + " 秒")));
   $("#fSeconds").value = pref.seconds || DEFAULTS.seconds;
-  refreshTopicOptions();
 }
 
 function fill(select, list, def) {
@@ -79,16 +78,6 @@ function fill(select, list, def) {
   if (def && list.some((i) => i.value === def)) select.value = def;
 }
 const opt = (value, label) => Object.assign(el("option"), { value, textContent: label });
-
-/* 知识点建议：把「学科 + 学段」都匹配的库内条目填进 datalist，仅作建议、不作限制；
- * 库外知识点由服务端走模型生成分镜草稿，生成后可逐镜编辑。 */
-function refreshTopicOptions() {
-  const subject = $("#fSubject").value, grade = $("#fGrade").value;
-  const list = state.topics.filter((t) => t.subject === subject && t.grade === grade);
-  const dl = $("#topicSuggest");
-  dl.textContent = "";
-  dl.append(...list.map((t) => opt(t.topic, t.topic)));
-}
 
 /* ------------------------------------------------------------------ 生成 + 轮询 */
 function briefFromForm() {
@@ -141,6 +130,22 @@ async function regenerate() {
   if (res.status === 409) return showError($("#planError"), DISABLED_MSG, job.error || "HTTP 409");
   if (job.error) return showError($("#planError"), job.error);
   startJob(job.job, "按修改重出片");
+}
+
+async function improve() {
+  if (state.busy) return;
+  if (!state.currentKey) return showError($("#improveError"), "没有可改进的成片");
+  const instruction = $("#fImprove").value.trim();
+  if (!instruction) return showError($("#improveError"), "请先写一句改进意见");
+  hideError($("#improveError"));
+  const res = await post("/api/improve", {
+    source_key: state.currentKey, instruction, quality: $("#fQuality").value,
+  });
+  if (!res) return;
+  const job = res.data;
+  if (res.status === 409) return showError($("#improveError"), DISABLED_MSG, job.error || "HTTP 409");
+  if (job.error) return showError($("#improveError"), job.error);
+  startJob(job.job, "按改进意见重出片");
 }
 
 function startJob(jobId, kindLabel) {
@@ -533,8 +538,8 @@ async function post(url, body) {
 }
 
 /* ------------------------------------------------------------------ 绑定 */
-$("#fSubject").addEventListener("change", () => { savePrefs({ subject: $("#fSubject").value }); refreshTopicOptions(); });
-$("#fGrade").addEventListener("change", () => { savePrefs({ grade: $("#fGrade").value }); refreshTopicOptions(); });
+$("#fSubject").addEventListener("change", () => { savePrefs({ subject: $("#fSubject").value }); });
+$("#fGrade").addEventListener("change", () => { savePrefs({ grade: $("#fGrade").value }); });
 $("#fStyle").addEventListener("change", () => savePrefs({ style: $("#fStyle").value }));
 $("#fQuality").addEventListener("change", () => savePrefs({ quality: $("#fQuality").value }));
 $("#fSeconds").addEventListener("change", () => savePrefs({ seconds: $("#fSeconds").value }));
@@ -553,10 +558,10 @@ $("#btnReset").addEventListener("click", () => {
   $("#fPrior").checked = true;
   $("#fRaw").value = "";
   try { localStorage.removeItem(PREF_KEY); } catch (e) { /* 忽略 */ }
-  refreshTopicOptions();
 });
 $("#btnGenerate").addEventListener("click", generate);
 $("#btnRegenerate").addEventListener("click", regenerate);
+$("#btnImprove").addEventListener("click", improve);
 $("#btnReloadPlan").addEventListener("click", () => state.plan && renderShots(state.plan));
 
 /* ------------------------------------------------------------------ 问题反馈 */

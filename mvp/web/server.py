@@ -69,7 +69,7 @@ from pipeline.ir import (  # noqa: E402
 )
 
 SUBJECTS = [("math", "数学"), ("physics", "物理"), ("chemistry", "化学")]
-GRADES = [("G8", "初二"), ("G9", "初三"), ("H1", "高一"), ("H2", "高二")]
+GRADES = [("G8", "初二"), ("G9", "初三"), ("H1", "高一"), ("H2", "高二"), ("H3", "高三"), ("U1", "大一"), ("U2", "大二")]
 STYLES = [("clean", "clean · 白底板书"), ("board", "board · 深色黑板")]
 DURATIONS = [60, 120, 180, 300]
 QUALITIES = [("draft", "480p 草稿（约 30s，演示用）"), ("hd", "720p（约 60s）"),
@@ -144,7 +144,7 @@ def run_meta(rd: Path, key: str) -> dict:
     grade = brief.get("grade") or (plan.get("brief") or {}).get("grade")
     topic = brief.get("topic") or (plan.get("brief") or {}).get("topic")
     if subject is None and artifact.name:
-        m = re.match(r"^(math|physics|chemistry)-(G8|G9|H1|H2)-(.+)-(\d+)s-[0-9a-f]{8}", artifact.name)
+        m = re.match(r"^(math|physics|chemistry)-(G8|G9|H1|H2|H3|U1|U2)-(.+)-(\d+)s-[0-9a-f]{8}", artifact.name)
         if m:
             subject, grade, topic = m.group(1), m.group(2), m.group(3)
     src = rd.stat().st_mtime
@@ -351,6 +351,31 @@ def start_regenerate(source_key: str, shots: list[dict], quality: str) -> str:
     spawn(job_id, [PY, str(RUNNER), "--mode", "render", "--job-dir", str(job_dir),
                    "--plan-file", str(plan_file), "--quality", quality,
                    "--source-key", source_key], job_dir)
+    return job_id
+
+
+def start_improve(source_key: str, instruction: str, quality: str) -> str:
+    """把用户写在成片下的改进意见交给 A3，在源 plan 上重写一版再重出片。"""
+    if GENERATE_DISABLED:
+        raise ValueError(GENERATE_DISABLED_MSG)
+    rd = run_dir_for(source_key)
+    plan = read_json(rd / "plan.json") if rd else None
+    if not plan:
+        raise ValueError("源任务没有 plan.json，无法改进")
+    job_id = new_id("i")
+    job_dir = JOBS_DIR / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    plan_file = job_dir / "plan.json"
+    plan_file.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+    (job_dir / "instruction.txt").write_text(instruction, encoding="utf-8")
+    with _lock:
+        _jobs[job_id] = {"id": job_id, "kind": "improve", "key": f"job:{job_id}", "state": "running",
+                         "created": time.time(), "source_key": source_key, "quality": quality,
+                         "brief": plan.get("brief", {}), "instruction": instruction}
+        persist(job_id)
+    spawn(job_id, [PY, str(RUNNER), "--mode", "improve", "--job-dir", str(job_dir),
+                   "--plan-file", str(plan_file), "--instruction-file", str(job_dir / "instruction.txt"),
+                   "--quality", quality, "--source-key", source_key], job_dir)
     return job_id
 
 
@@ -603,6 +628,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_generate()
             if parts[:2] == ["api", "regenerate"]:
                 return self.api_regenerate()
+            if parts[:2] == ["api", "improve"]:
+                return self.api_improve()
             if parts[:2] == ["api", "feedback"]:
                 return self.api_feedback()
             self.send_json({"error": "unknown endpoint"}, 404)
@@ -734,6 +761,24 @@ class Handler(BaseHTTPRequestHandler):
             quality = "fullhd"
         try:
             job_id = start_regenerate(source, shots, quality)
+        except (ValueError, TypeError) as e:
+            return self.send_json({"error": str(e)}, 400)
+        self.send_json({"job": job_id, "key": f"job:{job_id}", "state": "running", "source_key": source})
+
+
+    def api_improve(self):
+        b = self.read_body()
+        source = str(b.get("source_key") or b.get("job") or "")
+        instruction = str(b.get("instruction") or "").strip()
+        if not instruction:
+            return self.send_json({"error": "改进意见不能为空"}, 400)
+        if len(instruction) > 200:
+            return self.send_json({"error": "改进意见太长（最多 200 字）"}, 400)
+        quality = b.get("quality", "fullhd")
+        if quality not in dict(QUALITIES):
+            quality = "fullhd"
+        try:
+            job_id = start_improve(source, instruction, quality)
         except (ValueError, TypeError) as e:
             return self.send_json({"error": str(e)}, 400)
         self.send_json({"job": job_id, "key": f"job:{job_id}", "state": "running", "source_key": source})

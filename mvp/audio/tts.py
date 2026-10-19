@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import struct
 import time
 import urllib.error
@@ -114,6 +115,34 @@ def _post(body: dict) -> bytes:
     raise RuntimeError(f"TTS 合成失败（重试 {MAX_ATTEMPTS} 次后仍不可用）：{last}")
 
 
+# 口播里的公式片段：不含汉字、至少带一个运算符/上标，才当公式改写成念法
+_FORMULA = re.compile(r"[A-Za-z0-9²³√|()\[\]+\-−=×÷/<>≤≥.^ ]*[A-Za-z0-9²³)]"
+                      r"[A-Za-z0-9²³√|()\[\]+\-−=×÷/<>≤≥.^ ]*")
+_OPS = {"+": " 加 ", "=": " 等于 ", "×": " 乘 ", "÷": " 除以 ", "/": " 除以 ",
+        "<": " 小于 ", ">": " 大于 ", "≤": " 小于等于 ", "≥": " 大于等于 ", "√": " 根号 "}
+
+
+def _speak_formula(seg: str) -> str:
+    if not re.search(r"[+\-−=×÷/<>≤≥²³√^]", seg) or not re.search(r"[A-Za-z]", seg):
+        return seg
+    s = re.sub(r"\|\s*([A-Za-z])\s*\|", r" \1 的模 ", seg)
+    s = re.sub(r"√\s*\(([^()]*)\)", r" 根号下 \1 ", s)
+    s = s.replace("²", " 的平方 ").replace("³", " 的立方 ")
+    # 减号：句首/运算符/左括号后是「负」，其余是「减」；字母间无空格的连字符（如 Q-U）不动
+    s = re.sub(r"(^|[=(+×÷/<>]\s*)[−-]\s*", lambda m: m.group(1) + " 负 ", s)
+    s = re.sub(r"\s*−\s*|\s+-\s+|-(?=\d)", " 减 ", s)
+    for k, v in _OPS.items():
+        s = s.replace(k, v)
+    # 相邻字母是相乘的单字母变量（bi、qvB、ax），拆开念，免得 TTS 当成一个词
+    s = re.sub(r"(?<=[A-Za-z])(?=[A-Za-z])", " ", s)
+    return re.sub(r"\s+", " ", s)
+
+
+def speakable(text: str) -> str:
+    """把口播里的公式改写成按上下文的中文念法（a+bi → a 加 b i），其余文字原样。"""
+    return _FORMULA.sub(lambda m: _speak_formula(m.group(0)), text)
+
+
 def synth(text: str, out_wav: Path, workdir: Path, rate: int = 0) -> float:
     """把一段口播合成成 wav，返回实测时长（秒）。
 
@@ -122,7 +151,7 @@ def synth(text: str, out_wav: Path, workdir: Path, rate: int = 0) -> float:
     SPEED_SUPPORTED 如实记账。workdir 不再使用（HTTP 无中间文件），仅为兼容签名保留。
     """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
-    blob = _post({"model": _model(), "input": text, "voice": _voice(),
+    blob = _post({"model": _model(), "input": speakable(text), "voice": _voice(),
                   "language_type": _language()})
     out_wav.write_bytes(_repair_wav(blob))
     with wave.open(str(out_wav), "rb") as w:

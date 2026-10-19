@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -24,7 +25,46 @@ from .. import ir, llm_client, knowledge
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]                      # D:\Dev\Project1
+MVP = HERE.parents[1]                       # mvp/（physics 引擎所在）
 SPEC_PATH = ROOT / "Projrct_Plan" / "Spec_AgentFlow_v2.md"
+
+
+def physics_api_errors(code: str) -> list:
+    """确定性闸门：场景代码只能 import/引用 physics 引擎里**真实存在**的名字。
+
+    M2 一旦杜撰 API（早期草稿的 frame_points/progressive 之类），代码能编译、review 也过，
+    到 R 渲染才 ImportError —— 白白烧掉整轮额度。这里在 M2 出口就用反射拦下。
+    """
+    try:
+        import importlib
+        if str(MVP) not in sys.path:
+            sys.path.insert(0, str(MVP))
+        pkg = importlib.import_module("physics")
+        known = set(pkg.__all__)
+    except Exception as e:                       # 引擎装不上是编排层问题，不让它伪装成模型 FAIL
+        return [f"BLOCKED：physics 引擎导入失败（编排层问题，报操作员）：{e}"]
+    errs: set[str] = set()
+    for m in re.finditer(r"^[ \t]*from[ \t]+(physics(?:\.[A-Za-z_]\w*)?)[ \t]+import[ \t]+(.+)$",
+                         code, re.M):
+        mod, raw = m.group(1), m.group(2)
+        names = [n.split(" as ")[0].strip() for n in re.split(r"[(),]", raw)
+                 if n.strip() and not n.strip().startswith("as ")]
+        if mod == "physics":
+            bad = [n for n in names if n not in known]
+        else:
+            try:
+                sub = importlib.import_module(mod)
+            except Exception as e:
+                errs.add(f"{mod} 导入失败：{e}")
+                continue
+            bad = [n for n in names if not hasattr(sub, n)]
+        for n in bad:
+            errs.add(f"{mod} 里没有 {n}（可用名字：{', '.join(sorted(known))}）")
+    for m in re.finditer(r"(?<![\w.])physics\.([A-Za-z_]\w*)", code):
+        attr = m.group(1)
+        if attr not in known and attr not in ("integrator", "particle", "graphsync"):
+            errs.add(f"physics.{attr} 不存在（可用名字：{', '.join(sorted(known))}）")
+    return sorted(errs)
 
 # ---------------------------------------------------------------- run 上下文
 
@@ -233,6 +273,12 @@ def validate_v0(text: str, ctx: RunCtx):
         else:
             errs.append(f"shot[{i}] seconds_budget 不是数值")
         narr_all += str(sh.get("narration", ""))
+    # 开场大字标题（Spec_Video_Defaults 第一节「开头」，用户 2026-10-18 复申"仍然必要"）
+    topic = str((ctx.brief or {}).get("topic") or "").strip()
+    ot = str(shots[0].get("opening_title") or "").strip() if isinstance(shots[0], dict) else ""
+    if topic and ot.replace(" ", "") != topic.replace(" ", ""):
+        errs.append(f"首镜 opening_title 必须逐字等于 KP topic 原文（期望 {topic!r}，实际 {ot!r}）："
+                    "第一帧大字标题是默认设定，不可省")
     if errs:
         return script, errs
     if abs(total - target) > target * 0.20:
@@ -284,6 +330,23 @@ def validate_m2(text: str, ctx: RunCtx):
         compile(code, "<m2_scene>", "exec")
     except SyntaxError as e:
         errs.append(f"场景代码语法错误：{e}")
+    else:
+        errs += physics_api_errors(code)
+        md = ctx.path("modelspec")
+        has_dyn = md.exists() and any(md.glob("shot*.json"))
+        if has_dyn and "physics" not in code:
+            errs.append("ModelSpec 存在却没引用 physics 引擎：画面运动必须由 integrate()/series() 驱动，"
+                        "不得手填关键帧")
+        # 镜数完整性（机械修复，2026-10-18 实战）：分段策略下 Shot3+ 连续撞 524，前 2 段已落盘，
+        # 原先只验 "class Shot" 出现过 → 6/9 镜也判 PASS，坏产物一路带到 R 才暴露。缺哪镜就回喂哪镜。
+        script = ctx.load_script() or {}
+        want = [sh.get("shot_no") for sh in (script.get("shots") or []) if sh.get("shot_no") is not None]
+        have = {int(m.group(1)) for m in re.finditer(r"\bclass\s+Shot(\d+)\b", code)}
+        missing = [k for k in want if k not in have]
+        if want and missing:
+            errs.append(f"场景代码缺镜：Shot{', Shot'.join(str(k) for k in missing)}"
+                        f"（visual_script 要求 {len(want)} 镜，实际 {len(have & set(want))} 镜）——"
+                        "补齐缺失的 Shot 类，已写好的镜不要重写")
     return {"code": code}, errs
 
 
@@ -335,10 +398,14 @@ def save_m1(ctx: RunCtx, obj, text: str) -> list:
 
 def save_m2(ctx: RunCtx, obj, text: str) -> list:
     """拼接后的场景代码落 run 目录（生产接线 R7 时由操作员收编进 mvp/render/scenes/，bridge 不直写公共层）。"""
-    kp_id = (ctx.state.get("kp_id") or ctx.brief.get("topic") or "scene").replace("/", "_")
+    # 机械修复（主 agent，2026-10-18）：原先直接用 brief.topic 当文件名 → T5 产出
+    # 「电容-单杆模型 I=CBLa_scene.py」，中文+空格的文件名在 manim/ subprocess 链路上随时翻车。
+    # 文件名只走 ASCII slug：优先 kp_id（<subject>/<id>），退到 run 目录名，两者都是库内 ASCII 标识。
+    ident = (ctx.state.get("kp_id") or "").split("/")[-1] or ctx.run_dir.name
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "_", ident).strip("_") or "scene"
     d = ctx.path("generated")
     d.mkdir(parents=True, exist_ok=True)
-    rel = f"generated/{kp_id}_scene.py"
+    rel = f"generated/{slug}_scene.py"
     ctx.path(rel).write_text(obj["code"] + "\n", encoding="utf-8")
     return [rel]
 
@@ -353,10 +420,20 @@ def save_a4(ctx: RunCtx, obj, text: str) -> list:
 _STYLE_LINE = "style 由 brief 指定（见下），缺省沿用全局暗色主题。"
 
 
-def _brief_line(ctx: RunCtx) -> str:
+def _brief_line(ctx: RunCtx, focus: bool = True) -> str:
     b = ctx.brief
-    return (f"【本片需求】subject={b.get('subject')}；grade={b.get('grade')}；topic=「{b.get('topic')}」；"
+    line = (f"【本片需求】subject={b.get('subject')}；grade={b.get('grade')}；topic=「{b.get('topic')}」；"
             f"目标总时长 {ctx.target_seconds():g}s；style={json.dumps(b.get('style') or {}, ensure_ascii=False)}。{_STYLE_LINE}")
+    # 机械修复（主 agent，2026-10-18）：brief.focus（本题专题/验收点原文）此前只进派单模板，
+    # 不进棒 prompt → 操作员只能靠硬编常量补，造成跨题污染。此处逐字透传，M1/M2 另有
+    # concretization_rule 在尾部原文附加一遍。
+    # 口径纠偏（T1 操作员，2026-10-18）：V0 是**口播编剧**棒，专题要求全是画面/建模验收点，
+    # 进 V0 会诱导模型把验收条款念进口播 → V0 不注入（focus=False），只走 M1/M2。
+    if focus:
+        f = str(b.get("focus") or "").strip()
+        if f:
+            line += "\n【本题专题要求（brief.focus 原文）】\n" + f
+    return line
 
 
 def _kp_block(ctx: RunCtx) -> str:
@@ -436,6 +513,8 @@ def build_images_p(ctx: RunCtx) -> list:
 DEFAULTS_NOTE = """
 【默认设定（Spec_Video_Defaults.md 摘要，硬约束）】
 - 字体：中文宋体、英文 Times New Roman；公式一律 LaTeX（MathTex）渲染。
+- 开头：第一镜首帧必须是「内容主题」大字标题（宋体、居中、安全区内），随口播结束淡出——
+  这是下面"屏上几乎无字"的唯一开场例外（用户 2026-10-18 复申：第一帧大字标题仍然必要）。
 - 图多；文字只在口播，几乎不进画面；禁止把口播原样变成字幕（口播不上屏）。
 - 屏上允许的文字只有「把抽象概念落到具象画面」的短标注 + LaTeX 公式。
 - 动效默认「消失-出现」（淡出→淡入）。
@@ -449,10 +528,11 @@ def build_v0(ctx: RunCtx) -> str:
     if fs_dir.exists():
         fs = "\n\n【FigureSpec 清单（P 棒产物）】\n" + "\n".join(
             p.read_text(encoding="utf-8") for p in sorted(fs_dir.glob("*.json")))
-    return (DEFAULTS_NOTE + "\n" + _brief_line(ctx) + "\n\n" + _kp_block(ctx) + fs
+    return (DEFAULTS_NOTE + "\n" + _brief_line(ctx, focus=False) + "\n\n" + _kp_block(ctx) + fs
             + "\n\n输出 visual_script.json：顶层 {\"style\":{...},\"shots\":[...]}，"
               "每镜字段按你的系统提示词第 1 条（shot_no/seconds_budget/画面叙事/sim_kind/"
-              "ModelSpec需求描述/narration/屏上标注/reveal_beats）。只输出 JSON，不要解释文字。")
+              "ModelSpec需求描述/narration/屏上标注/reveal_beats），首镜另加 opening_title（第 8 条）。"
+              "只输出 JSON，不要解释文字。")
 
 
 def _modelspec_schema() -> str:
@@ -466,8 +546,10 @@ def _modelspec_schema() -> str:
 
 # 机械附加（操作员，2026-10，T4 速度选择器）：桥的 M1/M2 user prompt 模板里没有具象化要求原文
 # （只有 V0 系统提示词第 4 条带），按任务口径把 Spec 第 8 节 V0 提示词第 4 条（核心 rule「语义
-# 具象化原则」）与 Spec 第 10 节 T4 验收点**逐字原文**附加到 M1/M2 user prompt 尾部。
-# 操作员不新增任何语义，只搬运已定稿 rule 原文。
+# 具象化原则」）原文附加到 M1/M2 user prompt 尾部。操作员不新增任何语义，只搬运已定稿 rule 原文。
+# 主 agent 纠偏（2026-10-18）：各题验收点原先硬编在这段公共常量里 → T4 的验收点被带进 T1/T2/T3/T5
+# 的 prompt（跨题污染）。验收点是**每题输入**，改由 brief.acceptance 提供（--init / --acceptance），
+# 本函数只透传原文，不带任何一题的内容。
 CONCRETIZATION_RULE = """
 
 【核心 rule 原文附加 · 语义具象化原则（Spec_AgentFlow_v2.md 第 8 节 V0 提示词第 4 条，逐字引用）】
@@ -476,11 +558,16 @@ CONCRETIZATION_RULE = """
    讲「取代反应」就让原子/字符真的被换走、移进移出；公式推导必须有**字母↔物理量对应动画**
    （字母色标、代入位移、数值同步上屏）；方程式/表达式里有内在思维联系的项同理
    （项的移动、守恒量色标、来源去向连线）。禁止"口播讲取代、画面放静态结构式"这种脱钩。
-
-【核心 rule 原文附加 · 本台账 T4 验收点（Spec_AgentFlow_v2.md 第 10 节原文）】
-T4：推导细致=每步公式的每个字母有来源动画（从上一步的哪个量代入而来，色标追踪）；
-qE=qvB 平衡的受力图与粒子直线穿越同屏；v=E/B 由图像/数值双通道验证。
 """
+
+
+def concretization_rule(ctx: RunCtx) -> str:
+    """通用具象化 rule + 本题验收点原文（brief.focus，逐字透传，无则不附加）。"""
+    acc = str((ctx.brief or {}).get("focus") or "").strip()
+    if not acc:
+        return CONCRETIZATION_RULE
+    return (CONCRETIZATION_RULE +
+            "\n【核心 rule 原文附加 · 本题验收点（brief.focus，主 agent 逐字注入）】\n" + acc + "\n")
 
 
 def build_m1(ctx: RunCtx) -> str:
@@ -489,7 +576,7 @@ def build_m1(ctx: RunCtx) -> str:
             + _modelspec_schema() + "\n```\n\n【visual_script.json 全文】\n"
             + json.dumps(script, ensure_ascii=False, indent=1)
             + "\n\n把每个 sim 镜的 ModelSpec 装进一个 JSON 输出：{\"specs\":[{...,\"shot_no\":N},...]}，"
-              "静态版式镜可不出 spec。只输出 JSON。" + CONCRETIZATION_RULE)
+              "静态版式镜可不出 spec。只输出 JSON。" + concretization_rule(ctx))
 
 
 def segments_v0(ctx: RunCtx) -> list:
@@ -513,6 +600,37 @@ def segments_v0(ctx: RunCtx) -> list:
     return segs
 
 
+PHYSICS_API = """
+【physics 引擎 = 画面运动与图线的唯一合法来源（核心 rule：真实物理模型动态渲染，禁止手填关键帧）】
+只允许 import/调用下列真实存在的名字，签名照此，不得杜撰其它函数或参数：
+- from physics import …，可 import 的名字就这 12 个：integrate, Trajectory, rk4_step, Particle,
+  lorentz, series, shared_time_axis, autoscale, bounds, AxisMap, Range, Curve
+- integrate(pos=, vel=, mass=1.0, force=fn(t,pos,vel)->合力 或 particle=Particle, t_end=, dt=0.01) -> Trajectory
+  force 与 particle 二选一（都给或都不给=报错）；节点数 = round(t_end/dt)+1。
+  轨迹字段：tr.t[n]、tr.pos[n,d]、tr.vel[n,d]、tr.acc[n,d]、tr.dt、tr.t_end、tr.mass（numpy 数组，仿真单位）。
+- tr.sample(times) -> (pos, vel)：三次 Hermite 插值。逐帧动画必须按渲染帧时间调它取坐标，
+  帧数与 dt 解耦（fps 变了轨迹也不用重算）。
+- tr.speed() / tr.kinetic_energy() / tr.total_energy(phi=None, charge=0.0) -> 每个节点一个标量。
+- tr.crossing(fn(pos)->bool) -> 第一次满足的时刻（二分细化）；tr.speed_below(v) -> 速率首次降到 v 的时刻；
+  都不满足返回 None（"何时穿出边界/何时停下"只能这样问引擎，不许自己估）。
+- Particle(mass=, charge=, pos=, vel=, e_field=(Ex,Ey[,Ez]), b_field=(0,0,Bz), extra_force=None)：
+  二维粒子（纸面内运动）只允许 Bz；extra_force(t,pos,vel) 叠加重力等。p.net_force(t,pos,vel) 是合力，
+  p.at(pos,vel) 换状态保留场。lorentz(q, vel, e_field, b_field) -> q(E + v×B)。
+- series(traj, y, x="t", name="", width=10.0, origin=(0,0), want=5) -> Curve：横轴只能是共享时间轴 "t"；
+  y = "pos"/"speed"/"ek" | ("pos"|"v"|"a", 分量下标) | (图线名, fn(traj)->与节点等长的数组)。
+  c.points(n_frames) -> [(x,y)] 逐帧画面坐标（n_frames = round(SECONDS × fps)，线刚好铺满 width）；
+  c.upto(t) -> 截至 t 的已画部分（描线动画用）。
+- autoscale(values, want=5) -> Range(lo, hi, step)，r.ticks() 给刻度数组；
+  AxisMap.of(values, span, want, origin) 把仿真值映射到画面：am.to_screen(v, axis=0/1)
+  （**不翻 y**：渲染端 ManimCE 的 y 轴向上，映射再翻一次会把图线画颠倒、把粒子转向做成镜像）；
+  shared_time_axis(traj) 取全片共享时间轴。
+- 只用 ManimCE 0.22 真有的符号：没有 Polyline（ManimGL 残留名），逐帧折线用
+  VMobject().set_points_as_corners(...) 或 Line 段拼接；点/圆用 Dot/Circle。
+- 硬约束：粒子、图线、读数三者的数据必须来自**同一个** Trajectory（图-式-体同源）；坐标换算只走
+  AxisMap/Curve，不许在场景里写 x = v0*t 这类手算轨迹，也不许给 mobject 直接摆关键帧位置。
+"""
+
+
 M2_BRIEF = """
 【scene.py 可复用封装清单（只 import，禁止修改公共层）】
 - from render.scene import T, THEMES, SAFE_WIDTH, CONTENT_TOP, CONTENT_BOTTOM, SUBTITLE_BAND, HEADER_BAND
@@ -523,13 +641,20 @@ M2_BRIEF = """
 【帧预算铁律】
 - 每镜一个 Scene 类（Shot1..ShotN），类常量 SECONDS；construct 内动画总时长必须恰好 SECONDS
   （末尾 self.wait(pad) 补齐），从而帧数 == round(SECONDS × fps)。场景代码不得写死帧数。
-- 物体位置/速度/图线数据一律取 physics/ 引擎（integrator/particle/graphsync）输出，禁止手填关键帧坐标。
 
+""" + PHYSICS_API + """
 【输出要求】
-- 顶部 import 只用 ManimCE 核心 API + render.scene 封装 + physics/ 组件 + 标准库。
+- 顶部 import 只用 ManimCE 核心 API + render.scene 封装 + 上面清单里的 physics 名字 + 标准库。
+  包名一律写顶层形式（`from render.scene import …` / `from physics import …`）：R 渲染子进程已统一
+  注入 PYTHONPATH=mvp，不要写相对路径、不要 sys.path 手拼。
+- 整片输出不包 ```python 围栏也可以（桥按纯代码读取）；但必须**一次交齐 visual_script 要求的全部
+  Shot 类**，缺任何一镜判 FAIL。
 - 口播不上屏：无字幕、无 narration 文本；屏上只留短标注（T()）与 LaTeX 公式（MathTex）。
+  唯一开场例外：Shot1 第 0 帧必须是首镜 opening_title 的大字版（宋体、居中、安全区内，随口播淡出）。
 - 只输出 ```python 围栏的完整代码，不要解释。
 """
+
+
 
 
 def build_m2(ctx: RunCtx) -> str:
@@ -546,7 +671,7 @@ def build_m2(ctx: RunCtx) -> str:
             + f"【任务】本片共 {n} 镜（类名 Shot1~Shot{n}），单文件多镜头类。"
             + "\n【visual_script.json 全文】\n" + json.dumps(script, ensure_ascii=False, indent=1)
             + "\n【ModelSpec 全文（modelspec/*.json）】\n"
-            + "\n".join(f"--- {k} ---\n{v}" for k, v in specs.items()) + CONCRETIZATION_RULE)
+            + "\n".join(f"--- {k} ---\n{v}" for k, v in specs.items()) + concretization_rule(ctx))
 
 
 def segments_m2(ctx: RunCtx) -> list:
@@ -562,7 +687,7 @@ def segments_m2(ctx: RunCtx) -> list:
 
     # 机械修复（操作员，2026-10）：分段策略各段此前不带 brief.style，风格参数在分段路径断链。
     brief = "\n" + _brief_line(ctx)
-    rule = CONCRETIZATION_RULE   # 每段尾部附加具象化 rule 原文（分段路径同样生效）
+    rule = concretization_rule(ctx)   # 每段尾部附加具象化 rule 原文（分段路径同样生效）
     segs = [M2_BRIEF + brief + f"\n【任务】本片共 {n} 镜（类名 Shot1~Shot{n}，逐镜由后续段生成）。你只写文件头："
             "module docstring + 全部 import + 共享常量 + 共享辅助函数。总行数 ≤80，不写任何 Shot 类。"
             f"\n【全片 visual_script.json】\n{json.dumps(script, ensure_ascii=False, indent=1)}" + rule]
@@ -576,13 +701,15 @@ def segments_m2(ctx: RunCtx) -> list:
 
 def segments_m1(ctx: RunCtx) -> list:
     """机械修复（操作员，2026-10）：M1 未注册分段策略，10 镜 ModelSpec 单发 max_tokens=4000
-    常截断无法恢复。按 visual_script 镜数分组（每组 ≤4 镜），_stitch_json 对 specs 列表机械串接。"""
+    常截断无法恢复。按 visual_script 镜数分组，_stitch_json 对 specs 列表机械串接。
+    粒度调 1（逐镜分段）：单段 4 镜的 ModelSpec 输出在网关 120s 窗口内必 524
+    （substitution_trial 实测两轮 ×3 attempt 全 524），逐镜分段是任务书既定纪律。"""
     script = ctx.load_script() or {}
     shot_nos = [sh.get("shot_no") for sh in script.get("shots", [])]
     base = build_m1(ctx)
     segs = []
-    for i in range(0, len(shot_nos), 4):
-        grp = shot_nos[i:i + 4]
+    for i in range(0, len(shot_nos), 1):
+        grp = shot_nos[i:i + 1]
         segs.append(
             base + f"\n\n【本次为分段输出：只出 shot_no {grp} 的 ModelSpec】其余镜由相邻段输出，"
             f"本段不得越界、不得重复。顶层输出 {{\"specs\":[...]}}（每项含 shot_no）。"

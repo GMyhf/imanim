@@ -27,18 +27,18 @@ from typing import Any, Iterable
 # 两条路都要走得通：ir 与 knowledge 得一起进同一个 try，否则直跑时先在相对导入上炸掉。
 try:
     from . import knowledge as _knowledge
-    from .ir import MIN_SHOT_SECONDS, NATURAL_CPS, naming_narration, naming_shot_seconds
+    from .ir import MIN_SHOT_SECONDS, NATURAL_CPS, naming_label, naming_narration, naming_shot_seconds
 except ImportError:  # 脚本直跑：把 mvp/ 放进 sys.path
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from pipeline import knowledge as _knowledge
-    from pipeline.ir import MIN_SHOT_SECONDS, NATURAL_CPS, naming_narration, naming_shot_seconds
+    from pipeline.ir import MIN_SHOT_SECONDS, NATURAL_CPS, naming_label, naming_narration, naming_shot_seconds
 
 DATA_DIR: Path = Path(getattr(_knowledge, "DATA_DIR", Path(__file__).resolve().parent / "data" / "kp"))
 # 选型结论（Spec_PreqChain 第 1 节）：边放全局图文件，不内嵌进 kp 文件。
 # 该文件当前尚未落地 —— 缺失时本模块只用「从 prior 字段派生」的边，且一律 verified=False。
 GRAPH_PATH: Path = DATA_DIR.parent / "prereq.json"
 
-GRADES = ("G8", "G9", "H1", "H2")  # 与 ir.GRADES 同序，用于学段倒挂检查
+GRADES = ("G8", "G9", "H1", "H2", "H3", "U1", "U2")  # 与 ir.GRADES 同序，用于学段倒挂检查
 
 # 时长常量：与 review.py 的闸门同源（ir 里那一份），避免两处各写一把尺子。
 PREQ_BUDGET_RATIO = 0.15  # 先修段总时长占目标时长的比例上限
@@ -568,7 +568,8 @@ def _name_block(labels: list[str], host_refs: list[str], cap: float) -> dict:
         "narration": narration,
         "emphasis": "先修知识",
         "kp_refs": host_refs,
-        "visuals": [{"kind": "callout", "props": {"text": "先修：" + " · ".join(labels), "tone": "key"}}],
+        "visuals": [{"kind": "callout", "props": {"text": "先修：" + " · ".join(naming_label(x) for x in labels),
+                                                "tone": "key"}}],
         "origin": {"kind": MODE_NAME, "labels": labels, "citations_note": "仅点名，未展开讲解"},
     }
 

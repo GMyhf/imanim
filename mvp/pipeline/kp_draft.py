@@ -26,6 +26,7 @@ VISUAL_KINDS = ("axis_graph", "callout", "compare", "energy_dist", "figure", "fo
 MAX_ATTEMPTS = 3       # 第一版 + 两次带问题清单的重写
 MIN_SHOTS, MAX_SHOTS = 4, 10
 MAX_PRIOR_CHARS = 12  # 点名镜头把它们逐条念出来并整行上屏，整句会爆字数与字号
+GRADE_ZH = {"G8": "初二", "G9": "初三", "H1": "高一", "H2": "高二", "H3": "高三", "U1": "大一", "U2": "大二"}
 
 
 class DraftError(RuntimeError):
@@ -51,7 +52,7 @@ def _texts(entry: dict) -> str:
 
 def _user_message(subject: str, grade: str, topic: str, target_seconds: float,
                   raw_text: str, problems: list[str] | None) -> str:
-    lines = [f"学科：{subject}；学段：{grade}；知识点：{topic}",
+    lines = [f"学科：{subject}；学段：{GRADE_ZH.get(grade, grade)}（讲解深度按这个学段控制）；知识点：{topic}",
              f"目标总时长：{target_seconds:g} 秒（口播总量按这个时长控制）。",
              "refs 必须是空数组：这条内容还没核对过教材出处，不许编出处。"]
     if raw_text:

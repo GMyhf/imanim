@@ -21,6 +21,10 @@ RATE, WIDTH, CH = 24000, 2, 1
 
 # 换机器/上创空间时靠环境变量顶掉默认值，不把本机路径写死进代码。
 FFMPEG_DIR = Path(os.environ.get("MVP_FFMPEG_DIR", r"D:\App\ffmpeg"))
+# 烧录字幕字体（移植阻断项 ④）：原先 FontName 写死 Microsoft YaHei，Linux 容器没有这款字，
+# ffmpeg 会落到 fontconfig 兜底字体、与画面字体不一致。改为 env 注入（与 ② 同源），
+# 缺省仍是 YaHei——Windows 本机行为不动；容器在 Dockerfile/start 环境里设 MVP_SUB_FONT。
+SUB_FONT = os.environ.get("MVP_SUB_FONT", "Microsoft YaHei")
 log = logging.getLogger("mux")
 
 # 烧录结果供上层（sidecar.json）读取；每次 mux() 调用后刷新。
@@ -226,7 +230,7 @@ def _burn_cmd(video: Path, audio: Path, srt: Path, burned: Path,
     spec 非空时（SFX 已混进 final.mp4）字幕滤镜与音效混音并入同一条 filter_complex——
     烧录版必须和主版本听感一致，不能主版本有转场音、烧录版没有。
     """
-    style = ("FontName=Microsoft YaHei,FontSize=15,PrimaryColour=&H00FFFFFF,"
+    style = (f"FontName={SUB_FONT},FontSize=15,PrimaryColour=&H00FFFFFF,"
              "OutlineColour=&H80000000,BorderStyle=1,Outline=1,Shadow=0,MarginV=18")
     vf = f"subtitles=filename='{srt.name}':force_style='{style}'"
     # cwd 会改成字幕目录，所以除 srt 外的路径必须绝对化，否则 ffmpeg 找不到输入。

@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # 时长口径唯一来源是 pipeline.ir；渲染层不再自己读 SHOT_HEAD（边界改硬切后 INTRO/OUTRO 归零，
 # 见上面那段注释），但字幕窗口仍由 IR 算好下发，这里不留一份副本。
+import font_metrics  # noqa: E402  字体度量标定表（阻断项③），纯标准库
 
 from manim import (
     BOLD,
@@ -76,13 +77,16 @@ INTRO = 0.0
 OUTRO = 0.0
 
 THEMES = {
-    "clean": {"bg": "#0b0e14", "fg": WHITE, "accent": BLUE_C, "warn": ORANGE, "key": GOLD, "dim": GREY_A},
-    "board": {"bg": "#05070a", "fg": "#f2f2f2", "accent": GREEN_C, "warn": RED_C, "key": GOLD, "dim": GREY_A},
+    # clean = 白底深字（深色系强调色，保证白底对比度）；board = 深色黑板。
+    "clean": {"bg": "#ffffff", "fg": "#1a1a1a", "accent": "#1f5fbf", "warn": "#c0392b", "key": "#b06d00",
+              "dim": "#5f6670", "grid": "#e3e6ea", "hi": "#d35400", "emph": "#c0392b"},
+    "board": {"bg": "#05070a", "fg": "#f2f2f2", "accent": GREEN_C, "warn": RED_C, "key": GOLD, "dim": GREY_A,
+              "grid": "#20242c", "hi": PURE_YELLOW, "emph": GOLD},
 }
 
 # 页眉中文化映射（缺陷 2）：未知键回退原文，不引入新依赖。
 SUBJECT_ZH = {"physics": "物理", "math": "数学", "chemistry": "化学", "biology": "生物"}
-GRADE_ZH = {"G8": "初二", "G9": "初三", "H1": "高一", "H2": "高二"}
+GRADE_ZH = {"G8": "初二", "G9": "初三", "H1": "高一", "H2": "高二", "H3": "高三", "U1": "大一", "U2": "大二"}
 
 SAFE_WIDTH = 12.4              # 画面安全宽（与 _fit 一致）
 
@@ -195,7 +199,9 @@ TICK_ADJUST: list = []
 # 本机无 LaTeX；实测 Unicode 下标**字母**（ₐₑₜ…）在字体栈里是豆腐块，Unicode 下标数字
 # （₀…）会被替换成满号 0（v₀ 看着像 v0），所以只能把字符串切片后分段生成 Text，再按
 # 基线手工拼接。下面三个 _DELTA_* 是「该段墨迹底低于基线多少 × 字号」（H 的墨迹底=基线），
-# 由 .local/typo2/probe.py 直接读 manim Text 的 SVG 轮廓量出——**换 TEXT_FONT 必须重跑一次**，
+# 由 mvp/tools_fontmetrics.py（.local/typo2/probe.py 的收编版）直接读 manim Text 的 SVG 轮廓量出
+# ——**换 TEXT_FONT 必须重跑一次**，标定值住在 font_metrics.CALIBRATED 表里、运行时按
+# (TEXT_FONT, LATIN_FONT) 查表，未标定的字体对直接抛错（阻断项③，不再静默沿用旧值），
 # 否则含降部/汉字/括号的段会整体错位（旧值标在未指定字体的 Sans 上，那一款还是旧式数字）。
 #   带降部字母(gjpqyQ)的段，墨迹底在基线下 0.00353×字号；汉字/全角标点段 0.00190×字号；
 #   拉丁字母与数字墨迹底≈基线（≤1px 溢出忽略）。上标取该字体栈 ² 的实测抬升为参照。
@@ -225,11 +231,27 @@ _UPRIGHT_DIGRAPHS = {"kg", "cm", "mm", "km", "dm", "ml", "mg", "ms", "kj", "ev",
 SUB_SCALE = 0.62               # 下标/上标字号比例
 SUB_DROP = 0.0014              # ×正文字号：下标基线相对正文基线下移（收敛下沉，底缘不越主基线）
 SUP_LIFT = 0.0040              # ×正文字号：上标基线相对正文基线上移（0.216@54）
-_DELTA_DESC = 0.00300          # ×段内字号：降部段（gjpqy）墨迹底低于基线
-_DELTA_CJK = 0.00097           # ×段内字号：汉字/全角标点段墨迹底低于基线
-_DELTA_PAREN = 0.00284         # ×段内字号：括号 ()[] 墨迹底低于基线，令含括号段按基线对齐
+# 移植阻断项 ③：下面三个下沉量是**按字体标定**的度量，唯一事实源在 font_metrics.CALIBRATED；
+# 这里的 _DELTA_* 只是 SimSun 表项的别名（test_typo.py 与注释沿用原名，数值一字未动）。
+# 运行时真正生效的取值走 _font_metrics()，按当前 (TEXT_FONT, LATIN_FONT) 查表。
+_SIMSUN_M = font_metrics.CALIBRATED[(font_metrics.DEFAULT_TEXT_FONT, font_metrics.DEFAULT_LATIN_FONT)]
+_DELTA_DESC = _SIMSUN_M["DELTA_DESC"]    # ×段内字号：降部段（gjpqy）墨迹底低于基线
+_DELTA_CJK = _SIMSUN_M["DELTA_CJK"]      # ×段内字号：汉字/全角标点段墨迹底低于基线
+_DELTA_PAREN = _SIMSUN_M["DELTA_PAREN"]  # ×段内字号：括号 ()[] 墨迹底低于基线，令含括号段按基线对齐
 _KERN = 0.0005                 # ×正文字号：拼接边界补回被 ink extents 吞掉的侧空
 _SUB_KERN = 0.0016             # ×正文字号：下标/上标右侧补空，令 v₀ 与右括号、下标与后续 = 间距均匀
+
+_FONT_METRICS_CACHE: dict[tuple[str, str], dict[str, float]] = {}
+
+
+def _font_metrics() -> dict[str, float]:
+    """当前字体对（TEXT_FONT, LATIN_FONT）的标定值；未标定字体在此硬失败（见 font_metrics）。"""
+    pair = (TEXT_FONT, LATIN_FONT)
+    m = _FONT_METRICS_CACHE.get(pair)
+    if m is None:
+        m = font_metrics.metrics_for(pair)
+        _FONT_METRICS_CACHE[pair] = m
+    return m
 
 
 def _is_unit_letter(s, i):
@@ -345,14 +367,19 @@ def _compose(core, fs, color, kw):
 
 
 def _seg_bottom_delta(s, fs):
-    """该段墨迹底相对其基线低多少（决定拼接时的垂直落点）。"""
+    """该段墨迹底相对其基线低多少（决定拼接时的垂直落点）。
+
+    取值按当前 (TEXT_FONT, LATIN_FONT) 查 font_metrics 表；字体对未标定时抛
+    FontMetricsError——宁可渲染失败，也不许拿 SimSun 的旧值给别的字体排错版（阻断项③）。
+    """
+    m = _font_metrics()
     d = 0.0
     if _DESC_RE.search(s):
-        d = max(d, _DELTA_DESC * fs)
+        d = max(d, m["DELTA_DESC"] * fs)
     if _CJK_RE.search(s):
-        d = max(d, _DELTA_CJK * fs)
+        d = max(d, m["DELTA_CJK"] * fs)
     if _PAREN_RE.search(s):  # 含括号的段按其基线（而非括号下沿）落位，避免把整段抬高、下标反越过括号
-        d = max(d, _DELTA_PAREN * fs)
+        d = max(d, m["DELTA_PAREN"] * fs)
     return d
 
 
@@ -764,7 +791,8 @@ class Explainer(Scene):
     def construct(self):
         with open(PLAN_JSON, encoding="utf-8") as f:
             plan = json.load(f)
-        self.camera.background_color = THEMES.get(plan["brief"]["style"], THEMES["clean"])["bg"]
+        self._th = THEMES.get(plan["brief"]["style"], THEMES["clean"])
+        self.camera.background_color = self._th["bg"]
         shots = plan["shots"]
         for i, shot in enumerate(shots):
             self._render_shot(shot, plan, is_first=(i == 0), is_last=(i == len(shots) - 1))
@@ -819,7 +847,7 @@ class Explainer(Scene):
         base = th["fg"] if (emph and tone == "key") else color
 
         def line(s, fs):
-            t2c = {e: GOLD for e in emph if e and e in s}
+            t2c = {e: th["emph"] for e in emph if e and e in s}
             return rich(s, fs, base, t2c=t2c) if t2c else rich(s, fs, base)
 
         parts = [s.strip() for s in re.split(r"\s+·\s+", text) if s.strip()]
@@ -1080,7 +1108,7 @@ class Explainer(Scene):
             y_range=[y_lo, y_hi, _grid_step(y_lo, y_hi)],
             x_length=6.4,
             y_length=4.0,
-            background_line_style={"stroke_color": "#20242c", "stroke_width": 1},
+            background_line_style={"stroke_color": th["grid"], "stroke_width": 1},
             axis_config={"stroke_color": th["dim"]},
         )
         # 不用 add_coordinates()：它走 MathTex，需要 LaTeX。刻度用 Text 手搓，保持零 LaTeX 依赖。
@@ -1208,7 +1236,7 @@ class Explainer(Scene):
         plane = NumberPlane(
             x_range=[x_lo, x_hi, _grid_step(x_lo, x_hi)], y_range=[y_lo, y_hi, _grid_step(y_lo, y_hi)],
             x_length=6.4, y_length=4.0,
-            background_line_style={"stroke_color": "#20242c", "stroke_width": 1},
+            background_line_style={"stroke_color": th["grid"], "stroke_width": 1},
             axis_config={"stroke_color": th["dim"]},
         )
 
@@ -1673,10 +1701,10 @@ class Explainer(Scene):
                                 flash_radius=0.18, line_stroke_width=3,
                                 time_width=min(0.3, secs)))
             elif kind == "formula":
-                fx.append(ShowPassingFlash(m.copy().set_color(PURE_YELLOW),
+                fx.append(ShowPassingFlash(m.copy().set_color(self._th["hi"]),
                                            time_width=min(0.35, secs)))
             elif tag == "indicate" or kind in FX_GRAPHIC_KINDS:
-                fx.append(Indicate(m, scale_factor=1.2, color=PURE_YELLOW))
+                fx.append(Indicate(m, scale_factor=1.2, color=self._th["hi"]))
         return fx
 
     def _intro_fx(self, stack, secs: float) -> list:
@@ -1691,7 +1719,7 @@ class Explainer(Scene):
             if not blk.family_members_with_points():
                 continue
             if getattr(blk, "_kind", "") == "formula":
-                fx.append(ShowPassingFlash(blk.copy().set_color(PURE_YELLOW),
+                fx.append(ShowPassingFlash(blk.copy().set_color(self._th["hi"]),
                                            time_width=min(0.35, secs)))
                 continue
             tag = self._first_fx_in(blk)
@@ -1702,7 +1730,7 @@ class Explainer(Scene):
             elif tag == "wiggle":
                 fx.append(Wiggle(blk, scale_value=1.05, n_wiggles=3))
             elif tag == "indicate" or getattr(blk, "_kind", "") in FX_GRAPHIC_KINDS:
-                fx.append(Indicate(blk, scale_factor=1.2, color=PURE_YELLOW))
+                fx.append(Indicate(blk, scale_factor=1.2, color=self._th["hi"]))
         return fx
 
     def _render_shot(self, shot, plan, is_first=False, is_last=False):
@@ -1771,7 +1799,7 @@ class Explainer(Scene):
                 hold(max(remain - fx_n, 1))
                 continue
             # 字幕也走 rich()：同一句里正文的 y 是斜体、字幕的 y 是正体，读起来像两个东西（五.3 排版规范对全片生效）。
-            cap = rich(s["text"], 30, WHITE).move_to([0, -4.0 + SUBTITLE_BAND / 2, 0])
+            cap = rich(s["text"], 30, th["fg"]).move_to([0, -4.0 + SUBTITLE_BAND / 2, 0])
             if cap.width > 13.0:
                 cap.scale_to_fit_width(13.0)
             span = max(frames_at(s["end"]) - consumed, 1)

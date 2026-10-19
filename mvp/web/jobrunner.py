@@ -31,7 +31,8 @@ sys.path.insert(0, str(MVP_DIR))
 
 import run as cli  # noqa: E402  mvp/run.py：复用 QUALITY / MANIM / _run / generate
 from audio import tts  # noqa: E402
-from pipeline import knowledge, kp_draft, mux, review, selfcheck, storyboard  # noqa: E402
+from pipeline import knowledge, kp_draft, llm_client, mux, review, selfcheck, storyboard  # noqa: E402
+from pipeline import storyboard_llm  # noqa: E402
 from pipeline.ir import SHOT_HEAD, SHOT_TAIL, Brief, Plan  # noqa: E402
 
 # 阶段中文名（对应 Spec_Workflow 的 A2~A7，前端按这个顺序画进度条）
@@ -218,9 +219,10 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     (out_dir / "review.json").write_text(json.dumps(review.report(plan, kp), ensure_ascii=False, indent=2), encoding="utf-8")
     log["steps"]["review"] = round(time.time() - step, 2)
     pg.end("review")
-    if findings:
+    hard = review.blocking(findings)
+    if hard:
         raise RuntimeError("静态监督未通过：\n" + "\n".join(
-            f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in findings))
+            f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard))
 
     plan_path = out_dir / "plan.json"
     plan.save(plan_path)
@@ -329,13 +331,45 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     return {"ok": True, "mode": "render", "names": names, "sidecar": log}
 
 
+def do_improve(plan_file: Path, out_dir: Path, quality: str, pg: Progress, instruction: str,
+               source_key: str = "") -> dict:
+    """用户在成片下写的改进意见：把上一版分镜连同意见交给 A3 重写，再过一遍后半段。
+
+    改进版照样过闸门；模型不可用或改到过不去，就带着人话原因失败、绝不毁掉已经出来的上一版
+    （storyboard_llm.improve 内部 fallback=上一版，这里据 info.source 判断是否继续）。
+    """
+    if not llm_client.enabled("A3"):
+        raise RuntimeError("改进需要开通生成环节（网关不可用或未配置）")
+    plan = Plan.load(plan_file)
+    brief = plan.brief
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pg.begin("storyboard")
+    try:
+        kp = knowledge.load(brief.subject, brief.topic, brief.grade)
+    except Exception:
+        raise RuntimeError("源任务的知识点已不在库里（自动库被清理？），无法在它的条目上做改进")
+    new_plan, info = storyboard_llm.improve(brief, kp, plan, instruction)
+    pg.end("storyboard")
+    if info["source"] != "llm":
+        raise RuntimeError("改进版没能通过静态检查，已保留上一版成片：" + str(info.get("reason") or "模型未改写"))
+    improved = out_dir / "plan_improved.json"
+    new_plan.save(improved)
+    result = do_render(improved, out_dir, quality, pg, source_key)
+    result.setdefault("sidecar", {})["improve"] = {
+        "instruction": instruction, "model": info["model"], "attempts": info["attempts"]}
+    (out_dir / "sidecar.json").write_text(json.dumps(result["sidecar"], ensure_ascii=False, indent=2),
+                                          encoding="utf-8")
+    return result
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", required=True, choices=["generate", "render"])
+    ap.add_argument("--mode", required=True, choices=["generate", "render", "improve"])
     ap.add_argument("--job-dir", required=True)
     ap.add_argument("--quality", default="fullhd", choices=list(cli.QUALITY))
     ap.add_argument("--brief-file")
     ap.add_argument("--plan-file")
+    ap.add_argument("--instruction-file")
     ap.add_argument("--source-key", default="")
     a = ap.parse_args()
 
@@ -349,6 +383,9 @@ def main() -> int:
         if a.mode == "generate":
             brief_data = json.loads(Path(a.brief_file).read_text(encoding="utf-8"))
             result = do_generate(brief_data, out_dir, a.quality, pg)
+        elif a.mode == "improve":
+            instruction = Path(a.instruction_file).read_text(encoding="utf-8").strip()
+            result = do_improve(Path(a.plan_file), out_dir, a.quality, pg, instruction, a.source_key)
         else:
             result = do_render(Path(a.plan_file), out_dir, a.quality, pg, a.source_key)
         result["elapsed"] = round(time.time() - pg.started_at, 1)

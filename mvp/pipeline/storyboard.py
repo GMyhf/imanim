@@ -5,17 +5,22 @@ MVP 用确定性模板编排，保证可复现（P2）；LLM 版将来作为另�
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from math import ceil
 
-from .ir import (BUDGET_REF_KIND, MIN_SHOT_SECONDS, NAME_MAX_SHARE, NATURAL_CPS, SHOT_HEAD,
-                 SHOT_TAIL, Brief, Plan, Shot, Visual, naming_narration, naming_shot_seconds, num)
-from .review import _text as _pace_text  # 字数口径与 A4 PACING 同一把尺子：分镜与闸门不得各算各的
+from .ir import (BUDGET_REF_KIND, FAST_CPS, MIN_SHOT_SECONDS, NAME_MAX_SHARE, NATURAL_CPS, SHOT_HEAD,
+                 SHOT_TAIL, Brief, Plan, Shot, Visual, fit_naming_labels, naming_narration,
+                 naming_shot_seconds, num)
+from .review import (CALLOUT_FS, CALLOUT_PAD, MAX_SHOT_SHARE, SAFE_WIDTH, _est_width,
+                     _text as _pace_text)  # 字数与宽度口径与 A4 同一把尺子：分镜与闸门不得各算各的
 
 # 秒数一律换算成整数「厘秒」再分配：浮点累加与遍历顺序都不许影响结果（P2 可复现）。
 _CS = 100
 _HEAD_TAIL_CS = int(round((SHOT_HEAD + SHOT_TAIL) * _CS))
 _MIN_WINDOW_CS = int(round(max(0.0, MIN_SHOT_SECONDS - SHOT_HEAD - SHOT_TAIL) * _CS))
+_SAFE_CPS = FAST_CPS * 0.97
+_STRETCH = 1.09  # 留 1% 给 A6 实测抖动，不顶到 TARGET 闸门的 10% 线上
 
 # 预算账本随 plan.json 落盘（refs 是 Plan 里唯一可自由结构化的字段），前端与 A4 都能读到。
 # 字段名常量住在 ir.BUDGET_REF_KIND —— review 要读它，而 review 不能 import storyboard（循环导入）。
@@ -23,6 +28,86 @@ _MIN_WINDOW_CS = int(round(max(0.0, MIN_SHOT_SECONDS - SHOT_HEAD - SHOT_TAIL) * 
 
 def _all_refs(kp: dict) -> list[str]:
     return [f"{r['source']} {r['locator']}" for r in kp["refs"]]
+
+
+_SENT = re.compile(r"[^。！？；\n]+[。！？；\n]*")
+_CALLOUT_AVAIL = SAFE_WIDTH - 2 * CALLOUT_PAD
+
+
+def _sentences(text: str) -> list[str]:
+    return [m.group(0) for m in _SENT.finditer(str(text or ""))]
+
+
+def _fits_callout(text: str) -> bool:
+    return all(_est_width(p.strip(), CALLOUT_FS) <= _CALLOUT_AVAIL
+               for p in re.split(r"\s+·\s+", str(text)) if p.strip())
+
+
+def _reflow_callout(text: str) -> str:
+    """一屏字太宽会被渲染层整条缩到读不见（LEGIBLE）。渲染按「 · 」逐行排，
+    所以先在句读处拆行，再把拆不开的行按宽度贪心合回——只改排版，不删内容。"""
+    if _fits_callout(text):
+        return text
+    rows: list[str] = []
+    for part in [p.strip() for p in re.split(r"\s+·\s+", str(text)) if p.strip()]:
+        pieces = [s for s in re.split(r"(?<=[，；。！？])", part) if s.strip()]
+        cur = ""
+        for s in pieces:
+            if cur and _est_width((cur + s).strip(), CALLOUT_FS) > _CALLOUT_AVAIL:
+                rows.append(cur.strip())
+                cur = s
+            else:
+                cur = (cur + s).strip()
+        if cur.strip():
+            rows.append(cur.strip())
+    rows = [re.sub(r"[，；。！？]+$", "", r) or r for r in rows]
+    if not rows or len(rows) > 5 or not all(_est_width(r, CALLOUT_FS) <= _CALLOUT_AVAIL for r in rows):
+        return text   # 拆到 4 行还塞不进的是真长句，留给闸门/模型处理，不做无原则截断
+    return " · ".join(rows)
+
+
+def _fit_callouts(blocks: list[dict]) -> None:
+    for b in blocks:
+        for v in b.get("visuals") or []:
+            if isinstance(v, dict) and v.get("kind") == "callout" and isinstance(v.get("props"), dict):
+                t = v["props"].get("text")
+                if isinstance(t, str) and t:
+                    v["props"]["text"] = _reflow_callout(t)
+
+
+def _reflow_narration(blocks: list[dict], chars: list[int], cap_total: int, cap_shot: int,
+                      must_say: list[str]) -> None:
+    """内部调整：正片口播超预算时从最长的镜头开始按句裁尾，直到总线和单镜线都过。
+
+    两类句子不裁：命中 must_say 的（那是这一条知识点的口径），以及每镜仅剩的最后一句
+    （宁可让 OVERLOAD/DUR_SHARE 说「时长装不下这些内容」，也不交出一句空话）。
+    """
+    locked = []
+    for b in blocks:
+        sents = _sentences(b.get("narration"))
+        # 按句子文本记锁，不按下标：裁一句后面所有的下标都会左移
+        locked.append({s for s in sents
+                       if any(_pace_text(p) and _pace_text(p) in _pace_text(s) for p in must_say)})
+    guard = sum(len(_sentences(b.get("narration"))) for b in blocks)
+    while (sum(chars) > cap_total or (chars and max(chars) > cap_shot)) and guard > 0:
+        guard -= 1
+        cand = None
+        for i in sorted(range(len(blocks)), key=lambda k: -chars[k]):
+            sents = _sentences(blocks[i].get("narration"))
+            if len(sents) < 2:
+                continue
+            # 逐句摘除（不是整段截尾）：must_say 锁住的句子留在原位，首句永不删，
+            # 否则一镜裁到只剩半句空话，比让闸门报 OVERLOAD 更糟。
+            drop = next((j for j in range(len(sents) - 1, 0, -1) if sents[j] not in locked[i]), None)
+            if drop is not None:
+                cand = (i, drop, sents)
+                break
+        if cand is None:
+            break
+        i, drop, sents = cand
+        blocks[i]["narration"] = "".join(sents[:drop] + sents[drop + 1:]).strip()
+        chars[i] = _chars(blocks[i]["narration"])
+
 
 
 def _chars(narration) -> int:
@@ -103,13 +188,19 @@ def budget_of(plan) -> dict | None:
 
 
 def build(brief: Brief, kp: dict) -> Plan:
-    blocks = list(kp["sequence"])
+    # 深拷贝：内部调整就地改文案，不许回头污染调用方传进来的 kp（knowledge.load 的缓存）
+    blocks = deepcopy(list(kp["sequence"]))
     refs = _all_refs(kp)
+    # 内部调整第一步：屏上字太宽先按句读拆行（LEGIBLE 的根因大多是排版而非内容）
+    _fit_callouts(blocks)
 
     prior = None
     prior_chars = 0
-    if brief.prior_knowledge and kp.get("prior"):
-        narr = naming_narration(kp["prior"])
+    # 点名镜只配 NAME_MAX_SHARE 的预算：标签去掉括注后按原顺序装，装不下的尾巴不念（内部调整，
+    # 不把"标签写长了"变成整片打回）。
+    labels = fit_naming_labels(kp.get("prior") or [], NAME_MAX_SHARE * num(brief.target_seconds))
+    if brief.prior_knowledge and labels:
+        narr = naming_narration(labels)
         # 时长跟着标签文本走：先前写死 8s，四条长标签就是 9 字/秒，闸门判它说不完。
         # 尺子取自 ir.naming_shot_seconds——prereq.py 对同一段文本必须算出同一个秒数。
         need = naming_shot_seconds(narr)
@@ -118,7 +209,7 @@ def build(brief: Brief, kp: dict) -> Plan:
             "seconds": round(min(need, NAME_MAX_SHARE * num(brief.target_seconds)), 2),
             "narration": narr,
             "emphasis": "先修知识",
-            "visuals": [{"kind": "callout", "props": {"text": "先修：" + " · ".join(kp["prior"]), "tone": "key"}}],
+            "visuals": [{"kind": "callout", "props": {"text": "先修：" + " · ".join(labels), "tone": "key"}}],
         }
         prior_chars = _chars(narr)
         blocks = [prior] + blocks
@@ -130,7 +221,24 @@ def build(brief: Brief, kp: dict) -> Plan:
     chars = [_chars(b.get("narration")) for b in body]
     needs = [_need_cs(c) for c in chars]
     weights = [max(0, int(round(num(b.get("seconds")) * _CS))) for b in body]
-    budget = int(round((target - fixed) * _CS)) - len(body) * _HEAD_TAIL_CS
+
+    # 内部调整：正片口播按闸门上限语速（留 3% 抖动）都塞不进剩余预算时，先让出点名镜，
+    # 再把总时长放宽到 TARGET 闸门 ±10% 带内；仍不够才交给 OVERLOAD/PACING 去说。
+    tight = sum(max(_MIN_WINDOW_CS, int(ceil(c / (_SAFE_CPS) * _CS))) for c in chars) \
+        + len(body) * _HEAD_TAIL_CS
+    if prior and tight > int(round((target - fixed) * _CS)):
+        blocks, prior, fixed, prior_chars = body, None, 0.0, 0
+    spend = target - fixed
+    if int(round(spend * _CS)) < tight <= int(round((_STRETCH * target - fixed) * _CS)):
+        spend = tight / _CS
+    budget = int(round(spend * _CS)) - len(body) * _HEAD_TAIL_CS
+    # 内部调整第二步：连上限语速都念不完的字数，先按句裁掉最长的镜头再重分秒数
+    # （must_say 的句子不裁）。裁到无可裁仍超的，才是「这些内容装不进这个时长」，交给闸门如实说。
+    cap_total = int(budget / _CS * _SAFE_CPS)
+    if body and (sum(chars) > cap_total or max(chars) > int(MAX_SHOT_SHARE * cap_total)):
+        _reflow_narration(body, chars, cap_total, int(MAX_SHOT_SHARE * cap_total),
+                          [str(m) for m in (kp.get("must_say") or []) if str(m).strip()])
+        needs = [_need_cs(c) for c in chars]
     secs = [round((_HEAD_TAIL_CS + w) / _CS, 2) for w in _allocate(budget, needs, weights)]
 
     # 「按自然语速讲完整片」需要多少秒：装不下就留结构化标记，不许把压缩默默吃掉。
