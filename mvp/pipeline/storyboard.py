@@ -75,6 +75,22 @@ def _fit_callouts(blocks: list[dict]) -> None:
                     v["props"]["text"] = _reflow_callout(t)
 
 
+def _reveal_keys(node) -> set[str]:
+    """一镜版式里所有 at 揭示键（含 graph_vt 的 cases[].at；at 可为字符串或列表）。"""
+    out: set[str] = set()
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == "at":
+                out.update(x.strip() for x in ([v] if isinstance(v, str) else v if isinstance(v, list) else [])
+                           if isinstance(x, str) and x.strip())
+            else:
+                out |= _reveal_keys(v)
+    elif isinstance(node, list):
+        for v in node:
+            out |= _reveal_keys(v)
+    return out
+
+
 def _reflow_narration(blocks: list[dict], chars: list[int], cap_total: int, cap_shot: int,
                       must_say: list[str]) -> None:
     """内部调整：正片口播超预算时从最长的镜头开始按句裁尾，直到总线和单镜线都过。
@@ -85,9 +101,12 @@ def _reflow_narration(blocks: list[dict], chars: list[int], cap_total: int, cap_
     locked = []
     for b in blocks:
         sents = _sentences(b.get("narration"))
-        # 按句子文本记锁，不按下标：裁一句后面所有的下标都会左移
+        keys = _reveal_keys(b.get("visuals"))
+        # 按句子文本记锁，不按下标：裁一句后面所有的下标都会左移。
+        # 版式的揭示键（at）也锁：裁掉「图线下斜…」那句，graph_vt 那条图线就永远等不到它（KIND）。
         locked.append({s for s in sents
-                       if any(_pace_text(p) and _pace_text(p) in _pace_text(s) for p in must_say)})
+                       if any(_pace_text(p) and _pace_text(p) in _pace_text(s) for p in must_say)
+                       or any(k in s for k in keys)})
     guard = sum(len(_sentences(b.get("narration"))) for b in blocks)
     while (sum(chars) > cap_total or (chars and max(chars) > cap_shot)) and guard > 0:
         guard -= 1

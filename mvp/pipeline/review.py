@@ -25,6 +25,7 @@ HEADER_BAND = 0.60
 USABLE_H = FRAME_H - SUBTITLE_BAND - HEADER_BAND
 
 MAX_SHOT_SHARE = 0.25
+MAX_SHOT_SHARE_HARD = 0.35
 
 # 可读性下限：渲染层会把超宽文本整条缩进安全宽，缩到看不清就成了一片细线
 # （batch_v4 的先修条实测：60 字挤一行，字号掉到 18px）。
@@ -125,6 +126,47 @@ def _ref_cut(text: str) -> list[str]:
 # 数字下标 ₀₁₂ 与上标 ⁻¹²³、Δ、·、² 都有字形，不在黑名单内。
 TOFU = set("ₐₑₔₕᵢⱼₖₗₘₙₚₛₜᵤᵥₓ"
            "ᵃᵇᶜᵈᵉᵍⁱʲᵏˡᵐᵒᵖʳˢᵗᵘᵛʷˣʸᶻ")
+
+
+def _mag_findings(kind: str, forces: list) -> list[str]:
+    """forces[].mag（79-C1b）：可选的相对大小，scene._force_lengths 按它让箭长成比例。
+    给了必须是有限正数；同一图要么全给要么全不给（混给时 scene 把缺 mag 的力画成最长，比例就失真了）。"""
+    msgs = []
+    given = [f for f in forces if f.get("mag") is not None]
+    for f in given:
+        m = f.get("mag")
+        if isinstance(m, bool) or not isinstance(m, (int, float)) or not math.isfinite(m) or m <= 0:
+            msgs.append(f"{kind} 的力「{_text(f.get('name'))}」mag 非法（{m!r}），必须是有限正数（力的相对大小）")
+    if given and len(given) < len(forces):
+        miss = "、".join(_text(f.get("name")) or "?" for f in forces if f.get("mag") is None)
+        msgs.append(f"{kind} 的 mag 要么全给要么全不给：{miss} 缺 mag，箭头长度会失去比例")
+    return msgs
+
+
+def _across_finding(e: dict, elems: list) -> str | None:
+    """电压表 across（79-C1b）：口径与 scene._voltmeter_target 一致——
+    int 为 elements 下标（与 scene 一样只数 dict 元件），str 依次匹配 label 或 type（取第一个命中的非电压表元件）。
+    闸门比渲染层更严：被测元件必须存在且不是电表（scene 遇到非法值会静默退回默认跨接）。"""
+    acr = e.get("across")
+    if acr is None:
+        return None
+    meters = ("ammeter", "voltmeter")
+    if isinstance(acr, int) and not isinstance(acr, bool):
+        if not 0 <= acr < len(elems):
+            return f"circuit 电压表 across={acr} 越界：本电路只有 {len(elems)} 个元件（下标从 0 起）"
+        t = elems[acr]
+    elif isinstance(acr, str) and acr.strip():
+        t = next((x for x in elems if _text(x.get("type")) != "voltmeter"
+                  and (_text(x.get("label")) == acr or _text(x.get("type")) == acr)), None)
+        if t is None:
+            t = next((x for x in elems if _text(x.get("label")) == acr), None)
+        if t is None:
+            return f"circuit 电压表 across「{acr}」不是本电路任何元件的 label 或 type"
+    else:
+        return f"circuit 电压表 across 必须是元件下标（整数）或元件 label，当前 {acr!r}"
+    if _text(t.get("type")) in meters:
+        return f"circuit 电压表 across 指向了电表（{_text(t.get('type'))}），只能并联在电池/电阻/开关/灯泡两端"
+    return None
 
 
 def _texts(obj, out=None):
@@ -244,6 +286,14 @@ def _visual_height(shot: Shot) -> float:
             h += 3.4
         elif v.kind == "trajectory":
             h += 3.6
+        elif v.kind == "derivation":
+            # 每步一行等式 + 可选注释，行距与 scene._v_derivation 的 0.34/0.12 同源。
+            steps = _seq(p.get("steps"))
+            h += 0.6 + 0.68 * max(len(steps), 1)
+            if p.get("symbols"):
+                h += 0.45
+            if p.get("label"):
+                h += 0.45
         else:
             h += 1.0
     return h
@@ -273,7 +323,14 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
         if secs < MIN_SHOT_SECONDS:
             add(s.index, "DUR_SHORT", f"镜头时长 {s.seconds}s 低于下限 {MIN_SHOT_SECONDS}s（或不是数字）")
         if total and secs / total > MAX_SHOT_SHARE:
-            add(s.index, "DUR_SHARE", f"单镜头占比 {secs / total:.0%} 超过 {MAX_SHOT_SHARE:.0%}，节奏会闷")
+            # 短目标（60s）只有六七个镜头，最重的那镜落在 26%~35% 是常态：节奏偏闷但片子能看，
+            # 记账不拦；真正一镜到底（>35%）才打回。
+            share = secs / total
+            if share > MAX_SHOT_SHARE_HARD:
+                add(s.index, "DUR_SHARE", f"单镜头占比 {share:.0%} 超过 {MAX_SHOT_SHARE_HARD:.0%}，节奏会闷，请拆镜")
+            else:
+                findings.append({"shot": s.index, "code": "DUR_SHARE", "blocking": False,
+                                 "msg": f"单镜头占比 {share:.0%} 略超 {MAX_SHOT_SHARE:.0%}，节奏偏闷（未拦）"})
 
         # 屏上条目是同片某句强表述去掉前缀后的那半截 → 限定词被压掉了，打回让作者补回屏上。
         # 只认"后缀压缩"这一种形状（丢掉开头的限定语），因为它是实测发生的形状（"氧化型"三个字被吞掉）。
@@ -377,6 +434,8 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                     if d is None or (not isinstance(d, (int, float)) and str(d).strip().lower() not in _FORCE_DIRS):
                         add(s.index, "KIND", f"force_diagram 的力「{_text(f.get('name'))}」dir 非法（{d}），"
                                              f"要用 {sorted(_FORCE_DIRS)} 或角度度数")
+                for msg in _mag_findings("force_diagram", forces):
+                    add(s.index, "KIND", msg)
             if v.kind == "field":
                 mode = _text(props.get("mode") or "region")
                 if mode not in _FIELD_MODES:
@@ -392,10 +451,17 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                 for e in elems:
                     if _text(e.get("type")) not in _CIRCUIT_TYPES:
                         add(s.index, "KIND", f"circuit 元件 type 只能是 {sorted(_CIRCUIT_TYPES)}，当前 {_text(e.get('type'))}")
+                    if _text(e.get("type")) == "voltmeter":
+                        msg = _across_finding(e, elems)
+                        if msg:
+                            add(s.index, "KIND", msg)
             if v.kind == "optics" and _text(props.get("mode") or "mirror") not in _OPTICS_MODES:
                 add(s.index, "KIND", f"optics 的 mode 只能是 {sorted(_OPTICS_MODES)}")
             if v.kind == "incline":
-                for f in (x for x in _seq(props.get("forces")) if isinstance(x, dict)):
+                inc_forces = [x for x in _seq(props.get("forces")) if isinstance(x, dict)]
+                for msg in _mag_findings("incline", inc_forces):
+                    add(s.index, "KIND", msg)
+                for f in inc_forces:
                     d = f.get("dir")
                     ok = isinstance(d, (int, float)) and not isinstance(d, bool) or \
                         str(d).strip().lower() in (_FORCE_DIRS | _INCLINE_DIRS)
@@ -404,6 +470,30 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                                              f"要用 {sorted(_FORCE_DIRS | _INCLINE_DIRS)} 或角度度数")
             if v.kind == "trajectory" and _text(props.get("mode") or "projectile") not in _TRAJECTORY_MODES:
                 add(s.index, "KIND", f"trajectory 的 mode 只能是 {sorted(_TRAJECTORY_MODES)}")
+            if v.kind == "derivation":
+                steps = _seq(props.get("steps"))
+                if not (1 <= len(steps) <= 8):
+                    add(s.index, "KIND", f"derivation 需要 1~8 步，当前 {len(steps)} 步")
+                for j, st in enumerate(steps):
+                    d = st if isinstance(st, dict) else {"text": st}
+                    text = _text(d.get("text")).strip()
+                    if not text:
+                        add(s.index, "KIND", f"derivation 第 {j + 1} 步缺少 text")
+                        continue
+                    if len(text) > 90:
+                        add(s.index, "KIND", f"derivation 第 {j + 1} 步过长（{len(text)} 字），一屏读不完，请拆步")
+                    sub = d.get("sub")
+                    if sub is not None and not isinstance(sub, dict):
+                        add(s.index, "KIND", f"derivation 第 {j + 1} 步的 sub 必须是 {{字母: 代入值}}")
+                    elif isinstance(sub, dict):
+                        for k, val in sub.items():
+                            if not _text(k).strip() or not _text(val).strip():
+                                add(s.index, "KIND", f"derivation 第 {j + 1} 步的 sub 有空字母或空代入值")
+                            elif _text(k) not in text:
+                                add(s.index, "KIND",
+                                    f"derivation 第 {j + 1} 步的代入目标「{_text(k)}」不在等式里，动画会指错位置")
+                if props.get("symbols") is not None and not isinstance(props.get("symbols"), dict):
+                    add(s.index, "KIND", "derivation 的 symbols 必须是 {字母: 物理含义}")
             if v.kind in ("steps", "summary") and len(_seq(props.get("lines", props.get("points")))) > 6:
                 add(s.index, "KIND", "一屏条目超过 6 条，认知负荷过高")
             # 与渲染层 _v_callout 的断行规则一致：能按「 · 」拆开且每行都够大就放行。
@@ -422,9 +512,18 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                         f"callout 上屏字号会掉到 {min(font_after_fit(r) for r in rows):.0f}px < {MIN_LEGIBLE_FS:.0f}px，"
                         f"投影读不见；按「 · 」分成两条以上或删到 {text[:16]}…")
 
+        # 渲染层 scene._fit 会把超高版面整体等比缩进内容带，不会真的压到字幕；只有缩完字号掉到
+        # 投影看不清（< MIN_LEGIBLE_FS）才阻断，轻度超高记一笔放行。
         need = _visual_height(s)
         if need > USABLE_H:
-            add(s.index, "SAFE_AREA", f"版面预计高 {need:.2f} 单位 > 可用 {USABLE_H:.2f}，会侵入字幕安全区")
+            fs = CALLOUT_FS * USABLE_H / need
+            if fs < MIN_LEGIBLE_FS:
+                add(s.index, "SAFE_AREA", f"版面预计高 {need:.2f} 单位 > 可用 {USABLE_H:.2f}，"
+                                          f"整体缩放后字号约 {fs:.0f}px < {MIN_LEGIBLE_FS:.0f}px，请拆成两镜或删减元素")
+            else:
+                findings.append({"shot": s.index, "code": "SAFE_AREA", "blocking": False,
+                                 "msg": f"版面预计高 {need:.2f} 单位 > 可用 {USABLE_H:.2f}，渲染时整体缩到 "
+                                        f"{USABLE_H / need:.0%}（字号约 {fs:.0f}px，仍可读）"})
 
         # 标题里的计数词是对这一屏的承诺：说"三个"却只画两张卡，学生数不到（v2 N2、批量 D13）。
         said = _count_claim(_text(s.title))

@@ -329,15 +329,33 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     env = dict(os.environ, PATH=str(FFMPEG_DIR) + os.pathsep + os.environ["PATH"], PLAN_JSON=str(plan_path))
     media = out_dir / "media"
     step = time.time()
-    _retry(lambda: _run([MANIM, *QUALITY[quality], "--media_dir", str(media), "-o", "silent.mp4",
-                         "--disable_caching", str(ROOT / "render" / "scene.py"), "Explainer"], env=env),
-           desc="画面渲染")
-    silent = next(iter(sorted(media.glob("**/silent.mp4"))), None)
+    # SubTask #79-D1a：flow v2 生产开关（env QX_LLM_FLOW=1 且 subject 命中白名单，缺省 {"physics"}，
+    # QX_LLM_FLOW_SUBJECTS 可覆盖）。缺省关=现网行为逐字不变：run.py 只在开关打开时才 import
+    # pipeline.flow 任何东西。flow 逐镜回退是第一层（pipeline/flow/produce.render_flow 内），
+    # 这里是最后一层：flow 整片塌了（concat/回退渲染都失败）→ 记 log["flow"]["fatal"] 走旧 A3 全片渲染。
+    flow_ok = os.environ.get("QX_LLM_FLOW") == "1"
+    silent = None
+    if flow_ok:
+        try:
+            from pipeline.flow import produce as flow_produce  # 懒导入：开关关着不碰 flow 包
+            # R7 接线：为每个 run 自动生成 .local/<run>/produce.py（bridge R 棒的驱动对象）
+            if flow_produce.flow_enabled(brief.subject):
+                flow_produce.write_produce_script(out_dir, quality=quality, manim=MANIM)
+                silent = flow_produce.render_flow(
+                    out_dir, plan.to_dict(), brief.__dict__, log, MANIM, QUALITY[quality], FFMPEG_DIR)
+        except Exception as e:  # noqa: BLE001 「一步失败不整段崩」的最后一层（含 flow 包导入失败）
+            log["flow"] = {**(log.get("flow") or {}), "enabled": True, "fatal": str(e)[-500:]}
+            silent = None
     if silent is None:
-        raise GenerationError(
-            "tool", f"渲染未产出 silent.mp4（media 目录：{media}）",
-            "manim 渲染异常退出、未产出画面轨。请检查分镜里的版式原语是否受支持，或稍后重试。")
-    shutil.move(str(silent), out_dir / "silent.mp4")
+        _retry(lambda: _run([MANIM, *QUALITY[quality], "--media_dir", str(media), "-o", "silent.mp4",
+                             "--disable_caching", str(ROOT / "render" / "scene.py"), "Explainer"], env=env),
+               desc="画面渲染")
+        silent = next(iter(sorted(media.glob("**/silent.mp4"))), None)
+        if silent is None:
+            raise GenerationError(
+                "tool", f"渲染未产出 silent.mp4（media 目录：{media}）",
+                "manim 渲染异常退出、未产出画面轨。请检查分镜里的版式原语是否受支持，或稍后重试。")
+        shutil.move(str(silent), out_dir / "silent.mp4")
     log["steps"]["render"] = round(time.time() - step, 2)
 
     # G2 时长闸门：成片必须与 Plan 时长一致（±10%），否则渲染层的时间记账又漏了东西。

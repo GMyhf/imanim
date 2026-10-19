@@ -172,6 +172,8 @@ def do_generate(brief_data: dict, out_dir: Path, quality: str, pg: Progress) -> 
     # 由 run.generate 走 K0 起草一条 origin=model_draft、refs 为空的条目再往下走（见 pipeline/kp_draft.py）。
     # 起草自身失败（未开 K0/模型自检不过）会让任务带着人话错误结束，不会出半成品。
     instrument(pg)
+    # flow v2 生产开关（SubTask #79-D1a）：QX_LLM_FLOW=1 + subject 白名单的分叉在 cli.generate
+    # 内部读 os.environ——server.py 用 Popen 继承环境，这里无需（也不应）额外传参；关闭时现网行为逐字不变。
     log = cli.generate(brief, out_dir, quality=quality)
     return {"ok": True, "mode": "generate", "names": ascii_names(out_dir, log), "sidecar": log}
 

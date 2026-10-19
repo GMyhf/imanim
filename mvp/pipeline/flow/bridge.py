@@ -29,7 +29,7 @@ from pathlib import Path
 
 from .. import llm_client, review
 from ..ir import Plan
-from . import handoff
+from . import handoff, produce as flow_produce
 from .stages import ROOT, HERE, STAGES, RunCtx, Stage, _resolve
 
 MAX_ATTEMPTS = 3          # 首次 + 坏格式回喂重试 ≤2 次（每环 ≤3 轮纪律的单棒内层）
@@ -154,9 +154,10 @@ def run_deterministic_A4(st: Stage, ctx: RunCtx) -> tuple[dict, list[str]]:
     PHYS_* 物理闸门码由 review.py R6 扩码后自动随 check 结果进入分类路由（stages.route_a4_fail）。"""
     plan_path = ctx.path("plan.json")
     if not plan_path.exists():
-        # TODO(R7 接线)：flow v2 链条里 plan.json 由 V0 visual_script + M2 场景码合成，
-        # 接线前 A4 只能对旧 A3 产物或试制手工落盘的 plan.json 生效。
-        return {"checked": [], "violations": []}, ["plan.json 不存在（V0→plan 转换待 R7 接线）——报 BLOCKED"]
+        # R7 接线（SubTask #79-D1a）：plan.json 缺失时先尝试从本 run 的 visual_script.json
+        # 机械合成（produce.ensure_plan，逐字搬运不做语义改写）；无可合成物才照旧报 BLOCKED。
+        if not flow_produce.ensure_plan(ctx):
+            return {"checked": [], "violations": []}, ["plan.json 不存在（且无 visual_script.json 可合成）——报 BLOCKED"]
     plan = Plan.load(plan_path)
     findings = review.check(plan, ctx.load_kp())
     violations = review.blocking(findings)
@@ -178,6 +179,11 @@ def run_deterministic_R(st: Stage, ctx: RunCtx) -> tuple[dict, list[str]]:
       5. manim/ffmpeg/MiKTeX 的 env PATH 注入（produce.py 头部两行）迁到 pipeline 配置。
     """
     produce = ROOT / ".local" / ctx.run_dir.name / "produce.py"
+    if not produce.exists():
+        # R7 接线（SubTask #79-D1a）：环境准备自动化——run 有 plan.json 就补一个默认
+        # produce.py（驱动 pipeline.flow.produce.drive_r：逐镜渲染+concat，缺场景文件的镜
+        # 走旧 A3 原语回退）。仍补不出来（无 plan.json/落盘失败）才照旧 BLOCKED。
+        flow_produce.ensure_produce_script(ctx.run_dir)
     if not produce.exists():
         return {"adapter": "missing"}, [
             f".local/{ctx.run_dir.name}/produce.py 不存在：R 适配层无可驱动对象。"

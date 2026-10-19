@@ -50,10 +50,12 @@ from manim import (
     Line,
     NumberPlane,
     Polygon,
+    CubicBezier,
     RoundedRectangle,
     Scene,
     ShowPassingFlash,
     Text,
+    TransformFromCopy,
     VMobject,
     VGroup,
     Wiggle,
@@ -106,7 +108,8 @@ FX_MAX_SEC = 0.5               # 单个强调动画最多借用的秒数
 # 这些版式是"本镜主角"（图形类）：出场/揭示时挂 Indicate 点名。
 FX_GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate",
                     "energy_dist", "stat_chart", "mind_map", "table",
-                    "force_diagram", "field", "circuit", "optics", "incline", "trajectory")
+                    "force_diagram", "field", "circuit", "optics", "incline", "trajectory",
+                    "derivation")
 # 角标（首镜 id / 末镜出处）到画框边的距离：让外缘正好落在安全宽边界上。
 # 原来写死 0.4，两条角标分别顶到 x=1866 / x=54，超出本项目自己的 123–1797 安全区（评审 A4）。
 EDGE_BUFF = config.frame_width / 2 - SAFE_WIDTH / 2
@@ -789,6 +792,309 @@ def _dir_vec(d) -> np.ndarray:
     return np.array(_FORCE_DIRS.get(str(d).strip().lower(), DOWN))
 
 
+FORCE_MIN_LEN = 0.45   # 按量值缩放时最短箭长（再短就看不见箭杆）
+
+
+def _force_lengths(forces, L: float, floor: float = FORCE_MIN_LEN) -> list:
+    """力箭长：同图内长度 ∝ mag（规范§5「同一图中力越大线段越长」）。
+
+    最大 mag 的力画成 L（沿用原固定长度），其余按比例缩短，最短 floor。
+    没有任何力给出有效 mag（正数）时全部为 L，与旧行为一致；混给时缺 mag 的力按 L 画。
+    """
+    mags = [_mag_of(f) for f in forces]
+    top = max((m for m in mags if m is not None), default=None)
+    if top is None:
+        return [L] * len(forces)
+    return [L if m is None else max(floor, L * m / top) for m in mags]
+
+
+FORCE_STICK_OUT = 0.3   # 按量值缩短时，箭头至少露出物体边框这么长（否则短力整支藏在方块里）
+
+
+def _body_force_lengths(forces, dirs, L, half_w, half_h, rot=0.0, edge_ok=None) -> list:
+    """从有体积的物体（方块）中心出发的力：给了 mag 时，**露出边框的那段** ∝ mag。
+
+    只按总长缩放会让短力（如 0.45）整支藏在半宽 0.75 的方块里看不见；学生读的是露在外面的
+    箭杆，所以让露出段 ∝ mag：最大者露出 L−half_h（竖直方向总长恰为 L，与旧固定长度一致），
+    最短露出 FORCE_STICK_OUT。edge_ok[i]=False 的力（起点不在中心，如斜面压力从接触点出发）
+    不加边距。全图无有效 mag 时返回 [L]*n，即旧行为。
+    """
+    if not any(_mag_of(f) for f in forces):
+        return [L] * len(forces)
+    vis = _force_lengths(forces, L - half_h, FORCE_STICK_OUT)
+    out = []
+    for i, (f, d, v) in enumerate(zip(forces, dirs, vis)):
+        if _mag_of(f) is None:
+            out.append(L)
+            continue
+        inside = True if edge_ok is None else edge_ok[i]
+        out.append((_box_edge(d, half_w, half_h, rot) if inside else 0.0) + v)
+    return out
+
+
+def _mag_of(f):
+    try:
+        v = float(f.get("mag"))
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) and v > 0 else None
+
+
+def _box_edge(d, half_w: float, half_h: float, rot: float = 0.0) -> float:
+    """从矩形中心沿单位方向 d 走到边框的距离（矩形逆时针转 rot 弧度）。"""
+    c, s = math.cos(-rot), math.sin(-rot)
+    lx, ly = abs(c * d[0] - s * d[1]), abs(s * d[0] + c * d[1])
+    return min(half_w / lx if lx > 1e-9 else math.inf, half_h / ly if ly > 1e-9 else math.inf)
+
+
+# ---------------- 电路版式（79-C1） ----------------
+CIRCUIT_R = 0.3                      # 灯泡/电流表/电压表圆半径
+CIRCUIT_HALF = {"battery": 0.55, "resistor": 0.55, "switch": 0.55}   # 其余类型（圆形元件）半宽 = CIRCUIT_R
+CIRCUIT_TAP = 0.2                    # 电压表支路分接点离被测元件端子的距离
+CIRCUIT_VRISE = 1.05                 # 电压表支路高出主回路顶边的距离（让开被测元件的标签）
+
+
+def _circuit_half(e) -> float:
+    return CIRCUIT_HALF.get(str(e.get("type")), CIRCUIT_R)
+
+
+def _voltmeter_target(e, i, elems, main) -> int | None:
+    """电压表跨接的被测元件下标：across=元件下标或 label；缺省取它前面最近的非电池元件，
+    再退到后面最近的，再退到电池（测路端电压）。主回路没有元件时返回 None。"""
+    if not main:
+        return None
+    acr = e.get("across")
+    if isinstance(acr, int) and not isinstance(acr, bool) and acr in main:
+        return acr
+    if isinstance(acr, str):
+        for j in main:
+            if str(elems[j].get("label") or "") == acr or str(elems[j].get("type")) == acr:
+                return j
+    loads = [j for j in main if str(elems[j].get("type")) != "battery"]
+    before = [j for j in loads if j < i]
+    after = [j for j in loads if j > i]
+    if before:
+        return before[-1]
+    if after:
+        return after[0]
+    return main[0]
+
+
+def circuit_layout(elems: list) -> dict:
+    """单回路电路的纯几何（不建 Mobject，便于测试）。
+
+    主回路：非电压表元件沿顶边等距排开，导线一直接到每个元件的端子（圆形元件即圆周 x±R），
+    其余三边是导线；电压表不进主回路，跨接在被测元件两端：从元件两侧的分接点竖直上引，
+    电压表居中在上方支路里（规范§2、§16「电压表并联」）。
+    连接点：只在 ≥3 根导线交汇处（即电压表支路的分接点）画实心点；拐角、元件端子不画。
+    返回 hw/hh（主回路半宽/半高）、wires[(a,b)]、junctions[(x,y)]、pos[元件中心，按 elems 顺序]、
+    terminals[(左端子, 右端子)]、main（串在主回路的元件下标）、parallel{电压表下标: 被测下标}。
+    """
+    main = [i for i, e in enumerate(elems) if str(e.get("type")) != "voltmeter"]
+    volts = [i for i, e in enumerate(elems) if str(e.get("type")) == "voltmeter"]
+    parallel = {}
+    for i in volts:
+        t = _voltmeter_target(elems[i], i, elems, main)
+        if t is None:            # 只有电压表、没有可测元件：退回串在顶边（旧行为），保证不报错
+            main.append(i)
+        else:
+            parallel[i] = t
+    main.sort()
+    n = max(len(main), 1)
+    W = max(4.0, 1.7 * n + 0.8)
+    H = 1.6
+    hw, hh = W / 2, H / 2
+    wires = [((-hw, hh), (-hw, -hh)), ((-hw, -hh), (hw, -hh)), ((hw, -hh), (hw, hh))]
+    pos = [None] * len(elems)
+    terminals = [None] * len(elems)
+    prev = -hw
+    for k, i in enumerate(main):
+        x = -hw + (k + 1) * W / (n + 1)
+        gw = _circuit_half(elems[i])
+        pos[i] = (x, hh)
+        terminals[i] = ((x - gw, hh), (x + gw, hh))
+        wires.append(((prev, hh), (x - gw, hh)))
+        prev = x + gw
+    wires.append(((prev, hh), (hw, hh)))
+    junctions = []
+    stack = {}
+    for i, t in parallel.items():
+        level = stack.get(t, 0)
+        stack[t] = level + 1
+        tx = pos[t][0]
+        gw = _circuit_half(elems[t])
+        lx, rx = tx - gw - CIRCUIT_TAP, tx + gw + CIRCUIT_TAP
+        vy = hh + CIRCUIT_VRISE * (level + 1)
+        pos[i] = (tx, vy)
+        terminals[i] = ((tx - CIRCUIT_R, vy), (tx + CIRCUIT_R, vy))
+        wires += [((lx, hh), (lx, vy)), ((lx, vy), (tx - CIRCUIT_R, vy)),
+                  ((tx + CIRCUIT_R, vy), (rx, vy)), ((rx, vy), (rx, hh))]
+        if level == 0:           # 同一被测元件的第二块表从同一对分接点上引，点不重复
+            junctions += [(lx, hh), (rx, hh)]
+    return {"hw": hw, "hh": hh, "wires": wires, "junctions": junctions, "pos": pos,
+            "terminals": terminals, "main": main, "parallel": parallel}
+
+
+# ---------------- 条形磁铁磁感线（79-C1） ----------------
+# 模型：均匀磁化条形磁铁 = 两端面均布磁荷（N 面 +σ、S 面 −σ）。在图平面内把每个端面当作
+# 均匀带"荷"线段，场用二维解析式（线段积分闭式），不做逐点求和，追踪一条线只要几毫秒。
+# 对称性：B_x(−x,y)=B_x(x,y)、B_y(−x,y)=−B_y(x,y)，所以从 N 面 (hx,y0) 出发的线关于 x=0
+# 镜像后恰好落回 S 面 (−hx,y0)。只积分右半段（到 x=0）再镜像，闭合与终点由构造保证，
+# 不受积分误差影响；内部段是 (−hx,y0)→(hx,y0) 的 S→N 平行直线。
+
+def _magnet_B(x: float, y: float, hx: float, hh: float):
+    bx = by = 0.0
+    for a, q in ((hx, 1.0), (-hx, -1.0)):
+        dx = x - a
+        if abs(dx) < 1e-9:
+            dx = 1e-9
+        bx += q * (math.atan((hh - y) / dx) + math.atan((hh + y) / dx))
+        by += q * 0.5 * math.log((dx * dx + (y + hh) ** 2) / (dx * dx + (y - hh) ** 2 + 1e-12))
+    return bx, by
+
+
+def magnet_field_line(y0: float, hx: float = 1.2, hh: float = 0.45, max_steps: int = 1200) -> list:
+    """从 N 极面 (hx, y0) 出发的一条外部磁感线，终于 S 极面 (−hx, y0)，返回 [(x, y), ...]。
+
+    RK4、单位化方向场；近极处步长 0.02、远处 0.05。确定性（无随机），只依赖入参。
+    """
+    def f(px, py):
+        bx, by = _magnet_B(px, py, hx, hh)
+        n = math.hypot(bx, by) or 1e-12
+        return bx / n, by / n
+
+    x, y = hx + 1e-3, y0
+    half = [(hx, y0), (x, y)]
+    for _ in range(max_steps):
+        h = 0.02 if math.hypot(x - hx, y) < 0.6 else 0.05
+        k1 = f(x, y)
+        k2 = f(x + .5 * h * k1[0], y + .5 * h * k1[1])
+        k3 = f(x + .5 * h * k2[0], y + .5 * h * k2[1])
+        k4 = f(x + h * k3[0], y + h * k3[1])
+        nx = x + h * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6
+        ny = y + h * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6
+        if nx <= 0.0:
+            t = x / (x - nx)
+            half.append((0.0, y + (ny - y) * t))
+            break
+        x, y = nx, ny
+        half.append((x, y))
+    else:
+        raise ValueError(f"magnet field line from y0={y0} did not reach x=0")
+    mirror = [(-px, py) for px, py in reversed(half[:-1])]
+    return half + mirror
+
+
+# ---------------- 光学透镜成像 / 通电导线磁场（79-C2a，纯几何，便于测试） ----------------
+
+LENS_F = 1.0    # 默认焦距（场景单位）；f>0 凸透镜、f<0 凹透镜
+
+
+def lens_layout(u, f: float = LENS_F, oh: float = 0.9) -> dict:
+    """透镜成像的纯几何（不建 Mobject）。规范§14、Audit_79A §1.1 optics lens。
+
+    符号口径（实正虚负）：u 物距（>0，物在 x=−u）、f 焦距（凸正凹负）、oh 物高（>0）。
+    像距解析解 1/u + 1/v = 1/f ⇒ v = u·f/(u−f)；像高 ih = −oh·v/u。
+    v>0 ⇒ 异侧倒立实像（凸透镜 u>f）；v<0 ⇒ 同侧正立虚像（凸透镜 u<f 放大、凹透镜恒缩小）。
+    三条特殊光线：①平行主轴→过（凹透镜：反向延长过同侧虚焦点）焦点；②过光心 O 不偏折；
+    ③过（或延长线指向）焦点→平行主轴出射。实际光线实线段（出射段带箭头=arrow），
+    反向延长线虚线段（dashed），虚线段所在直线都过像点顶点 img。
+    返回 {"u","f","oh","v","ih","real","obj_top","img","x_left","x_right","lens_h",
+    "focus":[(±|f|,0)], "pt2f":[在轴内的 (±2|f|,0)], "segs":[{"p","q","dashed","arrow"}]}。
+    """
+    u, f, oh = float(u), float(f), float(oh)
+    fm = abs(f)
+    if fm <= 1e-12 or u <= 0 or oh <= 0 or abs(u - f) < 1e-9:
+        raise ValueError("lens_layout 需要 u>0、f!=0 且 u!=f（u=f 像在无穷远）")
+    v = u * f / (u - f)
+    ih = -oh * v / u
+    top, img = (-u, oh), (v, ih)
+    xr = 1.8 * fm                       # 虚像情形出射光线的右端裁剪
+    segs = []
+
+    def seg(p, q, dashed=False, arrow=False):
+        segs.append({"p": p, "q": q, "dashed": dashed, "arrow": arrow})
+
+    def exit_end(p0, p1, xmax=xr, yabs=2.0 * fm):
+        """沿 p0→p1 方向把出射光线画到裁剪框（x≤xmax，|y|≤yabs）内的终点。"""
+        dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+        t = float("inf")
+        if dx > 1e-12:
+            t = (xmax - p0[0]) / dx
+        if dy > 1e-12:
+            t = min(t, (yabs - p0[1]) / dy)
+        if dy < -1e-12:
+            t = min(t, (-yabs - p0[1]) / dy)
+        if not t > 0:
+            t = 0.8
+        return (p0[0] + dx * t, p0[1] + dy * t)
+
+    if f > 0 and v > 0:                 # 凸透镜实像：三条光线实线会聚于像点，无反向延长
+        seg(top, (0, oh))
+        seg((0, oh), img, arrow=True)   # ①平行入射→过焦点折向像点
+        seg(top, img, arrow=True)       # ②过光心方向不变
+        seg(top, (0, ih))               # ③过物方焦点入射
+        seg((0, ih), img, arrow=True)   # ③平行出射（出射高度恰等于像高）
+    elif f > 0:                         # 凸透镜 u<f（放大镜）：出射发散，反向延长线交正立放大虚像
+        a0 = (0, oh)
+        seg(top, a0)
+        seg(a0, exit_end(a0, (fm, 0.0)), arrow=True)
+        seg(a0, img, dashed=True)
+        seg(top, exit_end(top, (0.0, 0.0)), arrow=True)
+        seg((0, 0), img, dashed=True)
+        seg(top, (0, ih))
+        seg((0, ih), (xr, ih), arrow=True)
+        seg((0, ih), img, dashed=True)
+    else:                               # 凹透镜（发散）：恒成正立缩小虚像；①反向延长过同侧虚焦点
+        a0 = (0, oh)
+        seg(top, a0)
+        seg(a0, exit_end(a0, (fm, 2 * oh)), arrow=True)
+        seg((-fm, 0.0), a0, dashed=True)
+        seg(top, exit_end(top, (0.0, 0.0)), arrow=True)
+        seg(top, (0, ih))
+        seg((0, ih), (xr, ih), arrow=True)
+        seg((0, ih), img, dashed=True)
+
+    x_left = -(max(u, abs(v), 2 * fm) + 0.45)
+    x_right = (max(v, 2 * fm) + 0.45) if v > 0 else (xr + 0.35)
+    return {
+        "u": u, "f": f, "oh": oh, "v": v, "ih": ih, "real": v > 0,
+        "obj_top": top, "img": img,
+        "x_left": x_left, "x_right": x_right,
+        "lens_h": 2 * max(1.4, oh + 0.35, (abs(ih) + 0.35) if f > 0 else 0.0),
+        "focus": [(-fm, 0.0), (fm, 0.0)],
+        "pt2f": [(x, 0.0) for x in (-2 * fm, 2 * fm) if x_left + 0.1 <= x <= x_right - 0.1],
+        "segs": segs,
+    }
+
+
+WIRE_FIELD_R0, WIRE_FIELD_RATIO, WIRE_FIELD_N = 0.6, 1.55, 4
+
+
+def wire_field_layout(current: str = "out", r0: float = WIRE_FIELD_R0,
+                      ratio: float = WIRE_FIELD_RATIO, n: int = WIRE_FIELD_N) -> dict:
+    """通电直导线磁感线同心圆的纯几何（规范§17：越靠近导线越密）。
+
+    B∝1/r ⇒ 半径取等比数列 r0·ratio^k（外圈间距越来越大，近导线侧变密）。
+    安培定则：current="out"（·，出纸面）→ 逆时针（ccw=True，切向 (−sinθ, cosθ)）；
+    "in"（×，入纸面）→ 顺时针（切向取反）。每条圆上放一个切向小箭头。
+    返回 {"radii":[...], "ccw": bool,
+    "arrows":[{"r","angle","pos":(x,y),"tangent":(tx,ty)}...]}，tangent 为单位向量，
+    cross(pos, tangent) 的 z 分量同号：出纸面 >0（逆时针）、入纸面 <0（顺时针）。
+    """
+    ccw = str(current or "out").strip().lower() != "in"
+    radii = [r0 * ratio ** k for k in range(max(n, 1))]
+    angles = (55.0, 150.0, 250.0, 330.0)
+    arrows = []
+    for k, r in enumerate(radii):
+        a = math.radians(angles[k % len(angles)])
+        sgn = 1.0 if ccw else -1.0
+        arrows.append({"r": r, "angle": angles[k % len(angles)],
+                       "pos": (r * math.cos(a), r * math.sin(a)),
+                       "tangent": (sgn * -math.sin(a), sgn * math.cos(a))})
+    return {"radii": radii, "ccw": ccw, "arrows": arrows}
+
+
 def _halo_ring(mob, color, buff=0.22, width=8, opacity=0.3):
     """P3 假辉光（halo，调研 1.2 的 ExplosionMarker 做法）：同中心叠一圈粗描边、
     低不透明度、无填充的环，垫在"本镜主角"（关键图形/公式）底下。
@@ -841,6 +1147,96 @@ class Explainer(Scene):
         g.arrange(DOWN, buff=0.3)
         # P3 halo：公式是"本镜主角"时叠假辉光环（静态、垫底、无脉冲），环随 _fit 一起缩放。
         return VGroup(_halo_ring(core, th["key"]), g)
+
+    def _v_derivation(self, p, th):
+        """逐步等式推导（SubTask #79-B）：同一字母全程同色，代入值飞入目标字母。
+
+        props:
+          steps:   [{"text": "F = BIL", "note": "安培力", "sub": {"I": "BLv/R"}}, ...]
+                   也接受纯字符串；最多 8 步。
+          symbols: {"F": "安培力", ...} 字母 → 物理含义。图例只列前 6 个。
+          label / at（揭示键，与 steps 等长；缺省按行序均匀铺）。
+        """
+        raw = p.get("steps")
+        raw_steps = [raw] if isinstance(raw, (str, dict)) else list(raw or [])[:8]
+        symbols = p.get("symbols") if isinstance(p.get("symbols"), dict) else {}
+        order: list[str] = []
+        for st in raw_steps:
+            text = st if isinstance(st, str) else str((st or {}).get("text", ""))
+            for ch in text:
+                if ch in symbols and ch not in order:
+                    order.append(ch)
+        palette = [th["accent"], th["warn"], th["key"], th["hi"], th["emph"], th["dim"]]
+        color_of = {s: palette[i % len(palette)] for i, s in enumerate(order)}
+
+        # 字母级切分：BIL 拆成 B/I/L（各自色标）；CJK 词与数字保持整段。
+        tok_re = re.compile(r"[A-Za-zΑ-ωΔ](?:_\{?[^}\s]+\}?|\^\{?[^}\s]+\}?)?"
+                            r"|\d+(?:\.\d+)?|[\u4e00-\u9fff]+|[^\sA-Za-z0-9]")
+        ops = set("=+-−×÷·/()[]{}<>≤≥≠,，。")
+
+        def base_of(tok: str) -> str:
+            return re.sub(r"[_^]\{?[^}]*\}?$", "", tok)
+
+        def color_for(tok: str) -> str:
+            b = base_of(tok)
+            if b in color_of:
+                return color_of[b]
+            return th["dim"] if b in ops else th["fg"]
+
+        def line_mob(text: str, fs: float = 34):
+            toks = [t for t in tok_re.findall(str(text)) if t.strip()]
+            mobs = [rich(t, fs, color_for(t)) for t in toks]
+            return VGroup(*mobs).arrange(RIGHT, buff=0.07), toks, mobs
+
+        step_groups = []
+        prev = None
+        for st in raw_steps:
+            d = st if isinstance(st, dict) else {"text": str(st)}
+            text = str(d.get("text", "")).strip()
+            if not text:
+                continue
+            line, toks, mobs = line_mob(text)
+            if line.width > SAFE_WIDTH - 1.2:
+                line.scale_to_fit_width(SAFE_WIDTH - 1.2)
+            parts = [line]
+            if d.get("note"):
+                parts.append(rich(str(d["note"]), 21, th["dim"]))
+            g = VGroup(*parts).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
+            if prev is not None and isinstance(d.get("sub"), dict):
+                fly = []
+                for sym, val in d["sub"].items():
+                    sym, val = str(sym).strip(), str(val).strip()
+                    if not sym or not val:
+                        continue
+                    target = next((m for t, m in zip(toks, mobs) if base_of(t) == sym), None)
+                    if target is None:
+                        continue      # 目标字母不在本步：不飞，避免指错位置
+                    target.set_opacity(0)
+                    fly.append((val, target, color_of.get(sym, th["accent"])))
+                if fly:
+                    g._derivation_fly = fly
+            prev = g
+            step_groups.append(g)
+
+        if not step_groups:
+            step_groups = [line_mob(p.get("label") or "推导")[0]]
+        body = VGroup(*step_groups).arrange(DOWN, aligned_edge=LEFT, buff=0.34)
+        for g, key in zip(step_groups, reveal_keys(p.get("at"), len(step_groups))):
+            tag_reveal(g, key)
+
+        out = []
+        if p.get("label"):
+            out.append(T(str(p["label"]), font_size=24, color=th["accent"]))
+        out.append(body)
+        legend = [VGroup(rich(sym, 21, color_of[sym]), rich(str(symbols[sym]), 19, th["dim"]))
+                  .arrange(RIGHT, buff=0.12)
+                  for sym in order[:6] if str(symbols.get(sym) or "").strip()]
+        if legend:
+            leg = VGroup(*legend).arrange(RIGHT, buff=0.55)
+            if leg.width > SAFE_WIDTH - 1.0:
+                leg.scale_to_fit_width(SAFE_WIDTH - 1.0)
+            out.append(leg)
+        return VGroup(*out).arrange(DOWN, aligned_edge=LEFT, buff=0.28)
 
     def _v_callout(self, p, th):
         """结论/提示卡：**无框排版**（去框化，SubTask #60-D 用户核心抱怨"看不懂的框框"）。
@@ -1404,13 +1800,19 @@ class Explainer(Scene):
         raw_levels = p.get("levels", [0, 1, 2, 3, 4])
         if not isinstance(raw_levels, (list, tuple)):
             raw_levels = [raw_levels]        # KP 数据不规范（如 levels: 7）时兜底，A4 的 KIND 会负责打回
-        levels = [float(e) for e in raw_levels][:7]
+        levels = sorted(float(e) for e in raw_levels)[:7]
         if len(levels) < 2:
             levels = [0.0, 1.0]
         temps = [float(t) for t in p.get("kT", [0.5, 1.5])][:3]
         names = list(p.get("names", []))
         n = max(4, min(int(p.get("n", 24)), 60))
         step, width = 0.5, 2.6
+        # 能级纵坐标 = 能量值的线性映射：y = (E−E₀)/(Eₘₐₓ−E₀)·H（79-A 一节 energy_dist）。
+        # 总高与旧版一致（最高能级仍在 (len−1)·step），只是中间能级按真实间隔落位。
+        e0, emax, top = levels[0], levels[-1], (len(levels) - 1) * step
+
+        def ylev(e):
+            return (e - e0) / (emax - e0) * top if emax - e0 > 1e-9 else 0.0
 
         def alloc(kt):
             w = [math.exp(-(e - levels[0]) / kt) for e in levels]
@@ -1425,7 +1827,7 @@ class Explainer(Scene):
             cnt = alloc(kt)
             g = VGroup()
             for li, c in enumerate(cnt):
-                y = li * step
+                y = ylev(levels[li])
                 g.add(Line([0, y, 0], [width, y, 0], color=th["dim"], stroke_width=3))
                 per_row = 13
                 for j in range(c):
@@ -1598,7 +2000,8 @@ class Explainer(Scene):
         """受力分析：真实力箭头从对象（方块/质点）中心沿方向画出，标签在箭头端，逐条揭示。
 
         dir 接受方向词（up/down/left/right/upleft/upright/downleft/downright）或角度度数
-        （0=右、逆时针为正）。箭长固定、以对象中心为起点，学生看到的是"合外力从哪来、指向哪"。
+        （0=右、逆时针为正）。以对象中心为起点，学生看到的是"合外力从哪来、指向哪"。
+        可选 mag（相对大小）：同图内箭长 ∝ mag，最大者长 L、最短 FORCE_MIN_LEN；都不给则等长。
         """
         obj = str(p.get("object") or "box")
         forces = [f for f in p.get("forces", []) if isinstance(f, dict)]
@@ -1613,10 +2016,19 @@ class Explainer(Scene):
                 body.add(lab)
         L = 1.25
         units = []
-        for f in forces:
-            d = _dir_vec(f.get("dir"))
+        raw = [np.array(_dir_vec(f.get("dir")), dtype=float) for f in forces]
+        if any(_mag_of(f) for f in forces):
+            dirs = [d / (np.linalg.norm(d) or 1.0) for d in raw]
+            if obj == "point":
+                lengths = _force_lengths(forces, L)
+            else:   # 方块 1.5×1.0：露出边框的那段 ∝ mag
+                lengths = _body_force_lengths(forces, dirs, L, 0.75, 0.5)
+        else:       # 无 mag：与旧版逐字一致（斜向方向词未归一，长 L·√2）
+            dirs, lengths = raw, [L] * len(forces)
+        for f, d, ln in zip(forces, dirs, lengths):
             color = th.get(str(f.get("tone") or "key"), th["key"])
-            arrow = Arrow([0, 0, 0], np.array(d) * L, color=color, buff=0, stroke_width=5)
+            arrow = Arrow([0, 0, 0], d * ln, color=color, buff=0, stroke_width=5,
+                          max_tip_length_to_length_ratio=0.35)
             unit = VGroup(arrow)
             label = str(f.get("label") or f.get("name") or "")
             if label:
@@ -1671,41 +2083,71 @@ class Explainer(Scene):
 
     def _f_field_wire(self, p, th):
         """通电直导线截面：圆心标电流 ×（进纸面）/ ·（出纸面），同心圆是磁感线，
-        切向小箭头按安培定则示环绕方向（出=逆时针、进=顺时针）。"""
-        into = str(p.get("current") or "out") == "in"
+        半径按几何级数排布（B∝1/r，越靠导线越密，wire_field_layout），切向小箭头按
+        安培定则示环绕方向（出=逆时针、进=顺时针，规范§17）。"""
+        lay = wire_field_layout(str(p.get("current") or "out"))
+        into = not lay["ccw"]
         conductor = Circle(radius=0.32, color=th["key"], stroke_width=4).set_fill(th["key"], 0.25)
         cur = T("×" if into else "·", font_size=40,
                 color=th["warn"] if into else th["accent"]).move_to([0, 0, 0])
         g = VGroup(conductor, cur)
-        for r in (0.9, 1.5, 2.1):
+        for r in lay["radii"]:
             g.add(Circle(radius=r, color=th["dim"], stroke_width=2))
-        sgn = -1 if into else 1
-        for r, ang in ((1.5, 60), (1.5, 200), (2.1, 130)):
-            a = math.radians(ang)
-            pos = np.array([r * math.cos(a), r * math.sin(a), 0.0])
-            t = sgn * np.array([-math.sin(a), math.cos(a), 0.0])
+        for a in lay["arrows"]:
+            pos = np.array([a["pos"][0], a["pos"][1], 0.0])
+            t = np.array([a["tangent"][0], a["tangent"][1], 0.0])
             g.add(Arrow(pos - t * 0.28, pos + t * 0.28, color=th["warn"], buff=0, stroke_width=5))
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
 
+    MAGNET_HX, MAGNET_HH = 1.2, 0.45
+    # N 极面上的种子（占半高的比例）：上半 4 条，下半镜像 4 条，外加轴向直线。
+    # 种子在端面上等距，外部线自然"近极密、远处疏"（规范§4 疏密示强弱）。
+    MAGNET_SEEDS = (0.62, 0.74, 0.86, 0.95)
+
     def _f_field_magnet(self, p, th):
-        """条形磁铁：左 S 右 N，磁感线为穿过两极的闭合椭圆，顶部/底部箭头示外磁路方向 N→S。"""
+        """条形磁铁（左 S 右 N）磁感线：两端面均布磁荷解析场 + RK4 流线追踪（magnet_field_line）。
+
+        外部线从 N 极面多点发出、绕回 S 极面同高处，内部沿 S→N 平行直线回到起点——每条闭合、
+        互不相交、不穿磁铁本体；含轴向直线；每条外部线在顶点处有 N→S 箭头，内部轴线箭头 S→N。
+        依据：规范§0 磁场行、§4、§19。
+        """
+        hx, hh = self.MAGNET_HX, self.MAGNET_HH
+        line_c, inner_c = th["accent"], WHITE
         bar = VGroup(
-            Rectangle(width=1.5, height=0.9, color=th["dim"]).set_fill(th["dim"], 0.85).move_to(LEFT * 0.75),
-            Rectangle(width=1.5, height=0.9, color=th["warn"]).set_fill(th["warn"], 0.85).move_to(RIGHT * 0.75),
-            T("S", font_size=30, color=WHITE).move_to(LEFT * 0.75),
-            T("N", font_size=30, color=WHITE).move_to(RIGHT * 0.75),
+            Rectangle(width=hx, height=2 * hh, color=th["dim"]).set_fill(th["dim"], 0.85).move_to(LEFT * hx / 2),
+            Rectangle(width=hx, height=2 * hh, color=th["warn"]).set_fill(th["warn"], 0.85).move_to(RIGHT * hx / 2),
         )
-        g = VGroup(bar)
-        heights = [1.3, 2.1, 2.9]
-        for i, h in enumerate(heights):
-            g.add(Ellipse(width=3.0, height=h, color=th["accent"],
-                          stroke_width=3 if i == len(heights) - 1 else 2))
-            if i >= 1:  # 最外两条标方向：外磁路 N→S，顶部/底部都朝左
-                b = h / 2
-                for s in (1, -1):
-                    g.add(Arrow([0.35, s * b, 0], [-0.35, s * b, 0], color=th["warn"], buff=0, stroke_width=5))
+        inner = VGroup()
+        outer = VGroup()
+        arrows = VGroup()
+        for s in self.MAGNET_SEEDS:
+            pts = magnet_field_line(s * hh, hx, hh)
+            apex_i = len(pts) // 2
+            for sg in (1, -1):
+                ln = VMobject(color=line_c, stroke_width=2.5)
+                ln.set_points_as_corners([[x, sg * y, 0] for x, y in pts])
+                outer.add(ln)
+                ay = sg * pts[apex_i][1]
+                arrows.add(Arrow([0.22, ay, 0], [-0.22, ay, 0], color=th["warn"], buff=0, stroke_width=4,
+                                 max_tip_length_to_length_ratio=0.6))
+                inner.add(Line([-hx, sg * s * hh, 0], [hx, sg * s * hh, 0], color=inner_c,
+                               stroke_width=1.5, stroke_opacity=0.75))
+        # 轴向直线：N 面沿轴向右出去、从左侧沿轴进入 S 面（无穷远闭合），各带一个 N→S 外部方向箭头。
+        ax_len = 1.3
+        outer.add(Line([hx, 0, 0], [hx + ax_len, 0, 0], color=line_c, stroke_width=2.5),
+                  Line([-hx - ax_len, 0, 0], [-hx, 0, 0], color=line_c, stroke_width=2.5))
+        for x in (hx + ax_len * 0.55, -hx - ax_len * 0.45):
+            arrows.add(Arrow([x - 0.22, 0, 0], [x + 0.22, 0, 0], color=th["warn"], buff=0, stroke_width=4,
+                             max_tip_length_to_length_ratio=0.6))
+        # 内部：轴线中段画 S→N 箭头（S/N 字母让到两侧，不压线）。
+        inner.add(Arrow([-0.55, 0, 0], [0.55, 0, 0], color=inner_c, buff=0, stroke_width=4,
+                        max_tip_length_to_length_ratio=0.3))
+        poles = VGroup(T("S", font_size=28, color=WHITE).move_to([-hx + 0.3, 0, 0]),
+                       T("N", font_size=28, color=WHITE).move_to([hx - 0.3, 0, 0]))
+        g = VGroup(outer, bar, inner, poles, arrows)
+        g = VGroup(g, rich("外部 N→S，内部 S→N", 22, th["fg"])).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
@@ -1717,38 +2159,19 @@ class Explainer(Scene):
         电表=圆圈内 A/V；导线横平竖直拐直角。
         """
         elems = [e for e in p.get("elements", []) if isinstance(e, dict)]
-        n = max(len(elems), 1)
-        W = max(4.0, 1.7 * n + 0.8)
-        H = 1.6
-        hw, hh = W / 2, H / 2
+        lay = circuit_layout(elems)
+        hw, hh = lay["hw"], lay["hh"]
         wire = th["dim"]
+        col = th["key"]
         g = VGroup()
-        g.add(Line([-hw, hh, 0], [-hw, -hh, 0], color=wire, stroke_width=3))
-        g.add(Line([-hw, -hh, 0], [hw, -hh, 0], color=wire, stroke_width=3))
-        g.add(Line([hw, -hh, 0], [hw, hh, 0], color=wire, stroke_width=3))
-        xs = [-hw + (i + 1) * W / (n + 1) for i in range(n)]
-        gw = 0.55
+        for a, b in lay["wires"]:
+            g.add(Line([a[0], a[1], 0], [b[0], b[1], 0], color=wire, stroke_width=3))
+        for jx, jy in lay["junctions"]:
+            g.add(Dot([jx, jy, 0], radius=0.065, color=wire).set_fill(wire, 1.0))
 
-        def junction(x):
-            g.add(Dot([x, hh, 0], radius=0.055, color=wire).set_fill(wire, 1.0))
-
-        def wire_to(a, b):
-            g.add(Line([a, hh, 0], [b, hh, 0], color=wire, stroke_width=3))
-
-        prev = -hw
-        for x in xs:
-            wire_to(prev, x - gw)
-            junction(x - gw)
-            junction(x + gw)
-            prev = x + gw
-        wire_to(prev, hw)
-        for cx, cy in ((-hw, hh), (hw, hh), (hw, -hh), (-hw, -hh)):
-            g.add(Dot([cx, cy, 0], radius=0.055, color=wire).set_fill(wire, 1.0))
-
-        def symbol(e, x):
+        def symbol(e, x, y):
             ty = str(e.get("type"))
-            y = hh
-            col = th["key"]
+            gw = CIRCUIT_HALF[ty] if ty in CIRCUIT_HALF else CIRCUIT_R
             sg = VGroup()
             if ty == "battery":
                 sg.add(Line([x - gw, y - 0.28, 0], [x - gw, y + 0.28, 0], color=col, stroke_width=5))
@@ -1759,19 +2182,19 @@ class Explainer(Scene):
                 sg.add(Rectangle(width=2 * gw, height=0.5, color=col, stroke_width=3).move_to([x, y, 0]))
             elif ty == "switch":
                 sg.add(Line([x - gw, y, 0], [x + gw * 0.55, y + 0.5, 0], color=col, stroke_width=3))
-                sg.add(Dot([x + gw, y, 0], radius=0.055, color=wire).set_fill(wire, 1.0))
             elif ty == "bulb":
-                c = Circle(radius=0.3, color=col, stroke_width=3).move_to([x, y, 0])
-                sg.add(c, Line([x - 0.21, y - 0.21, 0], [x + 0.21, y + 0.21, 0], color=col, stroke_width=3),
-                       Line([x - 0.21, y + 0.21, 0], [x + 0.21, y - 0.21, 0], color=col, stroke_width=3))
-            else:  # ammeter / voltmeter
-                c = Circle(radius=0.3, color=col, stroke_width=3).move_to([x, y, 0])
+                c = Circle(radius=CIRCUIT_R, color=col, stroke_width=3).move_to([x, y, 0])
+                d = CIRCUIT_R * 0.7
+                sg.add(c, Line([x - d, y - d, 0], [x + d, y + d, 0], color=col, stroke_width=3),
+                       Line([x - d, y + d, 0], [x + d, y - d, 0], color=col, stroke_width=3))
+            else:  # ammeter / voltmeter / 未知类型按电表圆画
+                c = Circle(radius=CIRCUIT_R, color=col, stroke_width=3).move_to([x, y, 0])
                 sg.add(c, T("A" if ty == "ammeter" else "V", font_size=26, color=col).move_to(c))
             if e.get("label"):
                 sg.add(rich(str(e["label"]), 22, col).next_to([x, y, 0], UP, buff=0.34))
             return sg
 
-        syms = [symbol(e, x) for e, x in zip(elems, xs)]
+        syms = [symbol(e, x, y) for e, (x, y) in zip(elems, lay["pos"])]
         if len(syms) >= 2:
             for s, key in zip(syms, reveal_keys(p.get("at"), len(syms))):
                 tag_reveal(s, key)
@@ -1783,6 +2206,7 @@ class Explainer(Scene):
 
     def _v_optics(self, p, th):
         """光路图：法线画虚线、光线画实线带箭头；镜面=线段+背面斜线；折射=界面+折向法线。
+        lens/image 见 _optics_imaging：u<f 放大镜虚像、lens="concave"（或 f<0）凹透镜虚像。
 
         入射角/反射角/折射角都标在光线上（不画角度弧线——那是数学记号，物理用物理图示）。
         """
@@ -1859,28 +2283,59 @@ class Explainer(Scene):
                          rich("像（虚像）", 22, th["accent"]).next_to([d, -0.6, 0], DOWN, buff=0.1))
             units = [obj, rays, img]
         else:
-            # 凸透镜：平行主轴的光线折射后过焦点；过光心的光线方向不变；两线交点即像。
-            f = 1.0
-            # u 限在 1.5f~3f：像距 v=uf/(u-f) 落在 1.5f~3f，整图不出框且光线几何保持精确
-            u = max(1.5 * f, min(float(p.get("u", 2.0 * f)), 3.0 * f))
+            # 透镜成像（lens_layout 解析几何）：u<f 放大镜成正立放大虚像；凹透镜（lens="concave"
+            # 或 f<0）恒成正立缩小虚像；反向延长线/虚像虚线，实际光线实线带箭头；F、2F 标在轴上。
+            f_in = float(p.get("f", LENS_F)) or LENS_F
+            fmag = abs(f_in)
+            concave = str(p.get("lens") or "").strip().lower() == "concave" or f_in < 0
+            f = -fmag if concave else fmag
             oh = 0.9
-            v = u * f / (u - f)
-            vx, ih = v, -oh * v / u
-            body.add(Line([-u - 0.4, 0, 0], [v + 0.4, 0, 0], color=th["dim"], stroke_width=2),
-                     Ellipse(width=0.32, height=2.8, color=th["key"], stroke_width=4))
-            for x in (-f, f):
+            # u 钳位（像在无穷远/出框的区间画不了）：凸实像 1.5f~3.5f、放大镜 0.3f~0.5f、凹 0.5f~3.5f
+            u = float(p.get("u", 2.0 * fmag))
+            if concave:
+                u = max(0.5 * fmag, min(u, 3.5 * fmag))
+            elif u < fmag:
+                u = max(0.3 * fmag, min(u, 0.5 * fmag))
+            else:
+                u = max(1.5 * fmag, min(u, 3.5 * fmag))
+            lay = lens_layout(u, f, oh)
+            body.add(Line([lay["x_left"], 0, 0], [lay["x_right"], 0, 0], color=th["dim"], stroke_width=2))
+            lh = lay["lens_h"] / 2
+            if f > 0:
+                body.add(Ellipse(width=0.32, height=2 * lh, color=th["key"], stroke_width=4))
+            else:   # 凹透镜符号：中间薄（双凹弧线 + 上下端帽；弧中点 x≈∓0.03，中薄边厚）
+                w, c = 0.16, 0.01
+                body.add(CubicBezier([-w, lh, 0], [c, lh * 0.4, 0], [c, -lh * 0.4, 0], [-w, -lh, 0],
+                                     color=th["key"], stroke_width=4),
+                         CubicBezier([w, lh, 0], [-c, lh * 0.4, 0], [-c, -lh * 0.4, 0], [w, -lh, 0],
+                                     color=th["key"], stroke_width=4),
+                         Line([-w, lh, 0], [w, lh, 0], color=th["key"], stroke_width=4),
+                         Line([-w, -lh, 0], [w, -lh, 0], color=th["key"], stroke_width=4))
+            for x, cap in [(p2[0], "F") for p2 in lay["focus"]] + [(p2[0], "2F") for p2 in lay["pt2f"]]:
                 body.add(Dot([x, 0, 0], radius=0.05, color=th["dim"]),
-                         rich("F", 22, th["dim"]).next_to([x, 0, 0], DOWN, buff=0.12))
+                         rich(cap, 22, th["dim"]).next_to([x, 0, 0], DOWN, buff=0.12))
             body.add(rich("O", 22, th["dim"]).next_to([0, 0, 0], DOWN + RIGHT, buff=0.08))
-            top = np.array([-u, oh, 0])
-            obj = VGroup(Arrow([-u, 0, 0], top, color=th["accent"], buff=0, stroke_width=6),
-                         rich("物", 22, th["accent"]).next_to([-u, 0, 0], DOWN, buff=0.12))
-            img_top = np.array([vx, ih, 0])
-            rays = VGroup(Line(top, [0, oh, 0], color=th["warn"], stroke_width=4),
-                          Arrow([0, oh, 0], img_top, color=th["warn"], buff=0, stroke_width=4),
-                          Arrow(top, img_top, color=th["warn"], buff=0, stroke_width=4))
-            img = VGroup(Arrow([vx, 0, 0], img_top, color=th["accent"], buff=0, stroke_width=6),
-                         rich("像（倒立实像）", 22, th["accent"]).next_to([vx, 0, 0], UP, buff=0.12))
+            top = np.array([lay["obj_top"][0], lay["obj_top"][1], 0.0])
+            obj = VGroup(Arrow([lay["obj_top"][0], 0, 0], top, color=th["accent"], buff=0, stroke_width=6),
+                         rich("物", 22, th["accent"]).next_to([lay["obj_top"][0], 0, 0], DOWN, buff=0.12))
+            rays = VGroup()
+            for s in lay["segs"]:
+                a = np.array([s["p"][0], s["p"][1], 0.0])
+                b = np.array([s["q"][0], s["q"][1], 0.0])
+                if s["dashed"]:
+                    rays.add(DashedLine(a, b, dash_length=0.12, color=th["warn"], stroke_width=3))
+                elif s["arrow"]:
+                    rays.add(Arrow(a, b, color=th["warn"], buff=0, stroke_width=4))
+                else:
+                    rays.add(Line(a, b, color=th["warn"], stroke_width=4))
+            vx, ih = lay["v"], lay["ih"]
+            if lay["real"]:
+                img = VGroup(Arrow([vx, 0, 0], [vx, ih, 0], color=th["accent"], buff=0, stroke_width=6),
+                             rich("像（倒立实像）", 22, th["accent"]).next_to([vx, 0, 0], UP, buff=0.12))
+            else:
+                cap = "像（正立放大虚像）" if f > 0 else "像（正立缩小虚像）"
+                img = VGroup(DashedLine([vx, 0, 0], [vx, ih, 0], dash_length=0.12, color=th["accent"], stroke_width=5),
+                             rich(cap, 22, th["accent"]).next_to([vx, 0, 0], DOWN, buff=0.5))
             units = [obj, rays, img]
         for un, k in zip(units, reveal_keys(p.get("at"), len(units))):
             tag_reveal(un, k)
@@ -1921,13 +2376,20 @@ class Explainer(Scene):
         rel = {"normal": u_norm, "into": -u_norm, "along_up": u_along, "along_down": -u_along}
         L = 1.2
         units = []
-        for f in (x for x in p.get("forces", []) if isinstance(x, dict)):
-            key = str(f.get("dir")).strip().lower()
+        forces = [x for x in p.get("forces", []) if isinstance(x, dict)]
+        keys = [str(f.get("dir")).strip().lower() for f in forces]
+        dirs = []
+        for f, key in zip(forces, keys):
             d = rel[key] if key in rel else _dir_vec(f.get("dir"))
-            d = d / (np.linalg.norm(d) or 1.0)
+            dirs.append(d / (np.linalg.norm(d) or 1.0))
+        # 方块 bw×bh 随斜面转 a：露出边框的那段 ∝ mag；压力 into 从接触点出发，不加边距
+        lengths = _body_force_lengths(forces, dirs, L, bw / 2, bh / 2, rot=a,
+                                      edge_ok=[k != "into" for k in keys])
+        for f, key, d, ln in zip(forces, keys, dirs, lengths):
             start = foot if key == "into" else center
             color = th.get(str(f.get("tone") or "key"), th["key"])
-            arrow = Arrow(start, start + d * L, color=color, buff=0, stroke_width=5)
+            arrow = Arrow(start, start + d * ln, color=color, buff=0, stroke_width=5,
+                          max_tip_length_to_length_ratio=0.35)
             unit = VGroup(arrow)
             label = str(f.get("label") or f.get("name") or "")
             if label:
@@ -2032,6 +2494,7 @@ class Explainer(Scene):
         "compare": "_v_compare",
         "graph_vt": "_v_graph_vt",
         "figure": "_v_figure",
+        "derivation": "_v_derivation",
     }
 
     # ---------------- 镜头装配 ----------------
@@ -2145,6 +2608,16 @@ class Explainer(Scene):
         for m in mobs or ():
             kind = getattr(m, "_kind", "")
             tag = getattr(m, "_reveal_fx", None) or self._first_fx_in(m)
+            # #79-B：推导步的代入动效——代入值从上方飞入目标字母并落定。
+            # 目标字母在装配时设为透明，这里先让飞入副本落位，再把本体点亮。
+            fly = getattr(m, "_derivation_fly", None)
+            if fly:
+                for val, target, color in fly:
+                    src = rich(val, 22, color)
+                    src.next_to(target, UP, buff=0.7).shift(LEFT * 0.8)
+                    fx.append(TransformFromCopy(src, target))
+                    fx.append(target.animate.set_opacity(1))
+                continue
             if tag == "wiggle":
                 fx.append(Wiggle(m, scale_value=1.05, n_wiggles=3))
             elif tag == "flash":

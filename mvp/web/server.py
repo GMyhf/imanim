@@ -60,9 +60,9 @@ GENERATE_DISABLED_MSG = (
     "本空间提供已渲染成片的画廊、分镜脚本与全部技术文档。")
 
 # 并发上限：generate/improve 都会连发 claude-opus-5-5（K0 起草 + A3 分镜），同时跑多条会把
-# 同一个网关打到上游 120s 内回不完（Cloudflare 524）。这里按在跑任务数拦一道，宁可让新任务
-# 排队失败也不让用户自伤式并发。regenerate 只走 TTS+渲染、不打 LLM 文案模型，不占这个名额。
-MAX_LLM_JOBS = int(os.environ.get("QX_MAX_LLM_JOBS", "2"))
+# 同一个网关打满。超出上限的任务进 FIFO 队列，名额空出来自动起跑，不拒绝用户。
+# regenerate 只走 TTS+渲染、不打 LLM 文案模型，不占这个名额。
+MAX_LLM_JOBS = max(1, int(os.environ.get("QX_MAX_LLM_JOBS", "3")))
 
 # 复用管线的输入契约层做「单一真源」校验：知识点检索走 knowledge.load(subject, topic, grade)（带学段过滤），
 # Brief 校验走 Brief.validate()（返回错误清单而非抛异常，__post_init__ 会把字符串数字归一化）。
@@ -81,7 +81,7 @@ QUALITIES = [("draft", "480p 草稿（约 30s，演示用）"), ("hd", "720p（�
              ("fullhd", "1080p 正式（约 100s）")]
 STAGE_LABELS = {"retrieve": "检索知识点库", "draft": "起草知识点（库外）", "storyboard": "生成分镜", "narration": "配音合成",
                 "review": "静态监督检查", "render": "画面渲染", "mux": "音幕合成",
-                "done": "已完成", "failed": "失败", "queued": "排队中"}
+                "done": "已完成", "failed": "失败", "queued": "排队中", "starting": "启动中"}
 
 MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
         ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -99,12 +99,29 @@ def _llm_busy() -> int:
                if j.get("kind") in ("generate", "improve") and j.get("state") == "running")
 
 
-def _check_llm_slots() -> None:
-    busy = _llm_busy()
-    if busy >= MAX_LLM_JOBS:
-        raise ValueError(
-            f"已有 {busy} 个生成/改进任务在跑（上限 {MAX_LLM_JOBS}），并发会把模型网关打到超时；"
-            "请等它们完成后再发新的")
+def _queued() -> list[dict]:
+    return sorted((j for j in _jobs.values() if j.get("state") == "queued"), key=lambda j: j["created"])
+
+
+def dispatch() -> None:
+    """名额有空就按提交顺序起排队任务。超出上限的任务只排队、不拒绝。"""
+    while True:
+        with _lock:
+            q = _queued()
+            if not q or _llm_busy() >= MAX_LLM_JOBS:
+                return
+            j = q[0]
+            j.update(state="running", started=time.time())
+            persist(j["id"])
+            job_id, argv = j["id"], list(j["argv"])
+        spawn(job_id, argv, JOBS_DIR / job_id)
+
+
+def _enqueue(job: dict, argv: list[str]) -> None:
+    with _lock:
+        _jobs[job["id"]] = {**job, "state": "queued", "argv": argv}
+        persist(job["id"])
+    dispatch()
 
 
 # --------------------------------------------------------------------------- 知识点库
@@ -283,6 +300,7 @@ def spawn(job_id: str, argv: list[str], job_dir: Path) -> None:
     except OSError as e:  # 起进程就失败
         with _lock:
             _jobs[job_id].update(state="failed", error=f"子进程启动失败：{e}", finished=time.time())
+            persist(job_id)
         return
 
     def watch() -> None:
@@ -307,6 +325,7 @@ def spawn(job_id: str, argv: list[str], job_dir: Path) -> None:
                     err = (job_dir / "runner.log").read_text(encoding="utf-8", errors="replace")[-1500:]
                 j.update(state="failed", finished=time.time(), error=err or f"子进程退出码 {rc}", rc=rc)
             persist(job_id)
+        dispatch()
 
     threading.Thread(target=watch, daemon=True).start()
 
@@ -326,13 +345,10 @@ def start_generate(brief: dict, quality: str) -> str:
     job_dir = JOBS_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     (job_dir / "brief.json").write_text(json.dumps(brief, ensure_ascii=False, indent=2), encoding="utf-8")
-    with _lock:
-        _check_llm_slots()
-        _jobs[job_id] = {"id": job_id, "kind": "generate", "key": f"job:{job_id}",
-                         "state": "running", "created": time.time(), "brief": brief, "quality": quality}
-        persist(job_id)
-    spawn(job_id, [PY, str(RUNNER), "--mode", "generate", "--job-dir", str(job_dir),
-                   "--brief-file", str(job_dir / "brief.json"), "--quality", quality], job_dir)
+    _enqueue({"id": job_id, "kind": "generate", "key": f"job:{job_id}",
+              "created": time.time(), "brief": brief, "quality": quality},
+             [PY, str(RUNNER), "--mode", "generate", "--job-dir", str(job_dir),
+              "--brief-file", str(job_dir / "brief.json"), "--quality", quality])
     return job_id
 
 
@@ -388,15 +404,12 @@ def start_improve(source_key: str, instruction: str, quality: str) -> str:
     plan_file = job_dir / "plan.json"
     plan_file.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     (job_dir / "instruction.txt").write_text(instruction, encoding="utf-8")
-    with _lock:
-        _check_llm_slots()
-        _jobs[job_id] = {"id": job_id, "kind": "improve", "key": f"job:{job_id}", "state": "running",
-                         "created": time.time(), "source_key": source_key, "quality": quality,
-                         "brief": plan.get("brief", {}), "instruction": instruction}
-        persist(job_id)
-    spawn(job_id, [PY, str(RUNNER), "--mode", "improve", "--job-dir", str(job_dir),
-                   "--plan-file", str(plan_file), "--instruction-file", str(job_dir / "instruction.txt"),
-                   "--quality", quality, "--source-key", source_key], job_dir)
+    _enqueue({"id": job_id, "kind": "improve", "key": f"job:{job_id}",
+              "created": time.time(), "source_key": source_key, "quality": quality,
+              "brief": plan.get("brief", {}), "instruction": instruction},
+             [PY, str(RUNNER), "--mode", "improve", "--job-dir", str(job_dir),
+              "--plan-file", str(plan_file), "--instruction-file", str(job_dir / "instruction.txt"),
+              "--quality", quality, "--source-key", source_key])
     return job_id
 
 
@@ -404,6 +417,7 @@ def status(job_id: str) -> dict | None:
     with _lock:
         j = _jobs.get(job_id)
         j = dict(j) if j else None
+        ahead = next((i for i, q in enumerate(_queued()) if q["id"] == job_id), None)
     if j is None:
         return None
     job_dir = JOBS_DIR / job_id
@@ -415,19 +429,21 @@ def status(job_id: str) -> dict | None:
         secs = round(s["ended"] - s["started"], 1) if s.get("ended") else None
         stages.append({"key": s["key"], "label": s.get("label") or STAGE_LABELS.get(s["key"], s["key"]),
                        "status": "done" if s.get("ended") else "running", "seconds": secs})
-    known = [k for k in STAGE_LABELS if k not in ("done", "failed", "queued")]
+    known = [k for k in STAGE_LABELS if k not in ("done", "failed", "queued", "starting")]
     started_keys = {s["key"] for s in stages}
     for k in known:
         if k not in started_keys:
             stages.append({"key": k, "label": STAGE_LABELS[k], "status": "pending", "seconds": None})
     stage = prog.get("stage") or ("done" if j["state"] == "done" else
-                                  "failed" if j["state"] == "failed" else "queued")
+                                  "failed" if j["state"] == "failed" else
+                                  "starting" if j["state"] == "running" else "queued")
     out = {"job": job_id, "key": j["key"], "kind": j["kind"], "brief": j.get("brief"),
            "state": j["state"], "stage": stage, "stage_label": STAGE_LABELS.get(stage, stage),
            "elapsed": round(elapsed, 1), "stages": stages, "error": j.get("error"),
            "created": j["created"]}
     if j["state"] == "queued":
-        out["stage_label"] = "排队中"
+        out["queue_ahead"] = ahead or 0
+        out["stage_label"] = f"排队中（前面还有 {ahead} 个）" if ahead else "排队中（下一个就是你）"
     rd = job_dir / "run"
     if not rd.is_dir():   # jobs/ 被手工清理过：状态照给，产物部分留空，别让接口 500
         return out
@@ -767,7 +783,7 @@ class Handler(BaseHTTPRequestHandler):
             job_id = start_generate(brief_dict, quality)
         except ValueError as e:  # 只有 GENERATE_DISABLED 会走到这里
             return self.send_json({"error": str(e), "findings": [], "candidates": []}, 409)
-        self.send_json({"job": job_id, "key": f"job:{job_id}", "state": "running",
+        self.send_json({"job": job_id, "key": f"job:{job_id}", "state": _jobs.get(job_id, {}).get("state", "running"),
                         "brief": brief_dict, "knowledge": hit,
                         "draft": hit is None, "quality": quality})
 
@@ -802,7 +818,8 @@ class Handler(BaseHTTPRequestHandler):
             job_id = start_improve(source, instruction, quality)
         except (ValueError, TypeError) as e:
             return self.send_json({"error": str(e)}, 400)
-        self.send_json({"job": job_id, "key": f"job:{job_id}", "state": "running", "source_key": source})
+        self.send_json({"job": job_id, "key": f"job:{job_id}", "state": _jobs.get(job_id, {}).get("state", "running"),
+                        "source_key": source})
 
 
     def api_feedback(self):
@@ -821,6 +838,11 @@ def warm_cache() -> None:
         if j and j.get("id"):
             with _lock:
                 _jobs[j["id"]] = j
+                # 重启前在跑的任务子进程已随旧服务消失，不收尾就会永远占着并发名额
+                if j.get("state") == "running":
+                    j.update(state="failed", finished=time.time(),
+                             error="服务重启时该任务仍在运行，已中断；请重新发起")
+                    persist(j["id"])
 
 
 def main() -> int:
@@ -830,6 +852,7 @@ def main() -> int:
     a = ap.parse_args()
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     warm_cache()
+    dispatch()  # 重启前排着队的任务（argv 已落盘）接着跑
     if FEEDBACK_REPO:
         print(f"[feedback] 从远端恢复 {feedback_restore()} 条", flush=True)
     httpd = ThreadingHTTPServer((a.host, a.port), Handler)

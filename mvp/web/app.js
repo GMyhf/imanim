@@ -154,7 +154,9 @@ function startJob(jobId, kindLabel) {
   state.busy = true;
   setBusy(true);
   $("#progressCard").classList.remove("hidden");
-  $("#jobHint").textContent = `${kindLabel} · 任务 ${jobId} · 云端生成中，用时见下方计时`;
+  state.hint = `${kindLabel} · 任务 ${jobId} · 云端生成中，用时见下方计时`;
+  state.queued = false;
+  $("#jobHint").textContent = state.hint;
   $("#stageList").textContent = "";
   $("#stageBar").hidden = true;
   $("#stageBarFill").style.width = "0";
@@ -177,6 +179,9 @@ async function pollOnce() {
   } catch (e) { return; }
   if (d.error && !d.state) return finishJob(d.error);
   renderStages(d.stages || [], d.state);
+  if (d.state === "queued") $("#jobHint").textContent = `任务 ${state.job} · ${d.stage_label}，名额空出后自动开始`;
+  else if (state.queued) $("#jobHint").textContent = state.hint;
+  state.queued = d.state === "queued";
   $("#elapsedSec").textContent = String(Math.round(d.elapsed || 0));
   if (d.state === "done") return finishJob(null, d);
   if (d.state === "failed") return finishJob(d.error, d);

@@ -28,7 +28,7 @@ TIMING_SPEC = """【镜头与时长】
 - 标题里若写「三个」「两种」之类计数词，该镜屏上的清单条数必须与之相等。"""
 
 
-VISUALS_SPEC = """【visuals：只能用这 19 种 kind，props 结构如下】
+VISUALS_SPEC = """【visuals：只能用下列 22 种 kind，props 结构如下】
 - title      {"main": 字符串, "sub": 字符串}                                  仅用于开场
 - formula    {"expr": 非空字符串, "tex": 可选的 LaTeX 源码（有则渲染成 LaTeX，TeX 缺失时自动退回 expr）, "note": 字符串}                              公式用 Unicode 写（Δ、×、÷、²、₀ 不可用的上下标写成 v_0、x^2 记法，_ 或 ^ 后须紧跟字母数字或花括号）
 - compare    {"left": {"h": 小标题, "items": [..]}, "right": {"h": 小标题, "items": [..]}}
@@ -48,13 +48,15 @@ VISUALS_SPEC = """【visuals：只能用这 19 种 kind，props 结构如下】
 - stat_chart  {"type": "bar"|"hist"|"pie"|"scatter", "data": bar/hist/pie 为 [{"label","value"}]，scatter 为 [[x,y],...], "x_label", "y_label", "label": 可选}
 - mind_map    {"root": 中心词, "branches": [{"h": 分支名, "children": [最多4个子项]}] 最多6个分支, "label": 可选}  新主题引入时用
 - table       {"headers": [..], "rows": [[..],..] 最多7行, "at": 可选}   对比与关联
-- force_diagram {"object": "box"|"point", "label_in": 对象上标的字(如 m), "forces": [{"name": "G"/"N"/"F"/"f", "dir": "up"/"down"/"left"/"right"/"upleft"/"upright"/"downleft"/"downright" 或角度度数, "label": 完整标签如"重力 G", "tone": 可选}], "label": 可选}  受力分析：真实力箭头从对象中心沿方向画出，标签在箭头端，逐条揭示
+- force_diagram {"object": "box"|"point", "label_in": 对象上标的字(如 m), "forces": [{"name": "G"/"N"/"F"/"f", "dir": "up"/"down"/"left"/"right"/"upleft"/"upright"/"downleft"/"downright" 或角度度数, "label": 完整标签如"重力 G", "tone": 可选, "mag": 可选，力的相对大小（如 G=10,N=10,F=6,f=2），给则全给，箭头长度按比例}], "label": 可选}  受力分析：真实力箭头从对象中心沿方向画出，标签在箭头端，逐条揭示
 - field       {"mode": "region"|"wire"|"magnet", "current": wire 模式的电流方向 "in"|"out", "symbols": region 模式的 "cross"|"dot"|"both", "label": 可选}  场图示：垂直纸面向里画 ×、向外画 ·；通电导线截面按安培定则画环绕磁感线；条形磁铁 N→S 闭合磁感线
-- circuit     {"elements": [{"type": "battery"|"resistor"|"switch"|"bulb"|"ammeter"|"voltmeter", "label": 可选}], "label": 可选}  电路图（GB/T 4728 符号）：电池长线正极+短线负极、电阻矩形、开关断线、灯泡圆圈内×、电表圆圈内 A/V，导线横平竖直、连接点实心圆点
+- circuit     {"elements": [{"type": "battery"|"resistor"|"switch"|"bulb"|"ammeter"|"voltmeter", "label": 可选, "across": 仅电压表可选，被测元件在 elements 中的下标（从0起）或其 label，须是非电表元件；电压表并联在它两端，不给则测相邻元件}], "label": 可选}  电路图（GB/T 4728 符号）：电池长线正极+短线负极、电阻矩形、开关断线、灯泡圆圈内×、电表圆圈内 A/V，导线横平竖直、连接点实心圆点
 - optics      {"mode": "mirror"|"refract"|"lens"|"image", "angle": 入射角度数, "n": 折射模式介质的折射率(默认1.5), "u": lens 模式物距/焦距(1.5~3，默认2), "show_normal": true, "label": 可选}  光路图：法线画虚线、光线画实线带箭头；镜面画线段+背面斜线；折射画界面+光线折向法线；lens=凸透镜成像（平行光过焦点+过光心直线，交出倒立实像）；image=平面镜成像（物像对称，反向延长线与虚像画虚线）；lens/image 按 物→光线→像 三步揭示
-- incline {"angle": 倾角度数(10~60), "label_in": 滑块上标的字, "forces": [{"name", "dir": "down"/"normal"(垂直斜面向外)/"into"(垂直斜面向里，压力)/"along_up"/"along_down" 或方向词/角度, "label", "tone": 可选}], "label": 可选}  斜面滑块受力：斜面+贴面方块+力箭头逐条揭示，倾角只标 θ 不画弧线
+- incline {"angle": 倾角度数(10~60), "label_in": 滑块上标的字, "forces": [{"name", "dir": "down"/"normal"(垂直斜面向外)/"into"(垂直斜面向里，压力)/"along_up"/"along_down" 或方向词/角度, "label", "tone": 可选, "mag": 可选，力的相对大小（如 G=10,N=10,F=6,f=2），给则全给，箭头长度按比例}], "label": 可选}  斜面滑块受力：斜面+贴面方块+力箭头逐条揭示，倾角只标 θ 不画弧线
 - trajectory {"mode": "projectile"(抛体，angle=0 为平抛)/"circle"(匀速圆周)/"cycloid"(摆线：配速法、叠加场中静止释放=匀速直线+匀速圆周), "angle": 抛射角度数, "arches": cycloid 拱数(1~3，默认2), "n": 位置点数(3~9), "show_velocity": 是否画速度箭头, "v_label": 可选, "label": 可选}  频闪式运动轨迹：虚线轨迹+等时间间隔位置点+切向速度箭头，逐点揭示
-- 【画面具象铁律】禁止「口播讲过程、画面放静图」：**每个镜头**至少一个图形类版式（figure / graph_vt / axis_graph / particle_box / microstate / energy_dist / stat_chart / mind_map / force_diagram / field / circuit / optics / incline / trajectory），且图形要直观演出口播正在讲的那个概念/对象/过程——概念动词（配、选、切、换、加、拆、分解、取代、充电）要用元素的替代、移动、变换演出来。整镜只有文字版式（steps / summary / callout）不放行；一屏条目不超过 6 条。
+- derivation {"steps": [{"text": "F = BIL", "note": 可选一步的说明, "sub": 可选 {"I": "BLv/R"}} 最多8步], "symbols": {"F": "安培力", "B": "磁感应强度", ...}, "label": 可选, "at": 可选}  逐步等式推导：每步一行，sub 让代入值飞入目标字母；同一字母全程同色，底部图例标出物理含义
+- 【推导必须用 derivation】凡口播出现「由…得…」「代入…」「化简得…」「联立…」的公式推导，必须用 derivation 逐步呈现；不许用 formula 一屏静态公式，也不许用 steps 只列文字结论。每步只做一次变形，sub 只写本步真正代入的字母，且该字母必须出现在本步 text 里。
+- 【画面具象铁律】禁止「口播讲过程、画面放静图」：**每个镜头**至少一个图形类版式（figure / graph_vt / axis_graph / particle_box / microstate / energy_dist / stat_chart / mind_map / force_diagram / field / circuit / optics / incline / trajectory / derivation），且图形要直观演出口播正在讲的那个概念/对象/过程——概念动词（配、选、切、换、加、拆、分解、取代、充电）要用元素的替代、移动、变换演出来。整镜只有文字版式（steps / summary / callout）不放行；一屏条目不超过 6 条。
 - 【必配分析图】凡涉及受力、运动、场、电路、光路，必须给物理图示（不用网格坐标图）：受力用 force_diagram（力箭头），斜面上的物体用 incline、抛体/圆周等运动过程用 trajectory（位置点+速度箭头）、场用 field（磁感线/×·）、电路用 circuit（元件符号）、光路用 optics（法线虚线+光线箭头）；物理题只有在讲「读图象/图象分析」（v-t 斜率、面积）时才用 graph_vt，讲概念/过程（加速度、牛顿定律、运动学）必须先给 force_diagram / incline / trajectory 之一；数学/化学的函数关系才用 graph_vt（含 cases 分情况）与 axis_graph（轨迹连成曲线）。分析图随口播逐步揭示（用 at / cases[].at 控制出现时机），不一次性摆满。
 - 【必分情况】凡题设含「不同初速度 / 不同方向 / 不同参数 / 不同对象 / 不同力」，必须分情况讨论：graph_vt 的 cases、axis_graph 的多条 curves，或 compare 左右栏，每种情况各自成图/成栏；口播点到哪一情况才揭示哪一情况。
 - 【注意事项单列】关键限定、易错点、使用条件（如「a≠0」「方向由题设决定」「必须先配出平衡速度」「周期与速度无关」）单独用 callout（tone="warn"）列一条，不埋在正文里。

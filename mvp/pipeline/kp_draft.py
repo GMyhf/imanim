@@ -21,7 +21,7 @@ from . import corpus, knowledge, llm_client, llm_prompts, review
 from .ir import ACCEPTABLE_RATE, NAME_MAX_SHARE, NATURAL_CPS, RATE_FACTOR, naming_narration, naming_shot_seconds
 
 # 与 render/scene.py 的 Scene.BUILDERS 同一份清单（tests/test_kp_draft.py 里做了比对，防漂移）。
-VISUAL_KINDS = ("axis_graph", "callout", "circuit", "compare", "energy_dist", "field", "figure",
+VISUAL_KINDS = ("axis_graph", "callout", "circuit", "compare", "derivation", "energy_dist", "field", "figure",
                 "force_diagram", "formula", "graph_vt", "incline", "microstate", "mind_map", "optics",
                 "particle_box", "stat_chart", "steps", "summary", "table", "title", "trajectory")
 

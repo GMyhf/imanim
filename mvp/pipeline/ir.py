@@ -18,11 +18,12 @@ GRADES = ("G8", "G9", "H1", "H2", "H3", "U1", "U2")
 STYLES = ("clean", "board")
 VISUAL_KINDS = ("title", "formula", "compare", "graph_vt", "figure", "steps", "summary", "callout",
                 "axis_graph", "particle_box", "microstate", "energy_dist", "stat_chart", "mind_map", "table",
-                "force_diagram", "field", "circuit", "optics", "incline", "trajectory")
+                "force_diagram", "field", "circuit", "optics", "incline", "trajectory", "derivation")
 # 以「画」为主的版式：整片至少要有一个（review.NO_FIGURE），讲具体对象的图都算。
+# derivation 也计入：它不是文字罗列，是带代换动画的推导过程呈现（#79-B，与 incline/trajectory 同理）。
 GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate", "energy_dist",
                  "stat_chart", "mind_map", "force_diagram", "field", "circuit", "optics",
-                 "incline", "trajectory")
+                 "incline", "trajectory", "derivation")
 
 # A3 分镜预算账本挂在 Plan.refs 末尾的标记（refs[0] 仍是教材出处，片尾卡只读第一条）。
 # 常量住在 ir：storyboard 写、review 读，任何一方都不该私有这份字段名。
