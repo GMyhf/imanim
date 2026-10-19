@@ -22,6 +22,9 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import ir, llm_client, knowledge
+from ..storyboard import MIN_SHOTS, max_shots_for  # 81-A1c：镜头密度单一真源在 storyboard（81-A1b 建），
+# flow 层不 import scene/manim，storyboard 只依赖 ir/review（纯标准库），无循环导入；
+# K0（kp_draft）/A3（storyboard_llm）已接入，V0 校验与 K1 派单 prompt 在此同步同一口径。
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]                      # D:\Dev\Project1
@@ -131,6 +134,7 @@ class Stage:
     deterministic: bool = False                 # True=bridge 直接执行（A4/R），不走网关
     max_tokens: int = 4000                      # 缺省 4000：抗 524（Spec 第 11 节第 2 条）
     segments: Optional[Callable[[RunCtx], list]] = None   # 524/截断时的分段 user 列表
+    parallel_segments: bool = False       # True=分段路径按段（按镜）ThreadPool 并行（81-F1，M1）；拼接仍按段号序
     stitch: str = "json"                        # 分段拼接策略：json=逐段抽 JSON 机械合并；text=原文拼接
     next_on_pass: object = "DONE"               # str 或 (state, ctx, obj) -> str
     next_on_fail: object = "BLOCKED"            # 同上
@@ -248,18 +252,22 @@ def validate_k2(text: str, ctx: RunCtx):
 
 def validate_v0(text: str, ctx: RunCtx):
     """V0 确定性校验，规则逐条抄自 Spec 第 8 节 V0 围栏块第 1/2 条：
-    4~10 镜；单镜 ≤25%；总时长 ≈ 目标（±20%）；must_say 逐字进某镜口播；forbidden 零出现；
+    镜头数下限 MIN_SHOTS、上限随目标时长伸缩（storyboard.max_shots_for，81-A1c 同步 81-A1b 口径；
+    时长读不出时 RunCtx.target_seconds 兜底 120s ⇒ 仍是旧上限 10）；单镜 ≤25%；总时长 ≈ 目标（±20%）；
+    must_say 逐字进某镜口播；forbidden 零出现；
     口播总字数 ≤ (秒数×NATURAL_CPS − 镜数×1.15s×NATURAL_CPS) 的 110%（宁少勿多，留抖动余量）。"""
     try:
         script = llm_client.extract_json(text)
     except llm_client.LLMError as e:
         return None, [f"输出不是合法 JSON：{e}"]
     errs: list[str] = []
-    shots = script.get("shots") if isinstance(script, dict) else None
-    if not isinstance(shots, list) or not (4 <= len(shots) <= 10):
-        n = len(shots) if isinstance(shots, list) else "?"
-        return script, [f"shots 必须是 4~10 镜的数组，实际 {n}"]
+    # 81-A1c：镜数上限取自 storyboard 单一真源——旧「4~10」硬校验会把 1200s 长片（可到 20 镜）打回。
     target = ctx.target_seconds()
+    cap = max_shots_for(target)
+    shots = script.get("shots") if isinstance(script, dict) else None
+    if not isinstance(shots, list) or not (MIN_SHOTS <= len(shots) <= cap):
+        n = len(shots) if isinstance(shots, list) else "?"
+        return script, [f"shots 必须是 {MIN_SHOTS}~{cap} 镜的数组，实际 {n}"]
     total, narr_all = 0.0, ""
     for i, sh in enumerate(shots):
         for k in ("shot_no", "seconds_budget", "narration"):
@@ -454,7 +462,7 @@ def segments_k1(ctx: RunCtx) -> list:
                    "并给出 \"sequence\": []（空数组占位）。只输出这个 JSON 对象。")
     seg2 = (f"# K1 分段输出第 2 段/共 2 段（承接第 1 段同一条目）\n"
             f"为知识点「{b.get('topic')}」（{b.get('subject')}/{b.get('grade')}）输出分镜序列："
-            f"只输出一个 JSON 对象 {{\"sequence\":[全部镜头]}}，4~10 镜，每镜含 "
+            f"只输出一个 JSON 对象 {{\"sequence\":[全部镜头]}}，{MIN_SHOTS}~{max_shots_for(ctx.target_seconds())} 镜，每镜含 "
             f"title/seconds/narration/emphasis/visuals；各镜 seconds 之和落在总时长 "
             f"{ctx.target_seconds():g}s 的 ±10%。事实口径与第 1 段同一资料一致。只输出 JSON。")
     return [seg1, seg2]
@@ -475,7 +483,7 @@ def build_k1(ctx: RunCtx) -> str:
             f"## 一、任务说明\n"
             f"- 为 {b.get('subject')} / {b.get('grade')} 学段撰写知识点「{b.get('topic')}」的 KP 条目 JSON。\n"
             f"- id 固定为 `kp.{b.get('subject')}.{kp_id.split('/')[-1]}`；全片总时长 {ctx.target_seconds():g}s，"
-            f"分镜 sequence 4~10 镜（各镜 seconds 之和落在总时长 ±10%）。\n"
+            f"分镜 sequence {MIN_SHOTS}~{max_shots_for(ctx.target_seconds())} 镜（各镜 seconds 之和落在总时长 ±10%）。\n"
             f"- 事实一律以下方「资料摘录」为准；摘录里没有的数字、结论、人名、年份一律不写。\n"
             f"- 限定词纪律：原文弱表述（倾向/可能/generally）不得强化为绝对断言。\n"
             f"- 翻资料时同步登记教材插图清单 figure_refs（Spec v2 K1 第 7 条，每条 ≤6 张，caption 逐字抄）。\n\n"
@@ -779,6 +787,7 @@ _reg(Stage("V0", "V0", "V0_SYSTEM.md", build_user=build_v0, segments=segments_v0
            task_line="视觉-first 编剧：先定画面叙事再配口播，产出 visual_script.json"))
 
 _reg(Stage("M1", "M1", "M1_SYSTEM.md", build_user=build_m1, segments=segments_m1,
+           parallel_segments=True,      # 81-F1：分段路径按镜并行（默认 3，env QX_FLOW_M1_WORKERS 覆盖）
            outputs=["modelspec/"], validate=validate_m1, save_output=save_m1,
            next_on_pass="M2", next_on_fail="BLOCKED",
            task_line="把画面叙事翻译成可被确定性引擎执行的 ModelSpec"))
@@ -792,7 +801,7 @@ _reg(Stage("M2", "M2", "M2_SYSTEM.md", build_user=build_m2, segments=segments_m2
 _reg(Stage("A4", "A4", "", deterministic=True, validate=validate_a4, save_output=save_a4,
            outputs=["review.json"],
            next_on_pass="R", next_on_fail=route_a4_fail,
-           task_line="确定性闸门：review.check（旧 18 码）+ physics 闸门（PHYS_*，R6 接入）"))
+           task_line="确定性闸门：review.check（旧 18 码）+ flow 层 physics_gates PHYS_* 六闸门（modelspec/ 输入，违规按码路由 M1/M2）"))
 
 _reg(Stage("R", "R", "", deterministic=True,
            outputs=["final/"],

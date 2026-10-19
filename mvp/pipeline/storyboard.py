@@ -22,6 +22,23 @@ _MIN_WINDOW_CS = int(round(max(0.0, MIN_SHOT_SECONDS - SHOT_HEAD - SHOT_TAIL) * 
 _SAFE_CPS = FAST_CPS * 0.97
 _STRETCH = 1.09  # 留 1% 给 A6 实测抖动，不顶到 TARGET 闸门的 10% 线上
 
+# ── 分镜密度（81-A1b，单一真源）──────────────────────────────────────────
+# 镜头数上限随目标时长伸缩；kp_draft（K0 起草自查）与 storyboard_llm（A3 输出校验）都从本模块
+# 取同一份口径，不再各写一份 `MIN_SHOTS, MAX_SHOTS = 4, 10`，避免双份常量漂移。推演：
+#   · 旧上限 10 镜是 ≤600s 短片的口径，MIN_SHOTS=4 下限不动；
+#   · 长片按 llm_prompts A3_HEAD【长片指引】「每 60~90 秒一个概念台阶」组织，取台阶下限 60s
+#     作「合理单镜秒数」——1200s 长片最多 1200/60 = 20 镜，平均每镜 ≥60s，正好一镜一台阶；
+#   · 60~600s 各档 ceil(t/60) ≤ 10，max(10, ·) 恒等于 10 ⇒ 短片维持旧上限，不被误放宽。
+# 公式：max_shots_for(t) = max(MAX_SHOTS_BASE, ceil(t / SHOT_STEP_SECONDS))
+MIN_SHOTS = 4              # 下限，旧口径不动
+MAX_SHOTS_BASE = 10        # 旧上限，≤600s 时长档仍然封在这里
+SHOT_STEP_SECONDS = 60.0   # 概念台阶的最短秒数（A3_HEAD【长片指引】60~90s 的下限）
+
+
+def max_shots_for(target_seconds) -> int:
+    """给定目标时长的镜头数上限（含端点）。脏数值走 ir.num 兜底，读不出时长就退回旧上限 10。"""
+    return max(MAX_SHOTS_BASE, ceil(num(target_seconds) / SHOT_STEP_SECONDS))
+
 # 预算账本随 plan.json 落盘（refs 是 Plan 里唯一可自由结构化的字段），前端与 A4 都能读到。
 # 字段名常量住在 ir.BUDGET_REF_KIND —— review 要读它，而 review 不能 import storyboard（循环导入）。
 

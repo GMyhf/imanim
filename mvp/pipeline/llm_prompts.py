@@ -21,16 +21,19 @@ A1_SYSTEM = """你是「澄象」知识讲解视频系统的需求分析员（A1
 
 
 # A3（改编已入库知识点）与 K0（库外知识点起草）共用下面两块约束，避免两份提示词的口径漂移。
+# 【镜头数】口径与 storyboard.max_shots_for 单一真源一致（81-A1b/81-A1c）：下限 MIN_SHOTS=4，
+# 上限 max(10, ceil(秒数/60))——60~600s 仍封 10，长片按概念台阶（A3_HEAD【长片指引】60~90s）放宽。
+# 这里是散文表述，改公式时同步改这两句。
 TIMING_SPEC = """【镜头与时长】
-- 4~10 个镜头，每镜 title 简短；seconds 只是该镜相对权重（真实秒数由系统按口播字数重新分配），请按口播字数的比例给。
+- 镜头数 4 个起步，上限随目标时长伸缩：约每 60 秒一个镜头，60~600 秒最多 10 个，更长（长片）按秒数/60 成比例放宽，如 1200 秒最多 20 个；每镜 title 简短；seconds 只是该镜相对权重（真实秒数由系统按口播字数重新分配），请按口播字数的比例给。
 - 口播是给学生听的口语：短句、不翻译腔、不念稿；平均语速不超过约 {{CPS}} 字/秒。整片口播总字数 ≈ 目标秒数 × {{CPS}} − 镜头数 × 1.15 秒对应的字数；超了就精简，宁少勿多。
 - 任何单镜不得超过全片 25%。
 - 标题里若写「三个」「两种」之类计数词，该镜屏上的清单条数必须与之相等。"""
 
 
-VISUALS_SPEC = """【visuals：只能用下列 22 种 kind，props 结构如下】
+VISUALS_SPEC = """【visuals：只能用下列 23 种 kind，props 结构如下】
 - title      {"main": 字符串, "sub": 字符串}                                  仅用于开场
-- formula    {"expr": 非空字符串, "tex": 可选的 LaTeX 源码（有则渲染成 LaTeX，TeX 缺失时自动退回 expr）, "note": 字符串}                              公式用 Unicode 写（Δ、×、÷、²、₀ 不可用的上下标写成 v_0、x^2 记法，_ 或 ^ 后须紧跟字母数字或花括号）
+- formula    {"expr": 非空字符串, "tex": 可选的 LaTeX 源码（有则渲染成 LaTeX，TeX 缺失时自动退回 expr）, "note": 字符串}                              公式用 Unicode 写（Δ、×、÷、²、₀ 不可用的上下标写成 v_0、x^2 记法，_ 或 ^ 后须紧跟字母数字或花括号）；化学式优先写 Unicode 上下标（H₂SO₄、Cu²⁺、SO₄²⁻）——单元素/带电荷的离子必须用 Unicode 写法，"Cu2+" 这类 ASCII 写法渲染层故意不自动转换（防误伤物理标号）
 - compare    {"left": {"h": 小标题, "items": [..]}, "right": {"h": 小标题, "items": [..]}}
 - graph_vt   {"points": [[x,y],...至少2点], "x_label": 字符串, "y_label": 字符串, "label": 字符串, "slope_note": 可选, "dots": 可选bool, "area": 可选bool,
               "cases": 可选 [{"points": [[x,y],..至少2点], "label": 字符串, "at": 字符串, "tone": "accent"}]}
@@ -48,15 +51,16 @@ VISUALS_SPEC = """【visuals：只能用下列 22 种 kind，props 结构如下�
 - stat_chart  {"type": "bar"|"hist"|"pie"|"scatter", "data": bar/hist/pie 为 [{"label","value"}]，scatter 为 [[x,y],...], "x_label", "y_label", "label": 可选}
 - mind_map    {"root": 中心词, "branches": [{"h": 分支名, "children": [最多4个子项]}] 最多6个分支, "label": 可选}  新主题引入时用
 - table       {"headers": [..], "rows": [[..],..] 最多7行, "at": 可选}   对比与关联
-- force_diagram {"object": "box"|"point", "label_in": 对象上标的字(如 m), "forces": [{"name": "G"/"N"/"F"/"f", "dir": "up"/"down"/"left"/"right"/"upleft"/"upright"/"downleft"/"downright" 或角度度数, "label": 完整标签如"重力 G", "tone": 可选, "mag": 可选，力的相对大小（如 G=10,N=10,F=6,f=2），给则全给，箭头长度按比例}], "label": 可选}  受力分析：真实力箭头从对象中心沿方向画出，标签在箭头端，逐条揭示
+- force_diagram {"object": "box"|"point", "label_in": 对象上标的字(如 m), "forces": [{"name": "G"/"N"/"F"/"f", "dir": "up"/"down"/"left"/"right"/"upleft"/"upright"/"downleft"/"downright" 或角度度数, "label": 完整标签如"重力 G", "tone": 可选, "mag": 可选，力的相对大小（如 G=10,N=10,F=6,f=2），给则全给，箭头长度按比例}], "surface": 可选支承面 "ground"(下方支持面)|"wall_left"(左竖墙)|"wall_right"(右竖墙)，面线+表面刻线+接触点高亮（如"物体放在地面上"）, "synthesize": 可选bool，≥2 力画平行四边形合成（分力实箭+平移边虚线+对角线合力加粗；不足 2 力不合成）, "decompose": 可选bool + "axis_deg": 可选分解x轴倾角度数（斜面上常用 30），正交分解（F 实箭+两轴虚线+投影分量箭）, "result_label"/"x_label"/"y_label"/"angle_label": 可选，合力/分量/夹角标注文字（默认"合力"/"F_x"/"F_y"/"θ"）, "L": 可选主箭长(0.8~2.2，默认1.5), "label": 可选}  受力分析：真实力箭头从对象中心沿方向画出，标签在箭头端，逐条揭示
 - field       {"mode": "region"|"wire"|"magnet", "current": wire 模式的电流方向 "in"|"out", "symbols": region 模式的 "cross"|"dot"|"both", "label": 可选}  场图示：垂直纸面向里画 ×、向外画 ·；通电导线截面按安培定则画环绕磁感线；条形磁铁 N→S 闭合磁感线
-- circuit     {"elements": [{"type": "battery"|"resistor"|"switch"|"bulb"|"ammeter"|"voltmeter", "label": 可选, "across": 仅电压表可选，被测元件在 elements 中的下标（从0起）或其 label，须是非电表元件；电压表并联在它两端，不给则测相邻元件}], "label": 可选}  电路图（GB/T 4728 符号）：电池长线正极+短线负极、电阻矩形、开关断线、灯泡圆圈内×、电表圆圈内 A/V，导线横平竖直、连接点实心圆点
-- optics      {"mode": "mirror"|"refract"|"lens"|"image", "angle": 入射角度数, "n": 折射模式介质的折射率(默认1.5), "u": lens 模式物距/焦距(1.5~3，默认2), "show_normal": true, "label": 可选}  光路图：法线画虚线、光线画实线带箭头；镜面画线段+背面斜线；折射画界面+光线折向法线；lens=凸透镜成像（平行光过焦点+过光心直线，交出倒立实像）；image=平面镜成像（物像对称，反向延长线与虚像画虚线）；lens/image 按 物→光线→像 三步揭示
-- incline {"angle": 倾角度数(10~60), "label_in": 滑块上标的字, "forces": [{"name", "dir": "down"/"normal"(垂直斜面向外)/"into"(垂直斜面向里，压力)/"along_up"/"along_down" 或方向词/角度, "label", "tone": 可选, "mag": 可选，力的相对大小（如 G=10,N=10,F=6,f=2），给则全给，箭头长度按比例}], "label": 可选}  斜面滑块受力：斜面+贴面方块+力箭头逐条揭示，倾角只标 θ 不画弧线
+- circuit     {"elements": [{"type": "battery"|"resistor"|"switch"|"bulb"|"capacitor"|"inductor"|"rheostat"|"ammeter"|"voltmeter", "label": 可选, "closed": 仅开关可选（true=闭合导通、缺省=断开态）, "reading"/"full_scale": 仅电流表可选——读数与量程满偏值（如 {"reading": 0.7, "full_scale": 1.0}），指针偏转 ∝ reading/full_scale、可为负（反向）；电压表读数请直接写进 label 文字, "across": 仅电压表可选，被测元件在 elements 中的下标（从0起）或其 label，须是非电表元件；电压表并联在它两端，不给则测相邻元件}], "label": 可选}  电路图（GB/T 4728 符号）：电池长线正极+短线负极、电阻矩形、开关断线、灯泡圆圈内×、电容双板断口、电感半圆线圈、变阻器框+斜箭头滑片、电表圆圈内 A/V，导线横平竖直、连接点实心圆点
+- optics      {"mode": "mirror"|"refract"|"lens"|"image", "angle": 入射角度数, "n": 折射模式介质的折射率(默认1.5), "u": lens 模式物距（有限正数，默认 2 倍焦距；凸透镜 u<f 自动转放大镜正立虚像、凹透镜恒正立缩小虚像）, "f": 可选焦距——实正虚负口径：f>0 凸透镜、f<0 凹透镜（默认 1.0；"lens": "concave" 与 f<0 等价，二选一表达）, "show_normal": true, "label": 可选}  光路图：法线画虚线、光线画实线带箭头；镜面画线段+背面斜线；折射画界面+光线折向法线；lens=透镜成像（三条特殊光线+焦点F/2F标在轴上，实像倒立、虚像正立画虚线）；image=平面镜成像（物像对称，反向延长线与虚像画虚线）；lens/image 按 物→光线→像 三步揭示
+- incline {"angle": 倾角度数(10~60), "label_in": 滑块上标的字, "forces": [{"name", "dir": "down"/"normal"(垂直斜面向外)/"into"(垂直斜面向里，压力)/"along_up"/"along_down" 或方向词/角度, "label", "tone": 可选, "mag": 可选，力的相对大小（如 G=10,N=10,F=6,f=2），给则全给，箭头长度按比例}], "vt": 可选bool（true=右侧 v-t 图与滑块频闪逐批同步联动，a=g(sinθ−μcosθ) 全公式驱动）, "mu": 可选动摩擦系数(0~1，默认0；μ≥tanθ 自动画"不滑"静止分支), "g": 可选重力加速度(正数，默认9.8), "T": 可选数学轴总时长秒(正数，默认6), "n": 可选频闪批次数(3~8 整数，默认6；=揭示单元数=建议字幕条数), "show_velocity": 可选bool(默认true，影块速度箭), "hatch_face"/"contact": 可选bool（斜面表面刻线/物块脚点接触高亮，vt 模式恒带）, "vt_label"/"vt_x_label"/"vt_y_label": 可选图线角标与轴名（默认 "a = … m·s⁻²"/"t/s"/"v/(m·s⁻¹)"）, "at": 可选(长度=n), "label": 可选}  斜面滑块受力：斜面+贴面方块+力箭头逐条揭示，倾角只标 θ 不画弧线
 - trajectory {"mode": "projectile"(抛体，angle=0 为平抛)/"circle"(匀速圆周)/"cycloid"(摆线：配速法、叠加场中静止释放=匀速直线+匀速圆周), "angle": 抛射角度数, "arches": cycloid 拱数(1~3，默认2), "n": 位置点数(3~9), "show_velocity": 是否画速度箭头, "v_label": 可选, "label": 可选}  频闪式运动轨迹：虚线轨迹+等时间间隔位置点+切向速度箭头，逐点揭示
 - derivation {"steps": [{"text": "F = BIL", "note": 可选一步的说明, "sub": 可选 {"I": "BLv/R"}} 最多8步], "symbols": {"F": "安培力", "B": "磁感应强度", ...}, "label": 可选, "at": 可选}  逐步等式推导：每步一行，sub 让代入值飞入目标字母；同一字母全程同色，底部图例标出物理含义
+- mechanism {"species": [{"text": "OH⁻", "pos": [x,y], 可选 "tone"/"attach": 箭下标}], "bonds": [{"from": [x,y], "to": [x,y], 可选 "order": 1|2|3, 可选 "kind": "break"|"form", 可选 "attach"}], "lps": [{"pos": [x,y], 可选 "attach"}], "arrows": [{"from": [x,y], "to": [x,y], 可选 "bulge", 可选 "type": "cov"|"hom", 可选 "label", 可选 "tone"}], "at": 可选(长度=箭头数), "label": 可选}  有机机理推电子箭头图：弯箭头尾=电子源(孤对/键)、头=电子汇；cov=电子对(全头)/hom=单电子(鱼钩)；attach 的物种随该箭揭示
 - 【推导必须用 derivation】凡口播出现「由…得…」「代入…」「化简得…」「联立…」的公式推导，必须用 derivation 逐步呈现；不许用 formula 一屏静态公式，也不许用 steps 只列文字结论。每步只做一次变形，sub 只写本步真正代入的字母，且该字母必须出现在本步 text 里。
-- 【画面具象铁律】禁止「口播讲过程、画面放静图」：**每个镜头**至少一个图形类版式（figure / graph_vt / axis_graph / particle_box / microstate / energy_dist / stat_chart / mind_map / force_diagram / field / circuit / optics / incline / trajectory / derivation），且图形要直观演出口播正在讲的那个概念/对象/过程——概念动词（配、选、切、换、加、拆、分解、取代、充电）要用元素的替代、移动、变换演出来。整镜只有文字版式（steps / summary / callout）不放行；一屏条目不超过 6 条。
+- 【画面具象铁律】禁止「口播讲过程、画面放静图」：**每个镜头**至少一个图形类版式（figure / graph_vt / axis_graph / particle_box / microstate / energy_dist / stat_chart / mind_map / force_diagram / field / circuit / optics / incline / trajectory / derivation / mechanism），且图形要直观演出口播正在讲的那个概念/对象/过程——概念动词（配、选、切、换、加、拆、分解、取代、充电）要用元素的替代、移动、变换演出来。整镜只有文字版式（steps / summary / callout）不放行；一屏条目不超过 6 条。机理/电子转移类知识点（取代、加成、均裂、SN2…）必须出 mechanism（弯箭头=电子的移动，不得用文字卡代替），且**每支弯箭头配一条口播**（at 长度=箭头数，一箭一句）。
 - 【必配分析图】凡涉及受力、运动、场、电路、光路，必须给物理图示（不用网格坐标图）：受力用 force_diagram（力箭头），斜面上的物体用 incline、抛体/圆周等运动过程用 trajectory（位置点+速度箭头）、场用 field（磁感线/×·）、电路用 circuit（元件符号）、光路用 optics（法线虚线+光线箭头）；物理题只有在讲「读图象/图象分析」（v-t 斜率、面积）时才用 graph_vt，讲概念/过程（加速度、牛顿定律、运动学）必须先给 force_diagram / incline / trajectory 之一；数学/化学的函数关系才用 graph_vt（含 cases 分情况）与 axis_graph（轨迹连成曲线）。分析图随口播逐步揭示（用 at / cases[].at 控制出现时机），不一次性摆满。
 - 【必分情况】凡题设含「不同初速度 / 不同方向 / 不同参数 / 不同对象 / 不同力」，必须分情况讨论：graph_vt 的 cases、axis_graph 的多条 curves，或 compare 左右栏，每种情况各自成图/成栏；口播点到哪一情况才揭示哪一情况。
 - 【注意事项单列】关键限定、易错点、使用条件（如「a≠0」「方向由题设决定」「必须先配出平衡速度」「周期与速度无关」）单独用 callout（tone="warn"）列一条，不埋在正文里。
@@ -74,7 +78,9 @@ A3_HEAD = """你是「澄象」的分镜编剧（A3）。你把一个已入库�
 - 条目的 forbidden 里每个词，不得出现在任何 narration 或屏上文字里（包括标题、callout、steps、summary、compare）。
 - 条目 sequence 是已经核对过的内容骨架：你可以重新组织语序、改写口语化表达、拆分或合并相邻镜头，但不能丢掉某个知识环节，也不能改变它的结论。
 - 屏上总结句不得把「氧化型/匀变速/合外力」之类的限定词压掉后单独上屏；凡口播里带限定的结论，屏上要写全。
-- 画面必须具象（见 VISUALS_SPEC 的【画面具象铁律】等五条）：条目 sequence 里只有文字版式的镜头，你要补上图形类版式；涉及受力/运动/场的环节必须配分析图，涉及多情形的必须分情况讨论，注意事项用 callout(warn) 单列。"""
+- 画面必须具象（见 VISUALS_SPEC 的【画面具象铁律】等五条）：条目 sequence 里只有文字版式的镜头，你要补上图形类版式；涉及受力/运动/场的环节必须配分析图，涉及多情形的必须分情况讨论，注意事项用 callout(warn) 单列。
+
+【长片指引】目标时长变大不等于可以水时长：长片按「概念台阶」组织，每 60~90 秒讲完一个台阶（一个概念/一次推导/一组对比），台阶之间用推导（derivation）或图示衔接递进，不把同一个结论换话术反复填时间；一屏条目仍不超过 6 条，每屏只讲一件事。"""
 
 
 A3_OUT = """【输出】
@@ -185,12 +191,15 @@ VOICEOVER_SYSTEM = """你是「澄象」的配音稿改写员。分镜口播里�
 
 规则：
 1. 数学式按运算读出来：a+bi →「a 加 b i」；x² →「x 的平方」；√(a²+b²) →「根号下 a 的平方 加 b 的平方」；a/b →「a 除以 b」；|z| →「z 的模」；下标 v_0 →「v 零」或「v 下标零」。
-   符号与函数名照英文念，不翻译成中文术语：Δv →「delta v」（不要改成「速度变化量」）；sin x →「sine x」；cos →「cosine」；tan →「tangent」；log →「log」；ln →「loin」；希腊字母读英文名（α →「alpha」，θ →「theta」，π →「pi」，ω →「omega」）。
-2. 负号/减号看位置：句首或运算符后是「负」，其余是「减」。
-3. 化学名里的定位连字符不念「减」：2-碘辛烷 →「2碘辛烷」（或「二碘辛烷」）；1,3-丁二烯 →「1,3 丁二烯」。
-4. 化学式/化学记号按常见读法：CH3Cl →「一氯甲烷」（或「C H 3 C l」逐字母）；C–Br 键 →「碳溴键」；H–X 键 →「氢卤键」或按上下文；σ* →「sigma 星」；SN2 →「S N 2」。
-5. 数字、单位、常数一字不改；不得增删或改写任何事实、限定词、结论，不得补原文没有的内容。
-6. 只改「怎么念」，不改含义、语序、语气；整段保持原样结构。
+2. 函数名与拉丁字母变量照英文念，不翻译成中文术语：sin x →「sine x」；cos →「cosine」；tan →「tangent」；log →「log」；ln →「loin」；Δv 里的 Δ 按第 3 条注音、v 照字母念。
+3. 希腊字母一律按中文音名注音，绝不让朗读员照字形猜：π →「派」（不是「皮」）、θ →「西塔」、μ →「谬」、ρ →「柔」、σ →「西格马」、τ →「陶」、α →「阿尔法」、β →「贝塔」、γ →「伽马」、δ/Δ →「德尔塔」、λ →「兰布达」、ω →「欧米伽」。原则：字母出现即换成音名汉字，前后内容不变。
+4. 负号/减号看位置：句首或运算符后是「负」，其余是「减」。
+5. 化学名里的定位连字符不念「减」：2-碘辛烷 →「2碘辛烷」（或「二碘辛烷」）；1,3-丁二烯 →「1,3 丁二烯」。
+6. 化学式/化学记号按常见读法：CH3Cl →「一氯甲烷」（或「C H 3 C l」逐字母）；C–Br 键 →「碳溴键」；H–X 键 →「氢卤键」或按上下文。
+7. 物理/化学记号按「数字归数字、字母归字母、单位归单位」原则展开，不许并成别的词：能级/轨道记号「2s 轨道」→「二 s 轨道」（数字读数字、字母逐读，绝不能读成「两秒」或「2 秒」，3d、4p 同理）；浓度符号 [X] →「X 的浓度」；机理编号 SN1/SN2 →「S N 一」「S N 二」（字母逐读、数字读中文数）；σ 键 →「西格马键」、σ* →「西格马星」。遇到未列出的同类记号按这条原则推断读法，不靠穷举硬背。
+8. 数字、单位、常数一字不改；不得增删或改写任何事实、限定词、结论，不得补原文没有的内容。
+9. 只改「怎么念」，不改含义、语序、语气；整段保持原样结构。
+10. 分句：朗读稿按自然句读切分，单句不超过约 20 字，长句拆成短句；过长的联合语用顿号分隔或拆句；数字与单位连读不拆（如「0.5 摩尔每升」中间不断句）。
 
 只输出一个 JSON 对象，不要围栏、不要解释：
 {"lines": ["第1段改写结果", "第2段改写结果", ...]}"""

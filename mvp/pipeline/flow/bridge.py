@@ -13,8 +13,10 @@
 由主 agent 另起子 agent 上下文执行 `python -m pipeline.flow --run <dir> --stage <X>`
 （隔离靠调用上下文，不靠代码；子 agent 里本执行器照常跑该棒）。
 
-确定性棒：A4=review.check 只读调用；R=TTS+渲染+合成适配层（现阶段 subprocess 调
-.local/<run>/produce.py，T0 定稿后收编，见 run_deterministic_R 内 TODO）。
+确定性棒：A4=review.check 只读调用 + flow 层 physics_gates PHYS_* 六闸门（81-F1 接线：
+输入 modelspec/ 目录，无目录=不检保持旧行为；violations 并入 F-8 输出后由
+stages.route_a4_fail 按 PHYS_TO_M1/PHYS_TO_M2 路由 M1/M2；闸门在 flow 层，不在 review.py）；
+R=TTS+渲染+合成适配层（现阶段 subprocess 调 .local/<run>/produce.py，T0 定稿后收编，见 run_deterministic_R 内 TODO）。
 
 红线：不打印/记录任何 API 密钥（llm_client 的异常消息本身不含密钥）；不 git；不改公共层。
 """
@@ -25,17 +27,23 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .. import llm_client, review
 from ..ir import Plan
-from . import handoff, produce as flow_produce
+from . import handoff
+from . import physics_gates as pg
+from . import produce as flow_produce
 from .stages import ROOT, HERE, STAGES, RunCtx, Stage, _resolve
 
 MAX_ATTEMPTS = 3          # 首次 + 坏格式回喂重试 ≤2 次（每环 ≤3 轮纪律的单棒内层）
 MAX_ROUNDS = 3            # O 路由表：每个打回环最多 3 轮，仍不过 → BLOCKED 报用户
 SEG_RETRY = 2             # 机械修复（substitution_trial）：单段网关失败（524 等）段内重试次数
 TRUNCATE_HINTS = ("524", "超时", "timeout", "Timeout")
+M1_WORKERS_ENV = "QX_FLOW_M1_WORKERS"   # M1 按镜并行度上限（81-F1），缺省 3
+DEFAULT_SEGMENT_WORKERS = 3
+MAX_SEGMENT_WORKERS = 16                # 兜底：env 写错也不至于把网关打爆
 
 
 # ---------------------------------------------------------------- 工具
@@ -100,6 +108,46 @@ def _stitch_json(parts: list[str]) -> str:
     return json.dumps(merged, ensure_ascii=False, indent=1)
 
 
+def _segment_workers(st: Stage) -> int:
+    """按镜并行度上限（81-F1）：默认 3，env QX_FLOW_M1_WORKERS 覆盖；非法值回退默认，
+    钳到 [1, MAX_SEGMENT_WORKERS]。只在 st.parallel_segments 的棒上生效。"""
+    try:
+        n = int(str(os.environ.get(M1_WORKERS_ENV, "")).strip())
+    except (TypeError, ValueError):
+        n = DEFAULT_SEGMENT_WORKERS
+    return max(1, min(n, MAX_SEGMENT_WORKERS)) if n > 0 else DEFAULT_SEGMENT_WORKERS
+
+
+def _call_one_segment(st: Stage, ctx: RunCtx, system: str, attempt: int,
+                      i: int, eff: str) -> tuple[str, str | None]:
+    """单段调用（_call_segmented 的段体，串行/并行共用，段内重试 SEG_RETRY 次语义不变）。
+
+    命中断点缓存（段 user 逐字一致）→ 直接复用，返回 (text, None) 不重复登记审计件；
+    否则调网关、落 _part<i>.md 与 segcache，返回 (text, rel)。失败抛 LLMError。
+    线程安全前提：各段读写各自 distinct 路径的文件，共享态（responses/inputs）由主线程登记。"""
+    cache_rel = f"reports/{st.name}_segcache_part{i}.md"
+    cache_p, user_p = ctx.run_dir / cache_rel, ctx.run_dir / f"reports/{st.name}_segcache_part{i}.user.md"
+    if cache_p.exists() and user_p.exists() and cache_p.stat().st_size > 0 and \
+            user_p.read_text(encoding="utf-8") == eff:
+        return cache_p.read_text(encoding="utf-8"), None   # 断点复用：审计件已在 responses 里
+    text, last = None, None
+    for _ in range(SEG_RETRY):
+        try:
+            text = llm_client.chat(st.stage_id, system, eff,
+                                   images=st.build_images(ctx) if (st.build_images and i == 0) else None,
+                                   max_tokens=st.max_tokens)
+            break
+        except llm_client.LLMError as e:
+            last = e
+    if text is None:
+        raise last or llm_client.LLMError(f"[{st.name}] 第 {i} 段调用失败")
+    rel = _response_name(st.name, attempt, part=i)
+    (ctx.run_dir / rel).write_text(text, encoding="utf-8")
+    cache_p.write_text(text, encoding="utf-8")
+    user_p.write_text(eff, encoding="utf-8")
+    return text, rel
+
+
 def _call_segmented(st: Stage, ctx: RunCtx, system: str, attempt: int,
                     inputs: list, feedback: str = "") -> tuple[str, list[str]]:
     """分段调用（524/截断兜底）：每段独立落盘 _part<i>.md，机械拼接后返回。
@@ -111,47 +159,97 @@ def _call_segmented(st: Stage, ctx: RunCtx, system: str, attempt: int,
     1) 段级断点缓存 reports/<stage>_segcache_part<i>.md（配 .user.md 校验段输入）：
        后段 524 导致整 attempt 报废时，已成功的先段不再重复调网关——下一 attempt 或
        下一次 --stage 运行直接复用（段 user 逐字一致才复用；回喂 feedback 变化即失效）。
-    2) 段内重试 SEG_RETRY 次（524 是窗口超时，隔几秒再发常可过）。"""
+    2) 段内重试 SEG_RETRY 次（524 是窗口超时，隔几秒再发常可过）。
+
+    81-F1（按镜并行）：st.parallel_segments=True 的棒（M1）用 ThreadPoolExecutor 并发跑段，
+    并行度 _segment_workers（默认 3，env QX_FLOW_M1_WORKERS 覆盖）。结果**按段号（=镜号）顺序**
+    拼接——拼接口径与串行版逐字节一致，与完成顺序无关（顺序确定性）；单段失败沿用段内
+    SEG_RETRY 重试语义，重试后仍失败 → 等全部在途段收尾（成功段落盘进 segcache 供下轮复用），
+    再抛段号最小的错误（与串行路径「撞到第一个坏段即止」的可观测结果一致）。
+    max_tokens 分段口径不动（抗 524）。"""
     segs = st.segments(ctx) if st.segments else None
     if not segs:
         raise llm_client.LLMError(f"[{st.name}] 该棒未注册分段策略，无法从截断中恢复")
-    parts, errs = [], []
-    for i, seg_user in enumerate(segs):
-        eff = seg_user + feedback
-        cache_rel = f"reports/{st.name}_segcache_part{i}.md"
-        cache_p, user_p = ctx.run_dir / cache_rel, ctx.run_dir / f"reports/{st.name}_segcache_part{i}.user.md"
-        if cache_p.exists() and user_p.exists() and cache_p.stat().st_size > 0 and \
-                user_p.read_text(encoding="utf-8") == eff:
-            parts.append(cache_p.read_text(encoding="utf-8"))   # 断点复用：审计件已在 responses 里
-            continue
-        text, last = None, None
-        for _ in range(SEG_RETRY):
-            try:
-                text = llm_client.chat(st.stage_id, system, eff,
-                                       images=st.build_images(ctx) if (st.build_images and i == 0) else None,
-                                       max_tokens=st.max_tokens)
-                break
-            except llm_client.LLMError as e:
-                last = e
-        if text is None:
-            raise last or llm_client.LLMError(f"[{st.name}] 第 {i} 段调用失败")
-        rel = _response_name(st.name, attempt, part=i)
-        (ctx.run_dir / rel).write_text(text, encoding="utf-8")
-        cache_p.write_text(text, encoding="utf-8")
-        user_p.write_text(eff, encoding="utf-8")
-        _note(handoff.stage(ctx.state, st.name)["responses"], rel)
-        inputs.append(rel)
-        parts.append(text)
+    effs = [seg + feedback for seg in segs]
+    parts: list[str] = [""] * len(effs)
+    rels: list[str | None] = [None] * len(effs)
+
+    try:
+        if getattr(st, "parallel_segments", False) and len(effs) > 1:
+            errs: dict[int, BaseException] = {}
+            with ThreadPoolExecutor(max_workers=min(_segment_workers(st), len(effs))) as ex:
+                futs = {ex.submit(_call_one_segment, st, ctx, system, attempt, i, effs[i]): i
+                        for i in range(len(effs))}
+                for fut in as_completed(futs):
+                    i = futs[fut]
+                    try:
+                        parts[i], rels[i] = fut.result()
+                    except Exception as e:            # 含 LLMError；文件 IO 异常照旧外抛语义（下方 raise）
+                        errs[i] = e
+            if errs:
+                raise errs[min(errs)]
+        else:
+            for i, eff in enumerate(effs):
+                parts[i], rels[i] = _call_one_segment(st, ctx, system, attempt, i, eff)
+    finally:
+        # 审计登记按段号序（并发下仍确定）；坏段出现时已成功段的登记不丢——
+        # 下一轮断点复用返回 rel=None，靠这里先登记过才不漏审计件（沿用串行旧语义）。
+        for i, rel in enumerate(rels):
+            if rel:
+                _note(handoff.stage(ctx.state, st.name)["responses"], rel)
+                inputs.append(rel)
     joined = "\n\n\n".join(p.strip() for p in parts) if st.stitch == "text" else _stitch_json(parts)
-    return joined, errs
+    return joined, []
 
 
 # ---------------------------------------------------------------- 确定性棒
 
 
+def _replay_sim_results(specs: list, plan) -> dict:
+    """81-E2 T1b（G5 裁定方案）：run_physics_gates 之前用 physics 引擎从 ModelSpec
+    **内存重放**填充 sim_result sidecar（不落盘、不覆盖已有 sidecar），让六闸门拿到
+    「真实模拟源」而非恒力现算兜底；镜秒来源 = solver.t_end（replay 内部优先）→
+    Plan 对应镜 seconds。不支持的模型/引擎不可用一律记 skip，绝不炸 A4
+    （恒力现算兜底仍在那儿，重放只是将 skip 变 checked、将近似判据变逐帧比对）。
+    shot_no↔plan.index 映射：V0 镜号 1 基（index = shot_no−1），兼容 0 基直用。"""
+    out: dict = {"injected": [], "skipped": []}
+    try:
+        from physics import replay as phys_replay
+    except Exception as e:  # noqa: BLE001 环境级故障不是模型的错：记 skip，闸门照常跑旧兜底
+        out["error"] = f"physics.replay 不可用，全部 spec 未尝试重放：{type(e).__name__}: {e}"
+        return out
+    secs: dict = {}
+    if plan is not None:
+        try:
+            secs = {int(s.index): float(s.seconds) for s in plan.shots}
+        except (TypeError, ValueError):
+            secs = {}
+    for spec in specs:
+        if not isinstance(spec, dict):
+            continue
+        t_end = None
+        no = spec.get("shot_no")
+        if isinstance(no, (int, float)) and not isinstance(no, bool):
+            no_i = int(no)
+            t_end = secs.get(no_i - 1, secs.get(no_i))
+        try:
+            rec = phys_replay.replay_spec(spec, t_end=t_end)
+        except Exception as e:  # noqa: BLE001 双保险：replay_spec 本体已吞异常
+            rec = {"injected": False, "shot": spec.get("shot_no"), "reason": str(e)}
+        out["injected" if rec.get("injected") else "skipped"].append(rec)
+    return out
+
+
 def run_deterministic_A4(st: Stage, ctx: RunCtx) -> tuple[dict, list[str]]:
     """A4'：review.check 只读调用（不改 plan/KP/review.py），F-8 契约 {checked, violations}。
-    PHYS_* 物理闸门码由 review.py R6 扩码后自动随 check 结果进入分类路由（stages.route_a4_fail）。"""
+    81-F1 接线：check 之后再跑 flow 层 physics_gates.run_physics_gates(modelspec/ 目录)，
+    PHYS_* violations（{code, shot, detail}）并入同一 violations/findings 结构，由
+    stages.route_a4_fail 按 PHYS_TO_M1/PHYS_TO_M2 路由 M1/M2；闸门在 flow 层，不经 review.py。
+    modelspec/ 目录不存在 → 不跑闸门（保持旧行为，PASS 不受影响）；skips=字段缺失不适用，
+    不算失败，原样挂 obj["phys_skips"] 供报告查。
+    81-E2 T1b（G5）：跑闸门前先对 specs 做 physics 引擎内存重放填 sim_result（见
+    _replay_sim_results），记账挂 obj["phys_replay"]；闸门输入改为重放后的 specs 列表
+    （load_specs 语义不变，内存对象优先于磁盘文件）。"""
     plan_path = ctx.path("plan.json")
     if not plan_path.exists():
         # R7 接线（SubTask #79-D1a）：plan.json 缺失时先尝试从本 run 的 visual_script.json
@@ -162,8 +260,21 @@ def run_deterministic_A4(st: Stage, ctx: RunCtx) -> tuple[dict, list[str]]:
     findings = review.check(plan, ctx.load_kp())
     violations = review.blocking(findings)
     checked = sorted({f.get("code", "") for f in findings} | set(getattr(review, "CODES", ()) or ()))
-    errors = [f"阻断违规 {f.get('code')}（shot {f.get('shot')}）：{f.get('msg', '')}" for f in violations]
-    return {"checked": checked, "violations": violations, "findings": findings}, errors
+    md_dir = ctx.path("modelspec")
+    obj: dict = {"checked": checked, "violations": violations, "findings": findings}
+    if md_dir.exists():
+        specs = pg.load_specs(md_dir)
+        replayed = _replay_sim_results(specs, plan)
+        phys = pg.run_physics_gates(specs)
+        violations = violations + phys["violations"]
+        obj = {"checked": sorted(set(checked) | set(phys["checked"])),
+               "violations": violations,
+               "findings": findings + phys["violations"],
+               "phys_skips": phys["skips"],
+               "phys_replay": replayed}
+    errors = [f"阻断违规 {f.get('code')}（shot {f.get('shot')}）：{f.get('msg') or f.get('detail') or ''}"
+              for f in violations]
+    return obj, errors
 
 
 def run_deterministic_R(st: Stage, ctx: RunCtx) -> tuple[dict, list[str]]:

@@ -39,6 +39,9 @@ QUALITY = {
     "hd": ["-q", "m"],                      # 1280x720 @30
     "fullhd": ["-r", "1920,1080", "--fps", "30"],
 }
+# 81-A2 时序口径：每画质实际渲染帧率。mux 侧按它把镜头边界量化到渲染帧网格
+# （scene.py 每镜帧数 == round(seconds×fps)），音频轴/SRT 轴/视频轴共用同一份累计秒。
+QUALITY_FPS = {"draft": 15, "hd": 30, "fullhd": 30}
 os.environ["PATH"] = str(FFMPEG_DIR) + os.pathsep + os.environ["PATH"]
 
 
@@ -86,6 +89,87 @@ class GenerationError(RuntimeError):
         self.extra = extra
 
 
+# ---------------------------------------------------------------- 81-E2 T1a：LABEL_CLASH 渲染侧接线（G4① 另一半）
+#
+# 81G_report §4/§10.1 的裁定：A4 静态期拿不到渲染子进程里的 scene.UNRESOLVED（字重叠复核
+# 自认"救不回来"的必挂冲突清单），接线必须落在渲染侧。这里是最低侵入实现：出片链路渲染
+# 成功后，用子进程把装配层重放一遍（Explainer._assemble 与成片同一份几何），按镜收集
+# PLACEMENTS/UNRESOLVED/CLASH_MOVED 统计，再经 review._unresolved_findings 转成 report 级
+# LABEL_CLASH finding 并入 review.json 既有 finding 流（violations）。语义：记账、不阻断——
+# blocking=False，review.blocking() 过滤掉，绝不拦出片；重放本身失败只记一笔状态。
+# 子进程用 sys.executable（与渲染同机的解释器；本仓测试/服务均跑在装了 manim 的 t314 环境），
+# 失败降级为 label_clash.status=replay_failed，不影响出片。
+
+_LABEL_REPLAY_SNIPPET = (
+    "import json, sys\n"
+    "sys.path.insert(0, sys.argv[3])\n"
+    "import run\n"
+    "plan = json.load(open(sys.argv[1], encoding='utf-8'))\n"
+    "json.dump(run.replay_unresolved(plan), open(sys.argv[2], 'w', encoding='utf-8'),\n"
+    "          ensure_ascii=False)\n"
+)
+
+
+def replay_unresolved(plan: dict) -> list[dict]:
+    """装配层重放：逐镜走 Explainer._assemble（与成片同一份几何），收集
+    {shot, unresolved:[残差,文本], placements, dirty_placements, moved}。
+    懒导入 render.scene（manim 只在重放这一刻进进程）；异常原样抛出，由调用方吞掉。"""
+    sys.path.insert(0, str(ROOT / "render"))
+    import scene as S
+    th = S.THEMES.get((plan.get("brief") or {}).get("style", "clean"), S.THEMES["clean"])
+    ex = S.Explainer()
+    shots = plan.get("shots") or []
+    out: list[dict] = []
+    for i, shot in enumerate(shots):
+        S.PLACEMENTS.clear()
+        S.UNRESOLVED.clear()
+        S.CLASH_MOVED.clear()
+        ex._assemble(shot, plan, th, is_first=(i == 0), is_last=(i == len(shots) - 1))
+        out.append({"shot": shot.get("index", i),
+                    "unresolved": [[float(r), str(t)] for r, t in S.UNRESOLVED],
+                    "placements": len(S.PLACEMENTS),
+                    "dirty_placements": sum(1 for score, _ in S.PLACEMENTS if score),
+                    "moved": len(S.CLASH_MOVED)})
+    return out
+
+
+def harvest_label_clash(out_dir: Path, plan_path: Path) -> dict:
+    """渲染后收集必挂冲突并并入 review.json；返回记账 dict（进 sidecar log['label_clash']）。
+    任何一步失败（解释器无 manim、装配抛错、超时）都降级为 replay_failed，不动出片主流程。"""
+    sidecar = out_dir / "label_clash.json"
+    tag: dict = {"status": "ok", "unresolved": 0, "findings": 0}
+    try:
+        r = subprocess.run([sys.executable, "-c", _LABEL_REPLAY_SNIPPET,
+                            str(plan_path), str(sidecar), str(ROOT)],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=1800)
+        if r.returncode != 0:
+            return {"status": "replay_failed",
+                    "detail": ((r.stderr or r.stdout or "").strip() or "非零退出")[-400:]}
+        entries = json.loads(sidecar.read_text(encoding="utf-8"))
+        findings: list[dict] = []
+        for e in entries:
+            findings.extend(review._unresolved_findings(e.get("unresolved") or [],
+                                                        shot=e.get("shot", -1)))
+        tag = {"status": "ok",
+               "shots": [{k: v for k, v in e.items()} for e in entries],
+               "unresolved": sum(len(e.get("unresolved") or []) for e in entries),
+               "findings": len(findings)}
+        if findings:
+            rj = out_dir / "review.json"
+            try:
+                report = json.loads(rj.read_text(encoding="utf-8")) if rj.exists() else None
+            except (OSError, ValueError):
+                report = None
+            if not isinstance(report, dict):
+                report = {"checked": list(review.CODES), "violations": []}
+            report["violations"] = list(report.get("violations") or []) + findings
+            rj.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001 接线级兜底：自检失败不许拖垮出片（同 F-10 口径）
+        tag = {"status": "replay_failed", "detail": f"{type(e).__name__}: {e}"[-400:]}
+    return tag
+
+
 def _retry(fn, attempts: int = 3, desc: str = ""):
     """机械重试：工具性步骤（渲染/合成）的偶发故障很常见，按固定间隔重试几次，仍不行才归类为 tool。
 
@@ -124,12 +208,14 @@ def _spread_surplus(spoken: list[float], floors: list[float]) -> list[float]:
     return [round(s + min(MAX_SHOT_IDLE, max(0.0, f - s)), 2) for s, f in zip(spoken, floors)]
 
 
-def _synthesize(plan, audio_dir: Path, rate: int, floors=None) -> list[tuple[float, Path]]:
+def _synthesize(plan, audio_dir: Path, rate: int, floors=None, fps: int | None = None) -> list[tuple[float, Path]]:
     """按给定语速合成全部镜头，并用实测时长反写 shot.seconds（A6 时长对齐回路）。
 
     `floors` 是 A3 分镜给每一镜的预算秒数：实测口播比预算薄时那截余量是刻意留给学生的
     思考时间，抹掉它总时长就会掉到目标之下（batch_v7 首跑：一次函数/二次函数自然语速
     106/108s），所以富余保留——但由 _spread_surplus 按各镜自己的缺口封顶，不再整块堆在一镜结尾。
+    镜头起点由 mux.cumulative_offsets 产出（量化到渲染帧网格），与 write_srt/_sfx_graph 同源，
+    不再在这里自己 float 累加（81-A2 防舍入漂移）。
     """
     spoken: list[float] = []
     for s in plan.shots:
@@ -139,11 +225,9 @@ def _synthesize(plan, audio_dir: Path, rate: int, floors=None) -> list[tuple[flo
         spoken.append(s.spoken)
     seconds = _spread_surplus(spoken, list(floors) if floors is not None else [0.0] * len(spoken))
     shot_wavs: list[tuple[float, Path]] = []
-    offset = 0.0
-    for s, sec in zip(plan.shots, seconds):
+    for s, sec, start in zip(plan.shots, seconds, mux.cumulative_offsets(seconds, fps)):
         s.seconds = sec
-        shot_wavs.append((offset, audio_dir / f"shot_{s.index:02d}.wav"))
-        offset += sec
+        shot_wavs.append((start, audio_dir / f"shot_{s.index:02d}.wav"))
     return shot_wavs
 
 
@@ -156,19 +240,20 @@ def _pick_rate(natural: float, target: float) -> int:
     return max(0, min(MAX_TTS_RATE, r))
 
 
-def _voice_and_align(plan, audio_dir: Path, brief: Brief, log: dict) -> list[tuple[float, Path]]:
+def _voice_and_align(plan, audio_dir: Path, brief: Brief, log: dict,
+                     fps: int | None = None) -> list[tuple[float, Path]]:
     """配音 → 用实测语音反写每镜秒数 → 语速记账。主路径与 A3 自愈路径共用这一份，保证两侧
     的 sidecar 口径一致（别一个记提速、一个记自然）。超长按 DurationNotFeasible 报"至少要多少秒"；
     反向超差不拦出片，只记 shortfall_note（内容就这么长，硬摊只会造冻屏）。"""
     step = time.time()
     # floors 必须在第一遍之前取：_synthesize 会就地改掉 s.seconds，第二遍不能再拿改后的值当下限。
     floors = [float(s.seconds) for s in plan.shots]
-    shot_wavs = _synthesize(plan, audio_dir, 0, floors)
+    shot_wavs = _synthesize(plan, audio_dir, 0, floors, fps=fps)
     natural = plan.total_seconds
     target = brief.target_seconds
     rate = _pick_rate(natural, target)
     if rate and tts.SPEED_SUPPORTED:
-        shot_wavs = _synthesize(plan, audio_dir, rate, floors)
+        shot_wavs = _synthesize(plan, audio_dir, rate, floors, fps=fps)
     dev = (plan.total_seconds - target) / target if target else 0
     spoken = sum(len("".join(c["text"] for c in s.subtitles())) for s in plan.shots)
     log["steps"]["narration"] = round(time.time() - step, 2)
@@ -286,7 +371,9 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     # 提速是否真的会发生由 tts.SPEED_SUPPORTED 决定（网关 TTS 实测不支持 speed，见 audio/tts.py）。
     audio_dir = out_dir / "audio"
     audio_dir.mkdir(exist_ok=True)
-    shot_wavs = _voice_and_align(plan, audio_dir, brief, log)
+    # 渲染帧率：音轨/SRT/SFX 的镜头边界都量化到这一帧网格（与 scene.py 帧记账同轴）。
+    fps = QUALITY_FPS.get(quality, 30)
+    shot_wavs = _voice_and_align(plan, audio_dir, brief, log, fps=fps)
 
     plan.brief.target_seconds = brief.target_seconds
 
@@ -302,7 +389,7 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
                 break
             log["storyboard_heal"] = {"model": info["model"], "attempts": info["attempts"]}
             log["voiceover"] = voiceover.apply(plan)
-            shot_wavs = _voice_and_align(plan, audio_dir, brief, log)
+            shot_wavs = _voice_and_align(plan, audio_dir, brief, log, fps=fps)
             findings = review.check(plan, kp)
             hard = review.blocking(findings)
             if not hard:
@@ -372,10 +459,20 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
             f"渲染时长 {rendered}s 与 Plan {total}s 偏差 {drift:.1%} > 10%（Spec_Scale G2），出片中止",
             "渲染层的时间记账与分镜不一致，成片可能卡顿或冻屏。请反馈这条知识点并附上 plan.json。")
 
+    # 81-E2 T1a（G4① 移交件）：渲染成功 = 装配层几何已经真跑过一遍，这里补收
+    # scene.UNRESOLVED → LABEL_CLASH（report 级）并入 review.json。放在 G2 之后：
+    # 时长闸门不过就没有"成片"可反查，记账也就无从谈起。失败不拦出片。
+    log["label_clash"] = harvest_label_clash(out_dir, plan_path)
+
     # A7 合成
     step = time.time()
     plan_dict = json.loads(plan_path.read_text(encoding="utf-8"))
-    mux.build_track(shot_wavs, total, out_dir / "track.wav")
+    sec_list = [float(s["seconds"]) for s in plan_dict["shots"]]
+    # 音轨缓冲至少盖住帧网格量化后的最后一镜终点（Σ round(sec×fps)/fps 可能比 Plan 的
+    # 十进制定长多数帧）；多出的静音尾巴由 mux 的 -shortest 按视频长度裁掉，
+    # 不能再像旧版那样把越界的片尾语音整段截弃。
+    track_secs = max(total, mux.cumulative_offsets(sec_list + ([0.0] if sec_list else []), fps)[-1])
+    mux.build_track(shot_wavs, track_secs, out_dir / "track.wav")
     # G4 音画同轴闸门：每镜头语音起点必须落在 SHOT_HEAD 附近（评审 P0 的复发检测）。
     onsets = mux.speech_onsets(out_dir / "track.wav")
     align = []
@@ -391,12 +488,14 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
         raise GenerationError(
             "tool", f"音画时间轴错位（>0.35s）：{bad}",
             "音画时间轴错位，成片会声画不同步。请反馈这条知识点并附上 plan.json。")
-    n_subs = mux.write_srt(plan_dict, out_dir / "subs.srt")
+    n_subs = mux.write_srt(plan_dict, out_dir / "subs.srt", fps=fps)
     # 音效（SubTask #60-E）：默认关，MVP_SFX=1 才在每个镜头切换点混转场音、片尾混提示音。
-    # 切换点用反写后的**实际**镜长累加，不能用预算值——预算和实测差 20% 时音效会错半拍。
+    # 切换点用反写后的**实际**镜长累加（mux._sfx_graph 与音轨/SRT 同一份 cumulative_offsets），
+    # 不能用预算值——预算和实测差 20% 时音效会错半拍。
     final = _retry(lambda: mux.mux(out_dir / "silent.mp4", out_dir / "track.wav", out_dir / "final.mp4",
                                    out_dir / "subs.srt" if burn else None,
-                                   shot_seconds=[float(s["seconds"]) for s in plan_dict["shots"]]),
+                                   shot_seconds=sec_list,
+                                   fps=fps),
                    desc="音画合成")
     log["steps"]["mux"] = round(time.time() - step, 2)
     log["sfx"] = os.environ.get("MVP_SFX", "0")

@@ -19,14 +19,15 @@ import time
 
 from . import corpus, knowledge, llm_client, llm_prompts, review
 from .ir import ACCEPTABLE_RATE, NAME_MAX_SHARE, NATURAL_CPS, RATE_FACTOR, naming_narration, naming_shot_seconds
+from .storyboard import MIN_SHOTS, max_shots_for  # 81-A1b：镜头密度单一真源在 A3 分镜层，两处校验不得各写一份
 
 # 与 render/scene.py 的 Scene.BUILDERS 同一份清单（tests/test_kp_draft.py 里做了比对，防漂移）。
 VISUAL_KINDS = ("axis_graph", "callout", "circuit", "compare", "derivation", "energy_dist", "field", "figure",
-                "force_diagram", "formula", "graph_vt", "incline", "microstate", "mind_map", "optics",
-                "particle_box", "stat_chart", "steps", "summary", "table", "title", "trajectory")
+                "force_diagram", "formula", "graph_vt", "incline", "mechanism", "microstate", "mind_map",
+                "optics", "particle_box", "stat_chart", "steps", "summary", "table", "title", "trajectory")
 
 MAX_ATTEMPTS = 3       # 第一版 + 两次带问题清单的重写
-MIN_SHOTS, MAX_SHOTS = 4, 10
+# MIN_SHOTS / max_shots_for 见 storyboard（81-A1b）：镜头数上限随目标时长伸缩，短片仍是旧口径 10。
 MAX_PRIOR_CHARS = 12  # 点名镜头把它们逐条念出来并整行上屏，整句会爆字数与字号
 GRADE_ZH = {"G8": "初二", "G9": "初三", "H1": "高一", "H2": "高二", "H3": "高三", "U1": "大一", "U2": "大二"}
 
@@ -75,7 +76,8 @@ def _user_message(subject: str, grade: str, topic: str, target_seconds: float,
     return "\n".join(lines)
 
 
-def _check_shape(entry: dict, topic: str, allowed: list[dict] | None = None) -> list[str]:
+def _check_shape(entry: dict, topic: str, allowed: list[dict] | None = None,
+                 target_seconds: float = 0.0) -> list[str]:
     errs: list[str] = []
     if not isinstance(entry, dict):
         return ["输出不是 JSON 对象"]
@@ -104,8 +106,9 @@ def _check_shape(entry: dict, topic: str, allowed: list[dict] | None = None) -> 
         errs.append(f"prior 必须是最多 3 条的字符串数组，每条是不超过 {MAX_PRIOR_CHARS} 字的名词短语"
                     "（如「磁通量的含义」），不要写成整句")
     seq = entry.get("sequence")
-    if not isinstance(seq, list) or not (MIN_SHOTS <= len(seq) <= MAX_SHOTS):
-        errs.append(f"sequence 必须是 {MIN_SHOTS}~{MAX_SHOTS} 个镜头")
+    cap = max_shots_for(target_seconds)   # 81-A1b：上限随目标时长伸缩，短片（≤600s）仍是 10
+    if not isinstance(seq, list) or not (MIN_SHOTS <= len(seq) <= cap):
+        errs.append(f"sequence 必须是 {MIN_SHOTS}~{cap} 个镜头")
         return errs
     for i, b in enumerate(seq, 1):
         if not isinstance(b, dict):
@@ -226,7 +229,7 @@ def draft(subject: str, grade: str, topic: str, target_seconds: float = 120.0,
         _fold_flat_props(entry)
         if not allowed:
             entry["refs"] = []          # 铁律：没有语料命中就没有出处
-        problems = _check_shape(entry, topic, allowed or None) + _check_content(entry, target_seconds)
+        problems = _check_shape(entry, topic, allowed or None, target_seconds) + _check_content(entry, target_seconds)
         if not problems:
             break
     if problems:

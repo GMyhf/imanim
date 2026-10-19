@@ -293,6 +293,21 @@ select:focus, textarea:focus, input:focus { outline: 2px solid #bcd4f7; border-c
 @keyframes skel { to { background-position: -200% 0; } }
 .wcard .body { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 8px; }
 .wcard h4 { margin: 0; font-size: 15px; }
+/* ---- 81-W1 加载优化：画廊骨架屏 + 分段懒加载哨兵
+   .wcard-skel 是 /api/gallery 未返回时的卡片壳（结构与真卡片同构，不跳版）；
+   哨兵本身零高度，只给 IntersectionObserver 当"快到底了"的触发线。 */
+.wcard-skel { pointer-events: none; }
+.skel-line {
+  display: block; height: 12px; border-radius: 6px;
+  background: linear-gradient(100deg, #e9ebef 40%, #f6f7f9 50%, #e9ebef 60%);
+  background-size: 200% 100%;
+  animation: skel 1.2s linear infinite;
+}
+.skel-line.w-40 { width: 40%; }
+.skel-line.w-60 { width: 60%; }
+.skel-line.w-90 { width: 90%; }
+.wall-sentinel, .shots-sentinel { height: 1px; }
+.shots-sentinel { margin-top: 6px; }
 .meta-line { font-size: 12px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 6px 12px; }
 .meta-line .tag {
   border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; background: #fafbfc;
@@ -344,4 +359,5 @@ select, textarea, input[type="number"],
   }
   .btn[aria-busy="true"] .btn-spin { border-color: rgba(255,255,255,.85); border-top-color: var(--accent); }
   .wmedia-skel { background: #e9ebef; }
+  .skel-line { background: #e9ebef; }
 }

@@ -27,6 +27,10 @@ from . import mux
 
 INK_THRESHOLD = 60     # 与 .local/f2_check/blankscan.py 同一把尺：max(RGB) > 60 才算"有墨"
 BOUNDARY_TOL = 0.12     # 判定"区间落在镜头边界上"的秒级容差（半帧误差 + 取整余量）
+# 81-G3 裁定：保留 0.12s 不收紧。边界时刻改走 mux.cumulative_offsets 的帧网格口径后，
+# 逐镜累积漂移这一路误差源已经消失，剩下的 0.12s 覆盖的是 ffmpeg 自己报帧率/时间戳的
+# 取整（15fps 下一帧 0.067s，0.12s ≈ 1.8 帧）；收紧到 1 帧以内会让正常边界黑段被误判成
+# 镜内异常，而 F-2 之后边界本不该有黑段——误报噪声比漏报更难复盘，故不动。
 CELL_SIZE = (640, 360)  # 拼图单格像素，与评审 brief 的批量判读口径一致
 
 
@@ -83,18 +87,40 @@ def _frames(video: Path, w: int, h: int):
         p.wait()
 
 
-def _shot_bounds(plan: dict) -> list[tuple[float, float]]:
-    """逐镜 [起点, 终点) 秒，口径与 mux.write_srt 的 offset 累加完全一致。"""
-    bounds, offset = [], 0.0
-    for shot in plan["shots"]:
-        secs = float(shot["seconds"])
-        bounds.append((offset, offset + secs))
-        offset += secs
+def _quantize_sec(sec: float, grid: int | None) -> float:
+    """单镜时长量化，与 `mux.cumulative_offsets` 内部同口径：给 grid 按整帧、否则按整数微秒。"""
+    g = grid or 1_000_000
+    return int(round(float(sec) * g)) / g
+
+
+def _shot_bounds(plan: dict, fps: float | None = None) -> list[tuple[float, float]]:
+    """逐镜 [起点, 终点) 秒。
+
+    81-G3（A2 移交）：累加口径改走 `mux.cumulative_offsets`——此前三处裸浮点 `offset += sec`
+    已经统一收成这一个真源，只有这里还各走各的。边界时刻不是装饰：`scan_boundaries` 是拿
+    它去对**帧号**（n/fps）的，而 scene.py 的每镜帧数 == round(seconds×fps)，两条轴各自取整
+    会随镜数线性错开（实测 49 镜 × 3.34s 在 15fps 下差到 0.32s = 5 帧 > BOUNDARY_TOL），
+    本该判"落在边界"的黑段会被算成镜内异常、反之漏报。
+    给 fps（ffmpeg 实测帧率，本构建全是整数帧率：`-q l`=15、`-q m`/fullhd=30）时按帧网格
+    量化，与渲染轴逐帧重合；不给时按整数微秒累加，数值与旧裸累加在浮点残差内一致（≤1e-9，
+    逐镜取整噪声归零），兼容无渲染上下文的调用（单测、只拿 Plan 算账）。
+    """
+    secs = [float(shot["seconds"]) for shot in plan["shots"]]
+    if not secs:
+        return []
+    grid = int(round(fps)) if fps else None
+    starts = mux.cumulative_offsets(secs, fps=grid)
+    bounds = []
+    for i, sec in enumerate(secs):
+        start = starts[i]
+        # 末镜终点没有"下一镜起点"可借，按同一口径量化该镜时长后加在起点上
+        end = starts[i + 1] if i + 1 < len(starts) else start + _quantize_sec(sec, grid)
+        bounds.append((start, end))
     return bounds
 
 
-def _boundary_times(plan: dict) -> list[float]:
-    bounds = _shot_bounds(plan)
+def _boundary_times(plan: dict, fps: float | None = None) -> list[float]:
+    bounds = _shot_bounds(plan, fps)
     total = sum(b[1] - b[0] for b in bounds) if bounds else 0.0
     return sorted({0.0, total, *(t for pair in bounds for t in pair)})
 
@@ -150,7 +176,7 @@ def scan_boundaries(video: Path, plan: dict, ink_threshold: int = INK_THRESHOLD)
     `unexpected` 为 True 时代表存在**不落在任何镜头边界上**的空白区间——这才是需要人去看的信号。
     """
     w, h, fps = _ffprobe_resolution_fps(video)
-    boundary_times = _boundary_times(plan)
+    boundary_times = _boundary_times(plan, fps)
 
     blanks: list[int] = []
     n_frames = 0
@@ -175,7 +201,7 @@ def contact_sheet(video: Path, plan: dict, out_png: Path, cols: int = 4) -> Path
     `-ss <终点>` 在部分 ffmpeg 构建上会寻到下一个关键帧，抓到的其实是下一镜画面。
     """
     _, _, fps = _ffprobe_resolution_fps(video)
-    bounds = _shot_bounds(plan)
+    bounds = _shot_bounds(plan, fps)
     # 尾帧退让 1.5 帧而不是半帧：`-ss` 落在最后一帧的后半区间时，部分 ffmpeg 构建解不出
     # 完整帧（已验证：半帧退让在片尾那一镜稳定抓不到帧，1.5 帧退让稳定可抓）。
     # 全片最后一个时间点还要额外退让：封装 Duration 是四舍五入到帧的近似值，紧贴它的

@@ -11,19 +11,20 @@ import json
 from copy import deepcopy
 
 from . import kp_draft, llm_client, llm_prompts, review, storyboard
-from .ir import VISUAL_KINDS, Brief, Plan
+from .ir import VISUAL_KINDS, NATURAL_CPS, Brief, Plan
+from .storyboard import MIN_SHOTS, max_shots_for  # 81-A1b：镜头密度单一真源在 storyboard，不再各写一份 MAX_SHOTS
 
 MAX_FEEDBACK_RETRIES = 2
-MIN_SHOTS, MAX_SHOTS = 4, 10
 
 
-def _schema_errors(data) -> list[str]:
+def _schema_errors(data, target_seconds: float = 0.0) -> list[str]:
     if not isinstance(data, dict) or not isinstance(data.get("shots"), list):
         return ["顶层必须是 {\"shots\": [...]}"]
     shots = data["shots"]
     errs = []
-    if not MIN_SHOTS <= len(shots) <= MAX_SHOTS:
-        errs.append(f"镜头数必须在 {MIN_SHOTS}~{MAX_SHOTS} 之间，收到 {len(shots)}")
+    cap = max_shots_for(target_seconds)   # 上限随目标时长伸缩（1200s → 20），短片仍是 10
+    if not MIN_SHOTS <= len(shots) <= cap:
+        errs.append(f"镜头数必须在 {MIN_SHOTS}~{cap} 之间，收到 {len(shots)}")
     for i, s in enumerate(shots):
         if not isinstance(s, dict):
             errs.append(f"shots[{i}] 不是对象")
@@ -53,9 +54,14 @@ def _blocks(data: dict) -> list[dict]:
 
 def _user_message(brief: Brief, kp: dict, feedback: list[str] | None, prev: str | None,
                   head: str = "【上一版被静态闸门/校验打回的清单，请逐条修正后重新输出完整 JSON】") -> str:
-    chars = int(brief.target_seconds * 3.9)
+    cap = max_shots_for(brief.target_seconds)
+    # 字数预算口径 = ir.NATURAL_CPS（真实语速标定 4.75 字/秒取整为 4.7，见 ir.py:46-51；
+    # 旧系数 3.9 是换配音引擎前 SAPI 的读数）。A3_SYSTEM 提示词里的字数公式同一把尺子
+    # （llm_prompts.py 用 {{CPS}}=NATURAL_CPS 替换），下发文本与校验口径不得漂移。
+    chars = int(brief.target_seconds * NATURAL_CPS)
     msg = (f"学科：{brief.subject}  学段：{kp_draft.GRADE_ZH.get(brief.grade, brief.grade)}  风格：{brief.style}\n"
-           f"目标时长：{brief.target_seconds} 秒（口播总字数建议不超过约 {chars} 字，含所有镜头）\n"
+           f"目标时长：{brief.target_seconds} 秒（镜头数 {MIN_SHOTS}~{cap} 个；"
+           f"口播总字数建议不超过约 {chars} 字，含所有镜头）\n"
            f"先修点名镜：{'由系统在片头另加，你不要写' if brief.prior_knowledge and kp.get('prior') else '本片不要'}\n\n"
            f"【知识点条目 JSON（唯一事实来源）】\n{json.dumps(kp, ensure_ascii=False, indent=1)}")
     if feedback:
@@ -103,7 +109,7 @@ def build(brief: Brief, kp: dict, *, feedback: list[str] | None = None, prev: st
             info["reason"] = str(e)
             break
         prev = raw.strip()
-        errs = _schema_errors(data)
+        errs = _schema_errors(data, brief.target_seconds)
         if errs:
             bad = [f"- [SCHEMA] {m}" for m in errs]
             if head != DEFAULT_HEAD:     # 改进通道：用户那句要跟着闸门清单一起留着

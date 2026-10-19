@@ -18,18 +18,20 @@ GRADES = ("G8", "G9", "H1", "H2", "H3", "U1", "U2")
 STYLES = ("clean", "board")
 VISUAL_KINDS = ("title", "formula", "compare", "graph_vt", "figure", "steps", "summary", "callout",
                 "axis_graph", "particle_box", "microstate", "energy_dist", "stat_chart", "mind_map", "table",
-                "force_diagram", "field", "circuit", "optics", "incline", "trajectory", "derivation")
+                "force_diagram", "field", "circuit", "optics", "incline", "trajectory", "derivation",
+                "mechanism")
 # 以「画」为主的版式：整片至少要有一个（review.NO_FIGURE），讲具体对象的图都算。
 # derivation 也计入：它不是文字罗列，是带代换动画的推导过程呈现（#79-B，与 incline/trajectory 同理）。
+# mechanism 计入（81-S3）：有机机理推电子箭头图是"画"不是"列"，与 force_diagram 同理。
 GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate", "energy_dist",
                  "stat_chart", "mind_map", "force_diagram", "field", "circuit", "optics",
-                 "incline", "trajectory", "derivation")
+                 "incline", "trajectory", "derivation", "mechanism")
 
 # A3 分镜预算账本挂在 Plan.refs 末尾的标记（refs[0] 仍是教材出处，片尾卡只读第一条）。
 # 常量住在 ir：storyboard 写、review 读，任何一方都不该私有这份字段名。
 BUDGET_REF_KIND = "storyboard_budget"
 
-MIN_SECONDS, MAX_SECONDS = 30, 600
+MIN_SECONDS, MAX_SECONDS = 30, 1200   # 81-W1：600→1200，观众要求 10~20 分钟长片
 MIN_SHOT_SECONDS = 4.0
 
 # 镜头时间轴：每个镜头占 shot.seconds 秒，其中前 SHOT_HEAD 秒留给标题淡入（配音也从这里开始），

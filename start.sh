@@ -12,10 +12,26 @@ export QX_LLM_K0="${QX_LLM_K0:-1}"
 export QX_LLM_A3="${QX_LLM_A3:-1}"
 export QX_LLM_VOICEOVER="${QX_LLM_VOICEOVER:-1}"
 
-# 阻断项③运行时化：起服务前量一次当前字体栈（Noto Serif CJK SC + TeX Gyre Termes）的字距，
+# 阻断项③运行时化：量当前字体栈（Noto Serif CJK SC + TeX Gyre Termes）的字距，
 # 落盘 font_metrics_cache.json，font_metrics.metrics_for 未标定时读它。量不出来就如实保持
 # "重测前只当画廊"（生成照旧报 FontMetricsError），画廊不受影响。
-python mvp/tools_fontmetrics.py --out mvp/font_metrics_cache.json \
-  || echo "[fontmetrics] 标定失败：在线生成保持关闭（画廊不受影响）" >&2
+# 81-W1 冷启动提速：实测要拉起 manim 排版采样，每次开机重测白白多花几十秒。
+# 判据与 font_metrics 现码同源（load_cache 只认「pair 齐全 + metrics 五键可转 float」，
+# current_pair 读 MVP_TEXT_FONT/MVP_LATIN_FONT）：缓存 JSON 已存在、结构完整、且其中
+# 记录的字体对与当前环境变量字体对一致 → 标定已可用，跳过重测；字体对变了（换镜像/换字体）
+# 视同版本不匹配，照旧重测覆盖。
+CACHE=mvp/font_metrics_cache.json
+if python -c '
+import sys
+sys.path.insert(0, "mvp")
+import font_metrics as FM
+FM.load_cache()  # 缓存缺失/损坏/键不全 → 不注册，下面判定不到当前字体对
+sys.exit(0 if FM.current_pair() in FM.CALIBRATED else 1)
+'; then
+  echo "[fontmetrics] 缓存标定命中当前字体对，跳过重测（81-W1 冷启动提速）" >&2
+else
+  python mvp/tools_fontmetrics.py --out "$CACHE" \
+    || echo "[fontmetrics] 标定失败：在线生成保持关闭（画廊不受影响）" >&2
+fi
 
 exec python mvp/web/server.py --host 0.0.0.0 --port "${PORT:-7860}"

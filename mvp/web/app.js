@@ -68,7 +68,10 @@ async function loadTopics() {
   fill($("#fGrade"), d.grades, pref.grade || DEFAULTS.grade);
   fill($("#fStyle"), d.styles, pref.style || DEFAULTS.style);
   fill($("#fQuality"), d.qualities, pref.quality || DEFAULTS.quality);
-  $("#fSeconds").append(...d.durations.map((s) => opt(String(s), s + " 秒")));
+  // 时长档文案由服务端 duration_labels 下发（81-W1 诚实标注：长片写明预计耗时与画质建议），
+  // 没有标注的旧服务回落到 "N 秒"。
+  const dlabels = d.duration_labels || {};
+  $("#fSeconds").append(...d.durations.map((s) => opt(String(s), dlabels[String(s)] || (s + " 秒"))));
   $("#fSeconds").value = pref.seconds || DEFAULTS.seconds;
 }
 
@@ -330,6 +333,8 @@ function wanted(files) {
 function renderShots(plan) {
   const box = $("#shots");
   box.textContent = "";
+  if (state.shotsIO) { state.shotsIO.disconnect(); state.shotsIO = null; }
+  state.shotsBatch = null;
   const shots = (plan && plan.shots) || [];
   if (!shots.length) {
     box.append(el("p", "hint", "该 run 没有 plan.json，无法编辑分镜。"));
@@ -345,7 +350,38 @@ function renderShots(plan) {
   box.append(el("p", "hint",
     `分镜 IR ${ver || "（旧版无版本/hash）"} · 镜头时长含淡入 ${HEAD}s 与淡出 ${TAIL}s 留白，`
     + `口播只占中间窗口，字幕时间是镜头内的绝对秒（从 ${HEAD}s 起，不是从 0 平铺）。`));
-  for (const s of shots) {
+  // 81-W1：长片分镜条数多（1200s 档可达几十镜），一次全挂几十个 textarea 会卡首屏。
+  // 先渲染第一批 + 底部哨兵，滚到哪渲到哪；未渲染的镜头保持 plan 原值（重出片只提交已渲染卡片）。
+  const ctx = { shots, drawn: 0, head: HEAD, tail: TAIL, min: MIN, box, sentinel: el("div", "shots-sentinel") };
+  box.append(ctx.sentinel);
+  state.shotsBatch = ctx;
+  shotsMore();
+  if ("IntersectionObserver" in window) {
+    state.shotsIO = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) shotsMore();
+    }, { rootMargin: "400px" });
+    state.shotsIO.observe(ctx.sentinel);
+  } else {
+    while (state.shotsBatch && state.shotsBatch.drawn < shots.length) shotsMore();
+  }
+}
+
+const SHOT_BATCH = 12;
+
+function shotsMore() {
+  const ctx = state.shotsBatch;
+  if (!ctx || ctx.drawn >= ctx.shots.length) return;
+  const take = ctx.shots.slice(ctx.drawn, ctx.drawn + SHOT_BATCH);
+  for (const s of take) ctx.box.insertBefore(shotCard(s, ctx.head, ctx.tail, ctx.min), ctx.sentinel);
+  ctx.drawn += take.length;
+  if (ctx.drawn >= ctx.shots.length) {
+    if (state.shotsIO) { state.shotsIO.disconnect(); state.shotsIO = null; }
+    ctx.sentinel.remove();
+    state.shotsBatch = null;
+  }
+}
+
+function shotCard(s, HEAD, TAIL, MIN) {
     const card = el("div", "shot");
     card.dataset.index = s.index;
 
@@ -391,22 +427,32 @@ function renderShots(plan) {
 
     const refs = (s.kp_refs || []).join(" ／ ");
     if (refs) card.append(el("p", "shot-refs", "出处：" + refs));
-    box.append(card);
-  }
+    return card;
 }
 
-/* ------------------------------------------------------------------ 作品墙 */
+/* ------------------------------------------------------------------ 作品墙
+ * 81-W1 加载优化：
+ *  1) 骨架屏——/api/gallery 还在路上时先铺卡片壳，页面不是一片空白；
+ *  2) 分段懒加载——每批只渲染 WALL_BATCH 张卡片壳，滚到接近底部（哨兵进视口）再拼下一批，
+ *     首屏 DOM 规模与总片数解耦（长片时代画廊只增不减，一次全挂会把主线程堵住）；
+ *  3) 媒体（video/img）仍由 IntersectionObserver 进入视口才拉 src——首帧元数据都不提前取。
+ */
+const WALL_BATCH = 9;
+
 async function loadGallery() {
+  drawWallSkeleton();
   let r, d;
   try {
     r = await fetch("/api/gallery");
     d = await r.json();
   } catch (e) {
     $("#wallHint").textContent = "作品墙加载失败：无法连接服务，请稍后刷新重试。";
+    $("#wallGrid").textContent = "";
     return;
   }
   if (!r.ok || d.error) {  // 接口 5xx/4xx 时不能冒充「新作品制作中」的空态
     $("#wallHint").textContent = "作品墙加载失败：" + (d && d.error ? d.error : "HTTP " + r.status);
+    $("#wallGrid").textContent = "";
     return;
   }
   const items = d.items || [];
@@ -430,6 +476,23 @@ async function loadGallery() {
   drawWall(items);
 }
 
+/* 骨架壳：结构与 .wcard 同高（媒体位 16:9 + 标题/标签/按钮行三条灰线），只做视觉占位 */
+function drawWallSkeleton(n) {
+  const grid = $("#wallGrid");
+  grid.textContent = "";
+  for (let i = 0; i < (n || 6); i++) {
+    const card = el("div", "wcard wcard-skel");
+    card.setAttribute("aria-hidden", "true");
+    const media = el("div", "wmedia");
+    media.append(el("div", "wmedia-skel"));
+    card.append(media);
+    const body = el("div", "body");
+    body.append(el("span", "skel-line w-40"), el("span", "skel-line w-90"), el("span", "skel-line w-60"));
+    card.append(body);
+    grid.append(card);
+  }
+}
+
 function drawWall(items) {
   const subject = $("#wallTabs .tab.active").dataset.subject;
   const list = items.filter((i) => !subject || i.subject === subject);
@@ -439,57 +502,90 @@ function drawWall(items) {
   $("#wallHint").textContent = list.length
     ? `共 ${list.length} 条 · 卡片元数据来自每个 run 的 sidecar.json / brief.json`
     : "新作品制作中：旧稿正在批量更换，更换完成的合格作品才会出现在这里。";
-  for (const it of list) {
-    const card = el("div", "wcard");
-    if (it.video) {
-      // 懒加载（SubTask 63）：进入视口附近才挂 src（preload=metadata 取首帧），
-      // 之前显示纯 CSS 骨架占位；loadeddata 后骨架撤掉。无 IntersectionObserver 的浏览器直接挂 src 兜底。
-      const media = el("div", "wmedia");
-      media.append(el("div", "wmedia-skel"));
-      const v = el("video");
-      v.controls = true; v.preload = "none";
-      v.dataset.src = it.video;
-      v.addEventListener("loadeddata", () => media.classList.add("loaded"));
-      media.append(v);
-      card.append(media);
-      lazyLoadMedia(v);
-    }
-    const body = el("div", "body");
-    body.append(el("h4", "", it.topic || it.key));
-    const meta = el("div", "meta-line");
-    meta.append(
-      tag(labelSubject(it.subject)), tag(it.grade_label || it.grade || "—"),
-      tag(it.seconds ? it.seconds + "s" : "时长未知"),
-      tag(it.size_mb ? it.size_mb + "MB" : "—"), tag(it.date || ""), tag(it.source));
-    body.append(meta);
-
-    const row = el("div", "wrow");
-    const open = el("button", "linkbtn", "查看 / 改分镜");
-    open.type = "button";
-    open.addEventListener("click", () => openWall(it));
-    row.append(open);
-    for (const f of (it.files || []).filter((x) => ["final", "burned", "srt", "plan"].includes(x.role))) {
-      const a = el("a", "linkbtn", "↓ " + f.name);
-      a.href = f.url + "?download=1";
-      row.append(a);
-    }
-    body.append(row);
-    card.append(body);
-    grid.append(card);
+  if (!list.length) return;
+  // 分段渲染：哨兵贴在批次尾部，进入视口（提前 600px）就续下一批；无 IO 时一次铺完兜底
+  const wall = { list, drawn: 0, sentinel: el("div", "wall-sentinel") };
+  state.wall = wall;
+  grid.append(wall.sentinel);
+  wallMore();
+  if ("IntersectionObserver" in window) {
+    state.wallBatchIO = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) wallMore();
+    }, { rootMargin: "600px" });
+    state.wallBatchIO.observe(wall.sentinel);
+  } else {
+    while (state.wall && state.wall.drawn < state.wall.list.length) wallMore();
   }
 }
 
-/* 作品墙懒加载：一个全局 IntersectionObserver，重绘前 disconnect 重建 */
+function wallMore() {
+  const wall = state.wall;
+  if (!wall || wall.drawn >= wall.list.length) return;
+  const grid = $("#wallGrid");
+  const take = wall.list.slice(wall.drawn, wall.drawn + WALL_BATCH);
+  for (const it of take) grid.insertBefore(wallCard(it), wall.sentinel);
+  wall.drawn += take.length;
+  if (wall.drawn >= wall.list.length) {   // 全部渲染完，哨兵退役
+    if (state.wallBatchIO) { state.wallBatchIO.disconnect(); state.wallBatchIO = null; }
+    wall.sentinel.remove();
+    state.wall = null;
+  }
+}
+
+function wallCard(it) {
+  const card = el("div", "wcard");
+  if (it.video) {
+    // 懒加载（SubTask 63 起）：进入视口附近才挂 src（preload=metadata 取首帧），
+    // 之前显示纯 CSS 骨架占位；loadeddata 后骨架撤掉。无 IntersectionObserver 的浏览器直接挂 src 兜底。
+    const media = el("div", "wmedia");
+    media.append(el("div", "wmedia-skel"));
+    const v = el("video");
+    v.controls = true; v.preload = "none";
+    v.dataset.src = it.video;
+    v.addEventListener("loadeddata", () => media.classList.add("loaded"));
+    media.append(v);
+    card.append(media);
+    lazyLoadMedia(v);
+  }
+  const body = el("div", "body");
+  body.append(el("h4", "", it.topic || it.key));
+  const meta = el("div", "meta-line");
+  meta.append(
+    tag(labelSubject(it.subject)), tag(it.grade_label || it.grade || "—"),
+    tag(it.seconds ? it.seconds + "s" : "时长未知"),
+    tag(it.size_mb ? it.size_mb + "MB" : "—"), tag(it.date || ""), tag(it.source));
+  body.append(meta);
+
+  const row = el("div", "wrow");
+  const open = el("button", "linkbtn", "查看 / 改分镜");
+  open.type = "button";
+  open.addEventListener("click", () => openWall(it));
+  row.append(open);
+  for (const f of (it.files || []).filter((x) => ["final", "burned", "srt", "plan"].includes(x.role))) {
+    const a = el("a", "linkbtn", "↓ " + f.name);
+    a.href = f.url + "?download=1";
+    row.append(a);
+  }
+  body.append(row);
+  card.append(body);
+  return card;
+}
+
+/* 作品墙懒加载：一个全局 IntersectionObserver，重绘前 disconnect 重建；
+ * 同时管「媒体进入视口才拉」和「分批哨兵」两件事（81-W1）。 */
 function resetWallLazy() {
-  if (state.wallIO) { state.wallIO.disconnect(); state.wallIO = null; }
+  for (const k of ["wallIO", "wallBatchIO"]) {
+    if (state[k]) { state[k].disconnect(); state[k] = null; }
+  }
+  state.wall = null;
   if ("IntersectionObserver" in window) {
     state.wallIO = new IntersectionObserver((entries) => {
       for (const en of entries) {
         if (!en.isIntersecting) continue;
-        const v = en.target;
-        state.wallIO.unobserve(v);
-        v.preload = "metadata";
-        v.src = v.dataset.src;
+        const n = en.target;
+        state.wallIO.unobserve(n);
+        if (n.tagName === "VIDEO") n.preload = "metadata";
+        n.src = n.dataset.src;   // video/img 通用（文档图如果后续上墙也走这条）
       }
     }, { rootMargin: "200px" });
   }

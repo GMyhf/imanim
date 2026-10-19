@@ -58,7 +58,8 @@ def _wav_seconds(path: Path) -> float | None:
 
 
 def _sfx_graph(shot_seconds: Iterable[float] | None,
-               track_seconds: float | None) -> tuple[list[Path], str] | None:
+               track_seconds: float | None,
+               fps: int | None = None) -> tuple[list[Path], str] | None:
     """构造 SFX 混音的额外输入与 filter_complex 图；没有可混内容时返回 None。
 
     输入布局：0=无声视频、1=配音整轨、2 起=SFX 素材（每个镜头切换点一份 sweep、片尾一份 ding）。
@@ -70,9 +71,11 @@ def _sfx_graph(shot_seconds: Iterable[float] | None,
     chains: list[str] = []
     labels: list[str] = ["[1:a]"]
     idx = 2
-    offset = 0.0
-    for sec in shot_seconds or ():
-        offset += float(sec)
+    # 切换点（=下一镜起点，含片尾）与音轨/SRT 共用 cumulative_offsets，不再自己 float 累加。
+    # 末尾补一个 0 秒的虚拟镜让列表多出「全片终点」这一切换点，与旧口径一致。
+    secs = [float(s) for s in (shot_seconds or ())]
+    boundaries = cumulative_offsets(secs + ([0.0] if secs else []), fps)[1:]
+    for offset in boundaries:
         if offset <= 0:
             continue        # t=0 的第一个镜头起点不放转场音
         inputs.append(SFX_SWEEP)
@@ -149,8 +152,32 @@ def speech_onsets(wav: Path, noise_db: float = -45.0, min_silence: float = 0.3) 
     return sorted(onsets)
 
 
+def cumulative_offsets(seconds: Iterable[float], fps: int | None = None) -> list[float]:
+    """镜头起点秒的唯一累加口径（81-A2 防舍入漂移）：返回 [0, s0, s0+s1, ...]。
+
+    音轨帧偏移（build_track 入参）、SRT 毫秒偏移（write_srt）、SFX 切换点（_sfx_graph）
+    必须读同一份累加结果：此前三处各自 `offset += sec` 浮点累加、各自取整，舍入残差各走各的
+    逐镜累积，长片里字幕/音频/画面三条轴会缓慢互相漂开。
+    给 fps（与渲染画质一致的帧率）时按**渲染帧网格**量化边界：第 k 镜起点 =
+    Σ round(sec_i*fps)/fps，与 scene.py 的「每镜帧数 == round(seconds×fps)」逐帧重合，
+    音频轴直接压在视频轴上；不给 fps 时按整数微秒累加（每镜先量化到 µs 再整型相加，
+    零浮点残差），数值与旧逐镜浮点累加一致，兼容无渲染上下文的调用与既有测试。
+    """
+    offs: list[float] = []
+    frames = 0
+    us = 0
+    for sec in seconds:
+        offs.append(frames / fps if fps else us / 1_000_000)
+        if fps:
+            frames += int(round(float(sec) * fps))
+        else:
+            us += int(round(float(sec) * 1_000_000))
+    return offs
+
+
 def build_track(shot_wavs: list[tuple[float, Path]], total_seconds: float, out_wav: Path) -> float:
     """shot_wavs: [(镜头起点秒, wav 路径)]，段内音频从起点后 SHOT_HEAD 秒开始（等标题淡入）。
+    镜头起点必须由 cumulative_offsets 产出（单一真源），与 SRT/SFX 共用同一份累计秒。
     与 IR 的字幕时间口径一致，字幕与语音才不会逐镜累积错位。"""
     rate = None
     for _, wav in shot_wavs:
@@ -164,10 +191,12 @@ def build_track(shot_wavs: list[tuple[float, Path]], total_seconds: float, out_w
             rate = w.getframerate()
     rate = rate or RATE
     width, ch = WIDTH, CH
-    frames = bytearray(int(total_seconds * rate) * width)
+    frames = bytearray(int(round(total_seconds * rate)) * width)
 
     def put(offset: float, data: bytes) -> None:
-        i = int(offset * rate) * width
+        # 四舍五入到整帧（截断会让偏移 0.9999… 的边界早一帧；offset 来自 cumulative_offsets，
+        # 已量化到渲染帧网格/整数微秒，这里取整只会落到最近的音频帧上）。
+        i = int(round(offset * rate)) * width
         if i >= len(frames):        # 越过轨道末尾：丢弃而不是把缓冲区撑大（撑大会让时长失真）
             return
         if i < 0:
@@ -196,11 +225,13 @@ def _ts(t: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def write_srt(plan: dict, out_srt: Path) -> int:
+def write_srt(plan: dict, out_srt: Path, fps: int | None = None) -> int:
     out = []
     n = 0
-    offset = 0.0
-    for shot in plan["shots"]:
+    # 镜头偏移取自 cumulative_offsets：与 build_track 的配音落点是同一份累计秒，
+    # 不再在字幕这一侧自己 float 累加（各自 round 才会各漂各的）。
+    offsets = cumulative_offsets([sh["seconds"] for sh in plan["shots"]], fps)
+    for shot, offset in zip(plan["shots"], offsets):
         # 兜底（SubTask #60-C）：plan.json 被手改后 cue 可能乱序/重叠，review 闸门又拦不住
         # 直接喂给合成层的这份 dict。写盘前按 start 排序，重叠时把前一条的 end 裁到后一条
         # 的 start（end = max(start, next.start)，不会裁出负时长），顺序不动、不删条——
@@ -213,7 +244,6 @@ def write_srt(plan: dict, out_srt: Path) -> int:
         for s in cues:
             n += 1
             out.append(f"{n}\n{_ts(offset + s['start'])} --> {_ts(offset + s['end'])}\n{s['text']}\n")
-        offset += shot["seconds"]
     out_srt.write_text("\n".join(out), encoding="utf-8")
     return n
 
@@ -254,12 +284,14 @@ def _burn_cmd(video: Path, audio: Path, srt: Path, burned: Path,
 
 
 def mux(video: Path, audio: Path, out: Path, srt: Path | None = None,
-        sfx: bool | None = None, shot_seconds: Iterable[float] | None = None) -> Path:
+        sfx: bool | None = None, shot_seconds: Iterable[float] | None = None,
+        fps: int | None = None) -> Path:
     """混流出 final.mp4；给了 srt 再烧一份内嵌字幕版（手机直看）。
 
     sfx: None=读环境变量 MVP_SFX（缺省关闭）；开启后在每个镜头切换点（t>0 的 shot 起点）
     混入转场 sweep、片尾混入 ding，用 filter_complex 多输入 + adelay/volume/amix 一次成型。
-    shot_seconds: 逐镜头时长（秒），算累计偏移得切换点。SFX 混入失败不致命：退回无音效
+    shot_seconds: 逐镜头时长（秒），切换点经 cumulative_offsets 取（与音轨/SRT 同一份累计秒）；
+    fps: 渲染帧率，给了就把边界量化到渲染帧网格。SFX 混入失败不致命：退回无音效
     路径并打 warning，音效不能毁掉整片。烧录版与主版本用同一份混音结果（SFX 混入成功才带
     音效，失败则两份都不带），不会出现"画廊版有转场音、手机版没有"。
 
@@ -272,7 +304,7 @@ def mux(video: Path, audio: Path, out: Path, srt: Path | None = None,
     base = [ffmpeg, "-y", "-loglevel", "error", "-i", str(video), "-i", str(audio),
             "-c:v", "copy", "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "2",
             "-shortest", str(out)]
-    spec = _sfx_graph(shot_seconds, _wav_seconds(audio)) if _sfx_enabled(sfx) else None
+    spec = _sfx_graph(shot_seconds, _wav_seconds(audio), fps) if _sfx_enabled(sfx) else None
     mixed = False
     if spec is not None:
         try:

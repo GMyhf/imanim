@@ -48,10 +48,16 @@ FIGURE_SHAPES = {"ellipse", "right_triangle", "chord"}
 # 物理图示的方向词与元件类型（与 render/scene.py 的 _FORCE_DIRS / circuit 符号同源）。
 _FORCE_DIRS = {"up", "down", "left", "right", "upleft", "upright", "downleft", "downright"}
 _FIELD_MODES = {"region", "wire", "magnet"}
-_CIRCUIT_TYPES = {"battery", "resistor", "switch", "bulb", "ammeter", "voltmeter"}
+# 81-S1 扩了三元件（capacitor/inductor/rheostat，scene.CIRCUIT_HALF 同源）；闸门枚举不认的类型一律打回。
+_CIRCUIT_TYPES = {"battery", "resistor", "switch", "bulb", "ammeter", "voltmeter",
+                  "capacitor", "inductor", "rheostat"}
 _OPTICS_MODES = {"mirror", "refract", "lens", "image"}
 _INCLINE_DIRS = {"normal", "into", "along_up", "along_down"}
 _TRAJECTORY_MODES = {"projectile", "circle", "cycloid"}
+# 81-S2 新字段合法域（scene._v_force_diagram 的 surface 与 scene._v_mechanism 的 bonds[].kind 同源）：
+# 支承面三式（未知串渲染层静默落回旧路径，闸门抓错字）；断键/成键两式。
+_SURFACE_KINDS = {"ground", "wall_left", "wall_right"}
+_MECH_BOND_KINDS = {"break", "form"}
 
 # 检查码清单（第四轮 F-8）：`review.json = []` 在 v7 里同时可能是"全绿"和"根本没跑"，
 # 两位评审各记一次（A D14 / B D-03）。交付件改成 {checked:[码], violations:[...]}，
@@ -122,10 +128,25 @@ def _ref_cut(text: str) -> list[str]:
             fallback = (wide, left, right)
     return [text] if fallback is None else [fallback[1], fallback[2]]
 
-# 本机字体栈实测缺字形的字符（Schedule C7 的字形结论）：Unicode 上/下标**字母**。
+# 本机字体栈实测缺字形的字符（Schedule C7 的字形结论）：Unicode 下标**字母**。
 # 数字下标 ₀₁₂ 与上标 ⁻¹²³、Δ、·、² 都有字形，不在黑名单内。
-TOFU = set("ₐₑₔₕᵢⱼₖₗₘₙₚₛₜᵤᵥₓ"
-           "ᵃᵇᶜᵈᵉᵍⁱʲᵏˡᵐᵒᵖʳˢᵗᵘᵛʷˣʸᶻ")
+# 81-G（按 81-S5 §3 归一化规格表收窄）：上标字母 ᵃ…ᶻ 任何出现都会被 scene.rich_tokens 的
+# _SUP_RUN 非数字分支转成 ASCII 进 ^ 道（含 ⁺⁻ⁿ 或字母即拆段，渲染层全兜底）→ 从黑名单删除；
+# 下标字母**仅在**前一字符是字母数字/闭括号时被转进 _ 道（scene._plain_tokens 同一判据），
+# 孤立出现（行首、标点/汉字之后）渲染层维持原样、仍是豆腐块 → 保留，但检查改为上下文感知。
+TOFU_SUP_LETTERS = set("ᵃᵇᶜᵈᵉᵍⁱʲᵏˡᵐᵒᵖʳˢᵗᵘᵛʷˣʸᶻ")  # 渲染层已兜底，只登记不拦（test 同源对照用）
+TOFU = set("ₐₑₔₕᵢⱼₖₗₘₙₚₛₜᵤᵥₓ")                      # 下标字母：上下文不安全时才拦
+_TOFU_SUB_PREV = re.compile(r"[A-Za-z0-9)\]]")         # scene._plain_tokens 的下标转换前邻判据
+
+
+def _tofu_hits(t: str) -> set:
+    """一条文本里真正会落豆腐块的上/下标字母：下标字母前邻是字母数字/闭括号时
+    rich_tokens 会把它转成 ASCII 下标（安全，S5 实拍已证），其余上下文照常缺字形。"""
+    bad = set()
+    for i, c in enumerate(t):
+        if c in TOFU and not (i > 0 and _TOFU_SUB_PREV.match(t[i - 1])):
+            bad.add(c)
+    return bad
 
 
 def _mag_findings(kind: str, forces: list) -> list[str]:
@@ -167,6 +188,94 @@ def _across_finding(e: dict, elems: list) -> str | None:
     if _text(t.get("type")) in meters:
         return f"circuit 电压表 across 指向了电表（{_text(t.get('type'))}），只能并联在电池/电阻/开关/灯泡两端"
     return None
+
+
+def _pos_num(v) -> bool:
+    """C1b 口径的「有限正数」：bool 与字符串数字都算非法。"""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
+
+
+def _fin_num(v) -> bool:
+    """有限数值（可为负）：电表 reading 允许负值（指针反向偏转是楞次刚需，scene.ammeter_needle_angle）。"""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _meter_findings(ty: str, e: dict) -> list[str]:
+    """电表量程（81-S1 reading/full_scale，沿用 C1b「给了必须合法」口径）：
+    scene.ammeter_needle_angle 对非法值静默退 0°（指针消失）、full_scale≤0 静默退 1.0，闸门比渲染层严。
+    指针只画在电流表上（scene._v_circuit 的 symbol 仅 ammeter 分支消费 reading），电压表给了不生效。"""
+    msgs = []
+    r, fs = e.get("reading"), e.get("full_scale")
+    if ty == "voltmeter" and (r is not None or fs is not None):
+        msgs.append("circuit 电压表给了 reading/full_scale：渲染层只给电流表画读数指针，"
+                    "电压表请直接用 label 文字写上读数")
+    if r is not None and not _fin_num(r):
+        msgs.append(f"circuit {ty} 的 reading 非法（{r!r}），必须是有限数字（可为负，指针随电流符号反向）")
+    if fs is not None and not _pos_num(fs):
+        msgs.append(f"circuit {ty} 的 full_scale 非法（{fs!r}），必须是有限正数（量程满偏值）")
+    return msgs
+
+
+def _mech_findings(props: dict) -> list[str]:
+    """mechanism（81-S3）协议闸门：arrows≥1；at 若给则长度=声明箭数；
+    species/bonds/lps 的 attach 必须是声明 arrows 的整数下标；kind=break/form 的键必须挂 attach。
+    渲染层全部有脏值兜底（attach 越界落静态层、at 长度不符回均匀铺批、退化箭跳过但占下标），
+    闸门比渲染层严——这些形状全是「LLM 以为画了、实拍不对」的静默缺陷，与 C1b mag/across 同一口径。"""
+    msgs = []
+    arrows = [a for a in _seq(props.get("arrows")) if isinstance(a, dict)]
+    if not arrows:
+        msgs.append("mechanism 至少要一支弯箭头（弯箭头=电子的移动，是机理图的揭示单元）")
+    at = _seq(props.get("at")) if props.get("at") is not None else []
+    if at and arrows and len(at) != len(arrows):
+        msgs.append(f"mechanism 的 at 长度 {len(at)} ≠ 箭头数 {len(arrows)}（一箭一条，长度必须相等；"
+                    f"不等时渲染层退化为均匀铺批，揭示与口播脱钩）")
+    if arrows:
+        for key in ("species", "bonds", "lps"):
+            for i, it in enumerate(_seq(props.get(key))):
+                if not isinstance(it, dict) or it.get("attach") is None:
+                    continue
+                a = it.get("attach")
+                if isinstance(a, bool) or not isinstance(a, int) or not 0 <= a < len(arrows):
+                    msgs.append(f"mechanism 的 {key}[{i}] attach={a!r} 必须是 0~{len(arrows) - 1} 的整数"
+                                f"（声明的 arrows 下标；越界/非整数时该元素落静态层，揭示语义漂移）")
+        for i, bd in enumerate(_seq(props.get("bonds"))):
+            if isinstance(bd, dict) and _text(bd.get("kind")).strip().lower() in _MECH_BOND_KINDS \
+                    and bd.get("attach") is None:
+                msgs.append(f"mechanism 的 bonds[{i}] kind=「{_text(bd.get('kind'))}」必须挂 attach"
+                            f"（绑定到某支箭随批揭示；不绑定则断键/成键信息静态全显，失去揭示意义）")
+    return msgs
+
+
+def _incline_vt_findings(props: dict) -> list[str]:
+    """incline 的 v-t 联动参数（81-S2）：scene.incline_slide_layout 对越界值静默钳位
+    （n→[3,8]、T→≥1.0、angle→[10,60]），钳完画面照样出但物理量与 props 不符——闸门按声明域打回。"""
+    msgs = []
+    n = props.get("n")
+    if n is not None:
+        ok = isinstance(n, int) and not isinstance(n, bool) and 3 <= n <= 8
+        ok = ok or (isinstance(n, float) and not isinstance(n, bool) and math.isfinite(n)
+                    and float(n).is_integer() and 3 <= n <= 8)
+        if not ok:
+            msgs.append(f"incline(vt) 的 n={n!r} 必须是 3~8 的整数（频闪批次数=揭示单元数=建议字幕条数）")
+    for key in ("g", "T"):
+        v = props.get(key)
+        if v is not None and not _pos_num(v):
+            msgs.append(f"incline(vt) 的 {key} 非法（{v!r}），必须是有限正数（重力加速度/数学轴总时长）")
+    mu = props.get("mu")
+    if mu is not None and (not _fin_num(mu) or not 0.0 <= mu <= 1.0):
+        msgs.append(f"incline(vt) 的 mu={mu!r} 必须在 0~1（动摩擦系数；μ≥tanθ 的静止分支合法，超 1 视为脏数据）")
+    return msgs
+
+
+def _unresolved_findings(unresolved, shot=-1) -> list[dict]:
+    """81-G（S4 遗留 6 的执行面）：把渲染期 scene.UNRESOLVED（复核自认救不回来的必挂冲突）
+    转成 report 级 findings——blocking=False，记账不拦出片。
+    接线在渲染侧（review 不 import scene/manim、A4 又跑在渲染之前，静态期拿不到这份清单；
+    manim 子进程也不回传），由拿到 UNRESOLVED 的一方（渲染驱动/E2 反证）调用本函数并入 review.json。"""
+    return [{"shot": shot, "code": "LABEL_CLASH", "blocking": False,
+             "msg": f"渲染期字重叠复核自认必挂：「{_text(t)}」（残差 {r}），成片里注定叠字——"
+                    f"不拦出片，出片后反查该镜"}
+            for r, t in _seq(unresolved)]
 
 
 def _texts(obj, out=None):
@@ -436,6 +545,18 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                                              f"要用 {sorted(_FORCE_DIRS)} 或角度度数")
                 for msg in _mag_findings("force_diagram", forces):
                     add(s.index, "KIND", msg)
+                # 81-S2 新字段（scene._v_force_diagram 的 synthesize/decompose/surface 分支同源）：
+                # 力数不足/未知 surface 串渲染层都静默落回旧受力路径——画面照样出、但合成分解没画，
+                # 属于「闸门说放行、实拍缺一块」的形状，必须在这里打回。
+                if props.get("synthesize") and len(forces) < 2:
+                    add(s.index, "KIND", "force_diagram 的 synthesize（平行四边形合成）至少需要 2 个力，"
+                                         f"当前 {len(forces)}；不足 2 力时渲染层落回普通受力图，不画合成 parallelogram")
+                if props.get("decompose") and len(forces) < 1:
+                    add(s.index, "KIND", "force_diagram 的 decompose（正交分解）至少需要 1 个被分解的力")
+                surf = props.get("surface")
+                if surf is not None and _text(surf).strip().lower() not in _SURFACE_KINDS:
+                    add(s.index, "KIND", f"force_diagram 的 surface=「{_text(surf)}」不在 "
+                                         f"{sorted(_SURFACE_KINDS)} 内；未知串渲染层静默忽略（支承面与刻线不画），多半是拼写错")
             if v.kind == "field":
                 mode = _text(props.get("mode") or "region")
                 if mode not in _FIELD_MODES:
@@ -449,14 +570,31 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                 if not elems:
                     add(s.index, "KIND", "circuit 至少要一个元件")
                 for e in elems:
-                    if _text(e.get("type")) not in _CIRCUIT_TYPES:
+                    ty = _text(e.get("type"))
+                    if ty not in _CIRCUIT_TYPES:
                         add(s.index, "KIND", f"circuit 元件 type 只能是 {sorted(_CIRCUIT_TYPES)}，当前 {_text(e.get('type'))}")
-                    if _text(e.get("type")) == "voltmeter":
+                    if ty == "voltmeter":
                         msg = _across_finding(e, elems)
                         if msg:
                             add(s.index, "KIND", msg)
+                    if ty in ("ammeter", "voltmeter"):
+                        # 81-S1 电表量程（reading/full_scale）：沿用 C1b「给了必须合法」口径
+                        for msg in _meter_findings(ty, e):
+                            add(s.index, "KIND", msg)
             if v.kind == "optics" and _text(props.get("mode") or "mirror") not in _OPTICS_MODES:
                 add(s.index, "KIND", f"optics 的 mode 只能是 {sorted(_OPTICS_MODES)}")
+            # 79-C2a 遗留闸门（lens 正负口径）：scene._v_optics 读 f/lens/u——f 非法或为 0 时
+            # 渲染层 `float(...) or LENS_F` 静默退回默认焦距、lens 未知串当 convex，像位整体画错。
+            if v.kind == "optics":
+                if props.get("f") is not None and (not _fin_num(props.get("f")) or props.get("f") == 0):
+                    add(s.index, "KIND", f"optics 的 f（焦距）= {props.get('f')!r} 必须是非零有限数字："
+                                         f"f>0 凸透镜、f<0 凹透镜（实正虚负口径，与 lens 字段二选一表达）")
+                ln_ = props.get("lens")
+                if ln_ is not None and _text(ln_).strip().lower() not in ("convex", "concave"):
+                    add(s.index, "KIND", f"optics 的 lens=「{_text(ln_)}」只能是 convex/concave（可不给，"
+                                         f"缺省按 f 的正负判定；未知串渲染层按凸透镜画）")
+                if props.get("u") is not None and not _pos_num(props.get("u")):
+                    add(s.index, "KIND", f"optics 的 u（物距）= {props.get('u')!r} 必须是有限正数（物在 x=−u 处）")
             if v.kind == "incline":
                 inc_forces = [x for x in _seq(props.get("forces")) if isinstance(x, dict)]
                 for msg in _mag_findings("incline", inc_forces):
@@ -468,6 +606,14 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                     if d is None or not ok:
                         add(s.index, "KIND", f"incline 的力「{_text(f.get('name'))}」dir 非法（{d}），"
                                              f"要用 {sorted(_FORCE_DIRS | _INCLINE_DIRS)} 或角度度数")
+                if props.get("vt"):
+                    # 81-S2 斜面↔v-t 联动参数：越界值渲染层静默钳位，钳完物理量就不是作者说的那个
+                    for msg in _incline_vt_findings(props):
+                        add(s.index, "KIND", msg)
+            if v.kind == "mechanism":
+                # 81-S3 推电子箭头机理协议（81S3_report §3 props 表）
+                for msg in _mech_findings(props):
+                    add(s.index, "KIND", msg)
             if v.kind == "trajectory" and _text(props.get("mode") or "projectile") not in _TRAJECTORY_MODES:
                 add(s.index, "KIND", f"trajectory 的 mode 只能是 {sorted(_TRAJECTORY_MODES)}")
             if v.kind == "derivation":
@@ -532,10 +678,13 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
             add(s.index, "COUNT", f"标题说「{said}」个/条，这一屏的清单只有 {n} 条")
 
         # 字形闸门：无 LaTeX 环境下，缺字形字符会上屏成豆腐块（评审 P1 第 2 条）。
+        # 81-G：黑名单按 S5 渲染层兜底能力收窄（见 TOFU 注释），下标字母只在渲染层
+        # 接不住的位置（无前邻字母数字/闭括号）才报。
         for t in _texts(s.narration) + _texts([{"kind": v.kind, "props": v.props} for v in _seq(s.visuals)]):
-            bad = sorted({c for c in t if c in TOFU})
+            bad = sorted(_tofu_hits(t))
             if bad:
-                add(s.index, "GLYPH", f"含本机字体缺字形的上下标字母 {''.join(bad)}，请改写为 _x/^x 记法：{t[:28]}")
+                add(s.index, "GLYPH", f"含本机字体缺字形且渲染层不兜底的上下标字母 {''.join(bad)}，"
+                                      f"请改写为 _x/^x 记法：{t[:28]}")
             if re.search(r"_(?![A-Za-z0-9{])|\^(?![A-Za-z0-9{])", t):
                 add(s.index, "GLYPH", f"上下标记法不合法（_ 或 ^ 后须紧跟字母数字或花括号）：{t[:28]}")
 

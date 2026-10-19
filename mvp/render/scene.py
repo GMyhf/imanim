@@ -35,6 +35,7 @@ from manim import (
     Sector,
     Square,
     Ellipse,
+    ArcBetweenPoints,
     GOLD,
     GREEN_C,
     GREY_A,
@@ -109,7 +110,7 @@ FX_MAX_SEC = 0.5               # 单个强调动画最多借用的秒数
 FX_GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate",
                     "energy_dist", "stat_chart", "mind_map", "table",
                     "force_diagram", "field", "circuit", "optics", "incline", "trajectory",
-                    "derivation")
+                    "derivation", "mechanism")
 # 角标（首镜 id / 末镜出处）到画框边的距离：让外缘正好落在安全宽边界上。
 # 原来写死 0.4，两条角标分别顶到 x=1866 / x=54，超出本项目自己的 123–1797 安全区（评审 A4）。
 EDGE_BUFF = config.frame_width / 2 - SAFE_WIDTH / 2
@@ -201,6 +202,15 @@ PLACEMENTS: list = []
 # 它动了多少必须看得见，否则避让到底生效没有只能靠肉眼翻帧（评审 P1 的自检口径）。
 TICK_ADJUST: list = []
 
+# 81-S4：候选位（含字号微缩/换锚点兜底）全部耗尽后仍然压线或撞字的标签登记在这里（必挂冲突）。
+# 与 PLACEMENTS 的区别：PLACEMENTS 是"每次落位的残差"（回归断言读它），UNRESOLVED 是"机器自认
+# 救不回来"的清单——非空即说明有标签在成片里注定叠字，收口与排障先看这里。
+UNRESOLVED: list = []
+
+# 81-S4：全链复核（_resolve_label_clashes）每次**真的挪了字**记一条 (标签文本, 挪动距离)。
+# 测试用它反证复核不是空转：语料里没有挪动记录 = 要么真干净、要么机器没接上。
+CLASH_MOVED: list = []
+
 # ---- 上下标排版（评审 P1 第 2 条：v_t / s^2 必须排成真下标/上标）----
 # 本机无 LaTeX；实测 Unicode 下标**字母**（ₐₑₜ…）在字体栈里是豆腐块，Unicode 下标数字
 # （₀…）会被替换成满号 0（v₀ 看着像 v0），所以只能把字符串切片后分段生成 Text，再按
@@ -234,6 +244,228 @@ _REL_OPS = "=<>≤≥≈≠+-−"
 # 三字母的 log/cos/tan 天然走"多字母 run 一律正体"那条，不必列。
 _UPRIGHT_DIGRAPHS = {"kg", "cm", "mm", "km", "dm", "ml", "mg", "ms", "kj", "ev", "hz",
                      "kp", "id", "of", "in", "to", "at", "on", "is", "it", "no", "lg", "ln"}
+
+# ---- 81-S5 化学式上下标归一化（渲染层兜底，纯函数便于单测）----
+# 根因实测（.local/81S5_smoke 实拍帧）：
+#   ① Unicode 上标混排在长段里时只有**纯数字**（²³）能靠字形自身抬升读对；⁺⁻ 在本字体栈
+#     落回满号基线（"Cu²⁺" 屏上读成 "Cu²+"，电荷错位）；下标转换把 ² 拆成独立尾段后，
+#     Pango 按墨迹裁剪令其底缘贴基线（"SO₄²⁻" 屏上读成 "SO₄₂⁻"，指数掉进下标行=乱码主案）。
+#   ② 上下标**字母**（ₐₑₜ… ᵃᶜ…，review.py TOFU 黑名单同源）不经转换直接送字体栈。
+#   ③ ASCII 化学式（"H2SO4"）不进任何下标道。
+# 对策（全部挂在 rich() 的统一分词入口，不碰 S4/S2 锁定机器）：
+#   A. 上标段扩展：含非数字字符（⁺⁻ⁿ 或字母）或所在段已被下标/化学式拆过时，整段改走
+#      手工基线 ^ 道；纯数字且段不拆时维持原排版（test_typo 钉死 "s = (1/2) a t²" 单 Text）。
+#   B. 下标段扩展到字母，与上标字母一起映射回 ASCII 再进 _/^ 道。
+#   C. ASCII 化学式（数字紧跟元素符号）按元素白名单 + 「≥2 种元素且带计量数字」双门槛识别，
+#      转成 下标数字/上标电荷；"R1""I2""Cu2+""2s" 这类单元素或物理标号一律不转（不误伤）。
+#   D. 化学语境（紧跟转换出的下标/上标）的纯元素符号段走正体——元素符号 IUPAC 正体，
+#      实拍旧帧里 H₂SO₄ 被斜体判定排成变量体也是本案"乱码"观感的一半。
+# 取舍：MathTex/LaTeX 只服务 _v_formula 卡片（缺 TeX 要退回、字体与全片 SimSun 脱钩、
+# 帧预算翻倍），标签级文本一律走既有「分段 Text + 基线偏移」机器，与 v₀/t_{停}² 同一条道。
+_ELEMENTS = frozenset("""
+H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge
+As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm
+Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th
+Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og
+""".split())
+# 下标：数字 + 正负号括号 + 下标字母（含 review.py TOFU 全集）；上标同理。
+_SUB_MAP = {"₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7",
+            "₈": "8", "₉": "9", "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")",
+            "ₐ": "a", "ₑ": "e", "ₔ": "e", "ₕ": "h", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₗ": "l",
+            "ₘ": "m", "ₙ": "n", "ₚ": "p", "ₛ": "s", "ₜ": "t", "ᵤ": "u", "ᵥ": "v", "ₓ": "x"}
+_SUP_MAP = {"⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7",
+            "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁿ": "n",
+            "ᵃ": "a", "ᵇ": "b", "ᶜ": "c", "ᵈ": "d", "ᵉ": "e", "ᵍ": "g", "ⁱ": "i", "ʲ": "j",
+            "ᵏ": "k", "ˡ": "l", "ᵐ": "m", "ᵒ": "o", "ᵖ": "p", "ʳ": "r", "ˢ": "s", "ᵗ": "t",
+            "ᵘ": "u", "ᵛ": "v", "ʷ": "w", "ˣ": "x", "ʸ": "y", "ᶻ": "z"}
+_SUB_RUN = re.compile("[" + "".join(_SUB_MAP) + "]+")
+_SUP_RUN = re.compile("[" + "".join(_SUP_MAP) + "]+")
+_SUP_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+_CHEM_RUN = re.compile(r"[0-9A-Za-z+\-]+")
+
+
+def _formula_walk(s, i, acc):
+    """从元素符号处继续解析：单字母优先（NH3=N+H₃ 不是 Nh+₃），失败回溯两字母（NaCl）。"""
+    if i >= len(s):
+        return acc if _formula_ok(acc) else None
+    for L in (1, 2):
+        cand = s[i:i + L]
+        if len(cand) == L and cand in _ELEMENTS:
+            r = _formula_count(s, i + L, acc + [(cand, "el")])
+            if r is not None:
+                return r
+    return None
+
+
+def _formula_ok(acc):
+    els = {t for t, k in acc if k == "el"}
+    return len(els) >= 2 and any(k == "count" for _, k in acc)
+
+
+def _formula_count(s, i, acc):
+    """元素符号之后：可选计量数字（下标），或收尾/电荷尾巴（上标），或下一个元素（H2SO4 的 S）。"""
+    if i < len(s) and s[i].isdigit():
+        j = i
+        while j < len(s) and s[j].isdigit():
+            j += 1
+        r = _formula_walk(s, j, acc + [(s[i:j], "count")])
+        if r is not None:
+            return r
+    if i == len(s):
+        return acc if _formula_ok(acc) else None
+    mc = re.match(r"^(\d*)([+\-])$", s[i:]) or re.match(r"^([+\-])(\d*)$", s[i:])
+    if mc and _formula_ok(acc):
+        return acc + [(s[i:], "charge")]
+    if not s[i].isdigit():
+        # 不带数字的元素（SO4 的 S、KMnO4 的 KMn…）：继续往后走，收尾仍要过双门槛
+        return _formula_walk(s, i, acc)
+    return None
+
+
+def parse_formula(run):
+    """纯函数：ASCII 片段 → [(chunk, role)]（role: coef/el/count/charge）或 None。
+
+    文法：[配比系数数字] (元素符号 [计量数字])+ [电荷 数字?± / ±数字?]。
+    双门槛防误伤：≥2 种不同元素符号 + ≥1 个紧跟元素的计量数字。
+    "H2SO4"→H₂SO₄ ✓；"R1"/"I2"/"Cu2+"/"2s"/"NaCl"（无数字）→ None（维持现行为）。
+    """
+    s = str(run or "")
+    if not s:
+        return None
+    i = 0
+    acc = []
+    if s[0].isdigit():
+        j = 0
+        while j < len(s) and s[j].isdigit():
+            j += 1
+        acc.append((s[:j], "coef"))
+        i = j
+    return _formula_walk(s, i, acc)
+
+
+def _chem_hit(run):
+    """_CHEM_RUN 的一个匹配是否为化学式（要求左右邻不是字母数字——最大片段自身已保证）。"""
+    return parse_formula(run) is not None
+
+
+def chem_formula_hit(text):
+    """纯函数：文本里是否出现可归一化的 ASCII 化学式片段（供 _v_title 快路径与单测用）。"""
+    return any(_chem_hit(m.group()) for m in _CHEM_RUN.finditer(str(text or "")))
+
+
+def _split_elements(s):
+    """s 能否整体拆成元素符号串（单字母优先回溯：NH=N+H；NaCl=N 走不通→Na+Cl）。"""
+    if not s:
+        return True
+    for L in (1, 2):
+        if s[:L] in _ELEMENTS and _split_elements(s[L:]):
+            return True
+    return False
+
+
+def _upright_element_chunk(s):
+    """纯字母数字段（如 H / SO / Ba / 2H）若字母部分能整体拆成元素符号串，判为化学式语境。"""
+    letters = re.sub(r"[0-9]", "", s)
+    if not letters or not re.fullmatch(r"[A-Za-z]+", letters):
+        return False
+    return _split_elements(letters)
+
+
+def rich_tokens(text):
+    """纯函数（81-S5 统一分词入口）：IR 文本 → [(kind, s, upright)]。
+
+    kind: "" 普通 / "_" 下标 / "^" 上标；upright=True 表示该普通段处于化学式语境，排正体。
+    规则优先级：ASCII _/^ 标记 > Unicode 上下标 > ASCII 化学式；三者都不沾的文本
+    原样返回单个 ("", 原文, False)——rich() 据此走单 Text，行为与旧版逐字相同。
+    """
+    toks = []
+    for p in [q for q in _MARKUP.split(str(text or "")) if q != ""]:
+        if p[:1] in ("_", "^") and len(p) > 1:
+            toks.append((p[0], p[2:-1] if p[1:2] == "{" else p[1:], False))
+            continue
+        toks.extend(_plain_tokens(p, toks[-1][1][-1:] if toks and not toks[-1][0] else ""))
+    return toks
+
+
+def _plain_tokens(p, prev_char):
+    """把一个非 _/^ 标记的普通段切成 token 流（见 rich_tokens 的规则优先级）。"""
+    ev = []                                   # (start, end, kind, payload)
+    for m in _CHEM_RUN.finditer(p):
+        parsed = parse_formula(m.group())
+        if parsed is not None:
+            ev.append((m.start(), m.end(), "chem", parsed))
+    for m in _SUB_RUN.finditer(p):
+        prev = p[m.start() - 1] if m.start() > 0 else prev_char
+        if re.match(r"[A-Za-z0-9)\]]", prev or ""):
+            ev.append((m.start(), m.end(), "sub", m.group()))
+    split_sup = any(e[2] in ("chem", "sub") for e in ev)
+    for m in _SUP_RUN.finditer(p):
+        g = m.group()
+        # 旧口径（test_typo 钉死）：纯数字上标混在长段里、且该段不拆时保持原排版；
+        # 独立成段（D27）/ 含 ⁺⁻ⁿ 字母（满号回落基线=乱码主案）/ 段已被拆 → 走上标道。
+        if g == p or any(c not in _SUP_DIGITS for c in g) or split_sup:
+            ev.append((m.start(), m.end(), "sup", g))
+    if not ev:
+        return [("", p, False)]
+    ev.sort()
+    out, j = [], 0
+    prev_conv = False        # 上一个事件是否为转换出的下标/上标（化学语境相邻判据）
+    for a, b, kind, payload in ev:
+        if a < j:            # chem 段与 Unicode 段理论上不重叠（字符集不相交），保守跳过
+            continue
+        if a > j:
+            seg = p[j:a]
+            # ①段尾紧贴转换下标/上标的元素符号串（"… + SO"₂）→ 拆出来排正体
+            if kind in ("sub", "sup"):
+                m = re.search(r"[A-Za-z]+$", seg)
+                if m and _upright_element_chunk(m.group()):
+                    if m.start() > 0:
+                        out.append(("", seg[:m.start()], False))
+                    seg = None
+                    out.append(("", m.group(), True))
+            if seg is not None:
+                # ②段首紧跟转换下标/上标的元素符号串（2H₂"O"、BaSO₄"↓" 前的 O）→ 拆出正体
+                m2 = re.match(r"[A-Za-z]+", seg) if prev_conv else None
+                if m2 and _upright_element_chunk(m2.group()):
+                    out.append(("", m2.group(), True))
+                    if m2.end() < len(seg):
+                        out.append(("", seg[m2.end():], False))
+                else:
+                    out.append(("", seg, False))
+        if kind == "chem":
+            for t, role in payload:
+                if role == "count":
+                    out.append(("_", t, False))
+                elif role == "charge":
+                    out.append(("^", t, False))
+                else:                         # coef / el：普通道，元素语境正体
+                    out.append(("", t, True))
+        elif kind == "sub":
+            out.append(("_", "".join(_SUB_MAP[c] for c in payload), False))
+        else:
+            out.append(("^", "".join(_SUP_MAP[c] for c in payload), False))
+        prev_conv = kind in ("sub", "sup")
+        j = b
+    if j < len(p):
+        seg = p[j:]
+        m2 = re.match(r"[A-Za-z]+", seg) if prev_conv else None
+        if m2 and _upright_element_chunk(m2.group()):
+            out.append(("", m2.group(), True))
+            if m2.end() < len(seg):
+                out.append(("", seg[m2.end():], False))
+        else:
+            out.append(("", seg, False))
+    return out
+
+
+def _has_scripts(s):
+    """文本是否会被 rich_tokens 拆出上下标段（_v_title 渐变快路径的绕行判据，81-S5）。
+
+    与分词器同一把尺子：纯数字上标混排（"a = v²/t²"）不拆段，标题保留渐变艺术字。
+    """
+    toks = rich_tokens(s)
+    return len(toks) != 1 or toks[0][0] != ""
+
 SUB_SCALE = 0.62               # 下标/上标字号比例
 SUB_DROP = 0.0014              # ×正文字号：下标基线相对正文基线下移（收敛下沉，底缘不越主基线）
 SUP_LIFT = 0.0040              # ×正文字号：上标基线相对正文基线上移（0.216@54）
@@ -355,12 +587,16 @@ def slant_chars(s):
     return {c for c, it in zip(s, slant_indices(s)) if it}
 
 
-def _compose(core, fs, color, kw):
+def _compose(core, fs, color, kw, upright=False):
     """按逐字符斜体判定生成 Text：只把拉丁单字母变量交给 t2s 斜体，其余（CJK/单位/数字）正体。
 
     走 Text 的 t2s（子串→slant），不拆分片段、不改宽度累加，避免破坏既有空格/拼接。
     同一字母在同一片段里既像变量又像单位时（罕见），保守取正体，绝不斜体单位。
+    upright=True（81-S5）：该段处于化学式语境（元素符号紧跟转换出的下标/上标），
+    跳过斜体判定——元素符号 IUPAC 正体，实拍旧帧把 H₂SO₄ 排成变量斜体是乱码观感的一半。
     """
+    if upright:
+        return T(core, font_size=fs, color=color, **kw)
     idx = slant_indices(core)
     italic, upright = set(), set()
     for ch, it in zip(core, idx):
@@ -395,29 +631,14 @@ def rich(text, font_size, color, **kw):
     无 _/^ 且无 Unicode 下标数字的文本原样返回单个 Text（行为不变）。
     拼接规则：每段按自身基线落位——普通段基线在 y=0，下标段基线下移
     SUB_DROP×字号，上标段上移 SUP_LIFT×字号；段底 = 基线 − _seg_bottom_delta。
+    81-S5：分词规则（Unicode 上下标字母/电荷/ASCII 化学式/元素正体）全部收进纯函数
+    rich_tokens()，本函数只管排版——单测对 token 断言，不必拉起 Text 对象。
     """
-    toks = []  # (kind, s)  kind: "" 普通 / "_" 下标 / "^" 上标
-    for p in [q for q in _MARKUP.split(str(text or "")) if q != ""]:
-        if p[:1] in ("_", "^") and len(p) > 1:
-            toks.append((p[0], p[2:-1] if p[1:2] == "{" else p[1:]))
-            continue
-        if _UNISUP.fullmatch(p):          # t_{停}² 里的 ² 会被拆成独立一段 → 改走上标道
-            toks.append(("^", p.translate(_UNISUP_MAP)))
-            continue
-        j = 0
-        for m in _UNISUB.finditer(p):  # v₀ → v + 下标0（本字体栈里 ₀ 是满号 0）
-            prev = p[m.start() - 1] if m.start() > 0 else (toks[-1][1][-1:] if toks and not toks[-1][0] else "")
-            if re.match(r"[A-Za-z0-9)\]]", prev or ""):
-                if m.start() > j:
-                    toks.append(("", p[j:m.start()]))
-                toks.append(("_", m.group().translate(_UNISUB_MAP)))
-                j = m.end()
-        if j < len(p):
-            toks.append(("", p[j:]))
+    toks = rich_tokens(text)
     if not toks:
         return T("", font_size=font_size, color=color, **kw)
     if len(toks) == 1 and not toks[0][0]:
-        return _compose(toks[0][1], font_size, color, kw)
+        return _compose(toks[0][1], font_size, color, kw, toks[0][2])
 
     # Pango 的 ink extents 不含首尾空白，分段拼接会把段间空格吃掉，
     # 所以空格宽度单独量一次（"一 一" 减 "一一"），再手工按 x 累加排布。
@@ -429,7 +650,7 @@ def rich(text, font_size, color, **kw):
     x = 0.0
     prev_core = False
     prev_kind = ""
-    for kind, s in toks:
+    for kind, s, _up in toks:
         lead = len(s) - len(s.lstrip(" "))
         trail = len(s) - len(s.rstrip(" "))
         core = s.strip(" ")
@@ -440,7 +661,7 @@ def rich(text, font_size, color, **kw):
         if prev_core:
             x += kern + (sub_kern if prev_kind else 0.0)
         fs_eff = font_size if not kind else fs_small
-        t = _compose(core, fs_eff, color, kw)
+        t = _compose(core, fs_eff, color, kw, _up if not kind else False)
         if kind == "_":
             base = -SUB_DROP * font_size
         elif kind == "^":
@@ -506,7 +727,99 @@ def _box(mob):
 
 
 def _overlap(a, b) -> bool:
-    return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+    """两个包围盒是否重叠。81-S4 加固：盒有两种形态——
+      · 4 元组 (x0,y0,x1,y1)：轴对齐 AABB，判据与旧写法逐字相同（全部既有调用零影响）；
+      · 8 元组 (x0,y0,x1,y1 + 4 个角点)：_obb 产出的**旋转后**包围盒（有向矩形）。
+    只要有一方是旋转盒就改用分离轴定理（SAT）：磁针、斜闸刀、贴面转过的方块这类旋转图元的
+    AABB 会被"撑满"成远超本体的方块，用 AABB 判标签碰撞会把没压住的误报成压住；SAT 用
+    旋转后的真实外接矩形判定，既不漏判也不误判。"""
+    if len(a) == 4 and len(b) == 4:
+        return not (a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1])
+    return _sat(_corners_of(a), _corners_of(b))
+
+
+def _corners_of(box) -> list:
+    """盒（AABB 或 _obb 的 8 元组）→ 逆时针 4 角点。"""
+    if len(box) == 4:
+        x0, y0, x1, y1 = box
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    return [(box[4], box[5]), (box[6], box[7]), (box[8], box[9]), (box[10], box[11])]
+
+
+def _sat(ca, cb) -> bool:
+    """两个凸四边形是否重叠：沿两组边法线投影，任一轴上区间分离即不相交。"""
+    for poly in (ca, cb):
+        for i in range(4):
+            nx = poly[i][1] - poly[(i + 1) % 4][1]
+            ny = poly[(i + 1) % 4][0] - poly[i][0]
+            nn = nx * nx + ny * ny
+            if nn < 1e-12:
+                continue
+            pa = [p[0] * nx + p[1] * ny for p in ca]
+            pb = [p[0] * nx + p[1] * ny for p in cb]
+            if max(pa) <= min(pb) or max(pb) <= min(pa):
+                return False
+    return True
+
+
+def _convex_hull(pts):
+    """Andrew 单调链凸包（输入少、够用即可），返回逆时针顶点。"""
+    p = sorted({(float(q[0]), float(q[1])) for q in pts})
+    if len(p) <= 2:
+        return p
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower, upper = [], []
+    for q in p:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], q) <= 0:
+            lower.pop()
+        lower.append(q)
+    for q in reversed(p):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], q) <= 0:
+            upper.pop()
+        upper.append(q)
+    return lower[:-1] + upper[:-1]
+
+
+def _obb(mob):
+    """旋转图元的**旋转后**最小面积包围盒：8 元组 (x0,y0,x1,y1, 4×2 角点)。
+    前 4 位仍是 AABB（_pad_box 等旧代码照常可用），后 8 位是 _overlap/SAT 用的有向角点。
+    方向取凸包各边的最小面积矩形（旋转卡钳的单步近似）；点数先降采样，几百点内不成为瓶颈。"""
+    b = _box(mob)
+    try:
+        pts = np.array([[q[0], q[1]] for q in mob.points], dtype=float)
+    except Exception:
+        return (*b, b[0], b[1], b[2], b[1], b[2], b[3], b[0], b[3])
+    if len(pts) == 0:
+        return (*b, b[0], b[1], b[2], b[1], b[2], b[3], b[0], b[3])
+    if len(pts) > 240:
+        pts = pts[:: max(1, len(pts) // 240)]
+    hull = _convex_hull(pts)
+    if len(hull) < 2:
+        return (*b, b[0], b[1], b[2], b[1], b[2], b[3], b[0], b[3])
+    best = None
+    for i in range(len(hull)):
+        ex, ey = hull[(i + 1) % len(hull)][0] - hull[i][0], hull[(i + 1) % len(hull)][1] - hull[i][1]
+        ln = math.hypot(ex, ey)
+        if ln < 1e-9:
+            continue
+        ux, uy = ex / ln, ey / ln
+        vx, vy = -uy, ux
+        pu = pts[:, 0] * ux + pts[:, 1] * uy
+        pv = pts[:, 0] * vx + pts[:, 1] * vy
+        area = (pu.max() - pu.min()) * (pv.max() - pv.min())
+        if best is None or area < best[0]:
+            best = (area, pu.min(), pu.max(), pv.min(), pv.max(), ux, uy, vx, vy)
+    if best is None:
+        return (*b, b[0], b[1], b[2], b[1], b[2], b[3], b[0], b[3])
+    _a, u0, u1, v0, v1, ux, uy, vx, vy = best
+    cs = [(u0 * ux + v0 * vx, u0 * uy + v0 * vy), (u1 * ux + v0 * vx, u1 * uy + v0 * vy),
+          (u1 * ux + v1 * vx, u1 * uy + v1 * vy), (u0 * ux + v1 * vx, u0 * uy + v1 * vy)]
+    xs = [c[0] for c in cs]
+    ys = [c[1] for c in cs]
+    return (min(xs), min(ys), max(xs), max(ys), *(x for c in cs for x in c))
 
 
 def _sample(mob, n=20):
@@ -562,12 +875,18 @@ def _poly_hits(poly, box, margin=0.0) -> bool:
     return any(x0 - margin <= q[0] <= x1 + margin and y0 - margin <= q[1] <= y1 + margin for q in poly)
 
 
-def _place_label(lab, line, plane, taken, avoid=()):
+def _place_label(lab, line, plane, taken, avoid=(), obstacles=()):
     """标签贴着它所指的那条线放，且不压住任何一条图线。
 
     旧写法 next_to(line, UP) 按外接框定位，斜线的外接框很高，标签被顶到画面上方两个单位，
     学生不知道它在标谁（一次函数「y = 2x − 1」实测）。改成在线上取锚点、沿局部法线让开半个字高：
     线再陡标签也落在它旁边，不会穿过它（加速度 v-t 三种情形，「下斜 → a 与 v 反向」被斜线划过去实测）。
+
+    81-S4 加固（签名向后兼容，新参都有缺省）：
+      · obstacles —— 旋转图元的 _obb 有向盒序列，用 SAT 参与判压（磁针/斜杆的 AABB 会误报）；
+      · 避让失败路径逐档兜底：常规候选 → 加密锚点重扫 → 字号微缩（缩到注释文字 22 号下限为止）；
+        全部耗尽仍不干净才落最低分位置，残差如实登记非零，并另记入 UNRESOLVED（必挂冲突清单）。
+    落位成功的标签打 _placed 标记：装配期的全量复核（_resolve_text_clashes）不再二次挪动它。
     """
     def place(p):
         lab.move_to(p)
@@ -581,51 +900,391 @@ def _place_label(lab, line, plane, taken, avoid=()):
             lab.set_y(plane.get_bottom()[1] + lab.height / 2 + 0.06)
 
     def score():
-        x0, y0, x1, y1 = _box(lab)
+        x0, y0, x1, y1 = _box(lab)[:4]
         on_line = sum(1 for poly in avoid for q in poly
-                      if x0 - 0.05 <= q[0] <= x1 + 0.05 and y0 - 0.05 <= q[1] <= y1 + 0.05)
+                      if x0 - CLASH_MARGIN <= q[0] <= x1 + CLASH_MARGIN
+                      and y0 - CLASH_MARGIN <= q[1] <= y1 + CLASH_MARGIN)
         clash = sum(1 for t in taken if _overlap(_box(lab), t))
+        clash += sum(1 for ob in obstacles if _overlap(_box(lab), ob))
         return on_line * 2 + clash * 3
 
+    def sweep(props):
+        nonlocal best
+        for prop in props:
+            try:
+                anchor = line.point_from_proportion(prop)
+                tangent = line.point_from_proportion(min(prop + 0.04, 1.0)) - line.point_from_proportion(
+                    max(prop - 0.04, 0.0)
+                )
+            except Exception:
+                continue
+            normal = np.array([-tangent[1], tangent[0], 0.0])
+            norm = np.linalg.norm(normal)
+            if norm < 1e-6:
+                continue
+            # 让开的距离 = 标签框在该法线方向上的半影（矩形支撑函数）：
+            # 只按半个字高让，遇到陡线（法线几乎是水平的）等于没让，标签照样被线穿过。
+            n = normal / norm
+            reach = abs(n[0]) * lab.width / 2 + abs(n[1]) * lab.height / 2 + 0.16
+            tang = np.array([n[1], -n[0], 0.0])       # 单位切向：沿自己的线滑一段，躲开别的线与已放好的标签
+            slide = lab.width / 2 + 0.2
+            cands = [anchor + s * reach * n + k * slide * tang
+                     for s in (1.0, -1.0) for k in (0.0, -1.0, 1.0, -2.0, 2.0)]
+            cands += [anchor + 0.26 * UP, anchor - 0.34 * UP]
+            for cand in cands:
+                place(cand)
+                value = score()
+                if best is None or value < best[0]:
+                    best = (value, np.array(lab.get_center()))
+                if value == 0:
+                    return True
+            if best[0] == 0:
+                return True
+        return best is not None and best[0] == 0
+
     best = None
-    for prop in (0.80, 0.62, 0.45, 0.90):
-        try:
-            anchor = line.point_from_proportion(prop)
-            tangent = line.point_from_proportion(min(prop + 0.04, 1.0)) - line.point_from_proportion(
-                max(prop - 0.04, 0.0)
-            )
-        except Exception:
-            continue
-        normal = np.array([-tangent[1], tangent[0], 0.0])
-        norm = np.linalg.norm(normal)
-        if norm < 1e-6:
-            continue
-        # 让开的距离 = 标签框在该法线方向上的半影（矩形支撑函数）：
-        # 只按半个字高让，遇到陡线（法线几乎是水平的）等于没让，标签照样被线穿过。
-        n = normal / norm
-        reach = abs(n[0]) * lab.width / 2 + abs(n[1]) * lab.height / 2 + 0.16
-        tang = np.array([n[1], -n[0], 0.0])       # 单位切向：沿自己的线滑一段，躲开别的线与已放好的标签
-        slide = lab.width / 2 + 0.2
-        cands = [anchor + s * reach * n + k * slide * tang
-                 for s in (1.0, -1.0) for k in (0.0, -1.0, 1.0, -2.0, 2.0)]
-        cands += [anchor + 0.26 * UP, anchor - 0.34 * UP]
-        for cand in cands:
-            place(cand)
-            value = score()
-            if best is None or value < best[0]:
-                best = (value, np.array(lab.get_center()))
-            if value == 0:
-                break
-        if best[0] == 0:
-            break
+    sweep((0.80, 0.62, 0.45, 0.90))
+    if best is not None and best[0] > 0:
+        # 兜底一：换锚点——常规四档之外再铺六档（两端与各段中点），还是"沿线滑"优先。
+        sweep((0.30, 0.15, 0.52, 0.71, 1.0, 0.0))
+    if best is not None and best[0] > 0:
+        # 兜底二：字号微缩——只允许缩到 22 号下限（G3 可读性红线：注释文字 ≥22），缩了也不许低于它。
+        fam = [m for m in lab.get_family() if hasattr(m, "text") and m.font_size > 0]
+        min_fs = min((m.font_size for m in fam), default=0)
+        if min_fs >= 24:
+            k = max(0.8, 22.0 / min_fs)
+            w0, h0 = lab.width, lab.height
+            lab.scale(k)
+            sweep((0.80, 0.62, 0.45, 0.90, 0.30, 0.15))
+            if best is not None and best[0] > 0:      # 缩了仍不干净：不缩了也不救回来就别留小字，还原
+                lab.scale(1.0 / k)
+                place(best[1]) if best[1] is not None else None
+                best = (min(best[0], score()), np.array(lab.get_center()))
     if best is None:
         best = (0, np.array(line.get_center()) + 0.26 * UP)
     place(best[1])
     taken.append(_box(lab))
+    if best[0] > 0:
+        text = "".join(m.text for m in lab.get_family() if hasattr(m, "text"))
+        UNRESOLVED.append((best[0], text))       # 必挂冲突登记：机器自认救不回来，成片里它注定叠字
     # 落点残差登记：0 = 既不压任何图线也不撞别的标签。tests/test_layout.py 拿它做全库回归，
     # 因为"标签压线"这类缺陷只有渲染出来才看得见，而评审看到的是成片、闸门拦不住——只能反向钉死。
+    # 81-S4 收紧后的语义：非零 = 常规候选 + 换锚点 + 字号微缩全部耗尽仍不干净（并同步进 UNRESOLVED）。
     PLACEMENTS.append((best[0], "".join(m.text for m in lab.get_family() if hasattr(m, "text"))))
+    lab._placed = True
     return lab
+
+
+# ---- 81-S4 全链字重叠复核机器（新增辅助，不触碰任何锁定图元逻辑）----
+# 锁定函数（_v_circuit / _v_derivation / _v_force_diagram / _v_incline / _v_optics …）一个字不能改，
+# 它们的裸放置标签却正是"字重叠"的案发现场。解法：在装配层的每个版式块**建完之后、排版之前**
+# 做一次与图元无关的通用复核——不改画法，只挪字：压线/撞字的标签在原位附近做小步平移（必要时
+# 字号微缩到 22 号下限），并把最终残差按 _place_label 同一口径登记进 PLACEMENTS。
+TEXT_MIN_FS = 22.0            # G3 可读性红线：允许的最小注释字号（微缩兜底不许跌破它）
+CLASH_MARGIN = 0.05           # 采样点落入标签盒的容差（≈3px@854 宽），与 _place_label 同口径：
+                              # 笔画中心线离字太近也算压字。P3 实拍抽验（斜面方块 label_in）证明
+                              # 0.02 时"挪干净"的字仍会被 3px 外的方块描边啃到边 → 收紧到 0.05。
+
+
+def _mob_leaf_pts(x) -> bool:
+    try:
+        return x.points is not None and len(x.points) > 0
+    except Exception:
+        return False
+
+
+def _mob_mean(x, name, default: float) -> float:
+    v = getattr(x, name, None)
+    if v is None:
+        return default
+    try:
+        return float(np.mean(v))
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_text_mob(x) -> bool:
+    return hasattr(x, "text") and not isinstance(x, VGroup)
+
+
+def _has_pts_deep(x) -> bool:
+    if _mob_leaf_pts(x):
+        return True
+    try:
+        return any(_mob_leaf_pts(y) for y in x.get_family())
+    except Exception:
+        return False
+
+
+def _is_pure_text_group(x) -> bool:
+    """整棵子树只有字（rich/图例行这类"一条标签的包装组"）：挪就整条一起挪，下标不许撕下来。"""
+    if not isinstance(x, VGroup):
+        return False
+    fam = x.get_family()
+    return (any(_is_text_mob(y) and _has_pts_deep(y) for y in fam)
+            and all(_is_text_mob(y) or isinstance(y, VGroup) for y in fam))
+
+
+def _visible_text(x) -> bool:
+    """可见性/豁免判定：0 号透明度（推导里等待"飞入点亮"的目标字母）与刻度数字（由 _clear_ticks
+    专管）不参与复核，否则会把设计性的"字在图形上/贴轴排布"误判成叠字。"""
+    if _mob_mean(x, "fill_opacity", 1.0) < 0.05 and _mob_mean(x, "stroke_opacity", 1.0) < 0.05:
+        return False
+    return not hasattr(x, "_tick_dir") and not hasattr(x, "_tick_anchor")
+
+
+def _family_parent_map(block):
+    parent = {}
+    for x in block.get_family():
+        for c in getattr(x, "submobjects", ()):
+            parent[id(c)] = x
+    return parent
+
+
+def _text_units(block):
+    """标签单元 = 复核时被整体挪动的那一组字：
+    · 有 .text 祖先的分段（MathTex 内部）并进祖先——整条公式一起挪；
+    · 同一纯文字父组、盒间距 ≤0.25 的兄弟段（rich 的一条标签、推导的一行公式）并进父组——
+      下标不能从基字上撕下来；
+    · 同父但彼此隔开的（磁针 N/S 两极字）保持独立——它们是两条标签，各挪各的。"""
+    fam = block.get_family()
+    parent = _family_parent_map(block)
+
+    def outermost(x):
+        a = parent.get(id(x))
+        while a is not None and a is not block:
+            if _is_text_mob(a):
+                return False
+            a = parent.get(id(a))
+        return True
+
+    def under_placed(x):
+        """_place_label 落过位的标签不再复核（机器不同、判据已更严），只认别家的裸字。"""
+        a = parent.get(id(x))
+        while a is not None and a is not block:
+            if getattr(a, "_placed", False):
+                return True
+            a = parent.get(id(a))
+        return bool(getattr(x, "_placed", False))
+
+    cands = [x for x in fam if _is_text_mob(x) and outermost(x) and _has_pts_deep(x)
+             and _visible_text(x) and not under_placed(x)]
+    byparent: dict = {}
+    for x in cands:
+        byparent.setdefault(id(parent.get(id(x))), []).append(x)
+    units, taken_ids = [], set()
+    for pid, group in byparent.items():
+        p = parent.get(pid)
+        merged = (p is not None and p is not block and len(group) > 1
+                  and all(_is_text_mob(c) or (_is_pure_text_group(c) if isinstance(c, VGroup) else False)
+                          for c in p.submobjects))
+        if merged:      # 只有"挨在一起的段"才算同一条标签（N/S 那种隔开的仍各自独立）
+            boxes = sorted(_box(c) for c in group)
+            for a, b in zip(boxes, boxes[1:]):
+                gap_h = max(a[0], b[0]) - min(a[2], b[2])      # 水平投影重叠时给负值=相邻
+                gap_v = max(a[1], b[1]) - min(a[3], b[3])
+                sep = gap_h if gap_h > 0 else gap_v
+                if sep > 0.25:
+                    merged = False
+                    break
+        if merged and id(p) not in taken_ids:
+            taken_ids.add(id(p))
+            units.append(p)
+        else:
+            units.extend(group)
+    return units
+
+
+def _label_obstacles(block, textids):
+    """块内可被字压到的图元：描边足够粗（≥2.4，与图线/导线/箭头同量级；网格线 1、细辅助线
+    1.5~2 是背景不是碰撞对象）、描边可见；或实心（fill>0.5）的图形。文字自己的 SVG 轮廓子件
+    （笔画）不算图元——字与字的关系由 AABB 撞字判定统一管，否则一个字的笔画会把它自己
+    旁边的字全判成"压图元"。"""
+    fam = block.get_family()
+    parent = _family_parent_map(block)
+    obs = []
+    for x in fam:
+        if isinstance(x, VGroup) or id(x) in textids or not _mob_leaf_pts(x):
+            continue
+        a = parent.get(id(x))
+        under_text = False
+        while a is not None and a is not block:
+            if _is_text_mob(a) or id(a) in textids:
+                under_text = True
+                break
+            a = parent.get(id(a))
+        if under_text:
+            continue
+        sw = _mob_mean(x, "stroke_width", 0.0)
+        so = _mob_mean(x, "stroke_opacity", 1.0)
+        fo = _mob_mean(x, "fill_opacity", 0.0)
+        stroked = sw >= 2.4 and so >= 0.6
+        solid = fo > 0.5
+        if not (stroked or solid):
+            continue
+        try:
+            pts = x.points
+            closed = len(pts) > 2 and float(np.linalg.norm(pts[0, :2] - pts[-1, :2])) < 1e-3
+        except Exception:
+            closed = False
+        obs.append({
+            "box": _box(x), "obb": _obb(x) if solid else None,
+            "samples": _sample(x, 32) if stroked else [],
+            "segs": _stroke_segs(x, 32) if stroked else [],
+            "closed": closed, "solid": solid, "stroked": stroked,
+        })
+    return obs
+
+
+def _orient(px, py, qx, qy, rx, ry):
+    return (qx - px) * (ry - py) - (qy - py) * (rx - px)
+
+
+def _crossover(ax, ay, bx, by, cx, cy, dx, dy):
+    """线段 AB 与线段 CD 是否跨立相交（含共线重叠）。"""
+    o1, o2 = _orient(ax, ay, bx, by, cx, cy), _orient(ax, ay, bx, by, dx, dy)
+    o3, o4 = _orient(cx, cy, dx, dy, ax, ay), _orient(cx, cy, dx, dy, bx, by)
+    if o1 == o2 == o3 == o4 == 0:
+        return not (max(ax, bx) < min(cx, dx) or max(cx, dx) < min(ax, bx)
+                    or max(ay, by) < min(cy, dy) or max(cy, dy) < min(ay, by))
+    return (o1 > 0) != (o2 > 0) and (o3 > 0) != (o4 > 0)
+
+
+def _stroke_segs(mob, n=32):
+    """把描边图元沿弧长切成小段，返回 (minx, miny, maxx, maxy, x0, y0, x1, y1) 列表。
+    为什么不能只看采样点：一条长直边采 20 个点，点间隔十几 px，贴着字走过的边可能一个采样点
+    都不在字盒里（P3 实拍抓到：斜面方块边框中心线离 label_in 只有 0.04u，采样点全落在别处，
+    残差报 0 而字仍被啃边）。线段与"外扩后的字盒"相交才算压字，才与像素口径一致。"""
+    pts = _sample(mob, n)
+    segs = []
+    for p, q in zip(pts, pts[1:]):
+        try:
+            x0, y0 = float(p[0]), float(p[1])
+            x1, y1 = float(q[0]), float(q[1])
+        except Exception:
+            continue
+        segs.append((min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1), x0, y0, x1, y1))
+    return segs
+
+
+def _segs_hit_box(segs, x0, y0, x1, y1):
+    """线段集合与矩形盒（已外扩过）相交数：先比外接框粗筛，再判端点在盒内 / 与四条边跨立。"""
+    hit = 0
+    for s in segs:
+        if s[2] < x0 or s[0] > x1 or s[3] < y0 or s[1] > y1:
+            continue
+        ax, ay, bx, by = s[4], s[5], s[6], s[7]
+        if (x0 <= ax <= x1 and y0 <= ay <= y1) or (x0 <= bx <= x1 and y0 <= by <= y1):
+            hit += 1
+            continue
+        if (_crossover(ax, ay, bx, by, x0, y0, x1, y0) or _crossover(ax, ay, bx, by, x1, y0, x1, y1)
+                or _crossover(ax, ay, bx, by, x1, y1, x0, y1) or _crossover(ax, ay, bx, by, x0, y1, x0, y0)):
+            hit += 1
+    return hit
+
+
+def _clash_score(tbox, samples, segs, obbs, other_boxes):
+    """(压线数, 撞字数)：samples/segs 是描边图元的采样点与线段，obbs 是实心图元的有向盒
+    （_overlap 走 SAT，旋转针/斜杆不误报），other_boxes 是其余文本的 AABB。"""
+    x0, y0, x1, y1 = tbox[:4]
+    mx0, my0, mx1, my1 = x0 - CLASH_MARGIN, y0 - CLASH_MARGIN, x1 + CLASH_MARGIN, y1 + CLASH_MARGIN
+    on_line = sum(1 for q in samples if mx0 <= q[0] <= mx1 and my0 <= q[1] <= my1)
+    on_line += _segs_hit_box(segs, mx0, my0, mx1, my1)
+    clash = 0
+    for ob in obbs:
+        if _overlap(tbox, ob):
+            on_line += 1
+    for o in other_boxes:
+        if _overlap(tbox, o):
+            clash += 1
+    return on_line, clash
+
+
+def _resolve_label_clashes(block):
+    """对块内每个标签单元复核落点：先原位打分，脏了才挪——8 方位×递增半径的小平移优先
+    （挪字不改图），全向挪不干净再试字号微缩（≥22 号下限，缩不干净就还原字号、落最低分位置）。
+    返回 [(残差分, 文本)]，残差 = 压线数 + 2×撞字数；仍脏的同步进 UNRESOLVED。"""
+    texts = _text_units(block)
+    if not texts:
+        return []
+    textids = {id(x) for u in texts for x in u.get_family()}
+    obs_all = _label_obstacles(block, textids)
+    tboxes = {id(x): _box(x) for x in texts}
+    records = []
+    for t in texts:
+        pbox = _box(t)
+        # 本标签专属障碍集：只有**实心**图形（fill>0.5 的磁极条、电荷点）把标签整个包住时才豁免
+        # ——那是"字写在色块上"的设计。描边轮廓不豁免：转过的斜面方块 bbox 比实体大一圈，
+        # 边框线斜着切过贴边的 label_in 实拍就是"字被线划"（P3 抽验 f3 帧抓到过）。
+        obs, obbs, segs = [], [], []
+        for o in obs_all:
+            bx, tb = o["box"], pbox
+            enclosed = (o["solid"] and o["closed"]
+                        and bx[0] <= tb[0] - 0.02 and bx[1] <= tb[1] - 0.02
+                        and bx[2] >= tb[2] + 0.02 and bx[3] >= tb[3] + 0.02)
+            if enclosed:
+                continue
+            obs.extend(o["samples"])
+            segs.extend(o["segs"])
+            if o["solid"] and o["obb"] is not None:
+                obbs.append(o["obb"])
+
+        def score():
+            nb = _box(t)
+            on_line, clash = _clash_score(nb, obs, segs, obbs, [b for k, b in tboxes.items() if k != id(t)])
+            return on_line + 2 * clash
+
+        s0 = score()
+        rec_text = "".join(m.text for m in t.get_family() if hasattr(m, "text"))
+        if s0 == 0:
+            records.append((0, rec_text))
+            continue
+        c0 = np.array(t.get_center())
+        dirs = [np.array(v, dtype=float) for v in
+                ((0, 1, 0), (0.707, 0.707, 0), (1, 0, 0), (0.707, -0.707, 0),
+                 (0, -1, 0), (-0.707, -0.707, 0), (-1, 0, 0), (-0.707, 0.707, 0))]
+        best = (s0, c0, 0.0)
+        moved = False
+        for dist in (0.08, 0.18, 0.3, 0.44, 0.6, 0.8, 1.0, 1.2):
+            for u in dirs:
+                t.move_to(c0 + u * dist)
+                v = score()
+                if v < best[0]:
+                    best = (v, np.array(t.get_center()), dist)
+                if v == 0:
+                    moved = True
+                    break
+            if moved:
+                break
+        if not moved and best[0] > 0:
+            fam = [m for m in t.get_family() if hasattr(m, "text") and m.font_size > 0]
+            min_fs = min((m.font_size for m in fam), default=0)
+            if min_fs >= TEXT_MIN_FS + 2:
+                k = max(0.8, TEXT_MIN_FS / min_fs)
+                t.scale(k)
+                for dist in (0.08, 0.18):
+                    for u in dirs:
+                        t.move_to(c0 + u * dist)
+                        v = score()
+                        if v < best[0]:
+                            best = (v, np.array(t.get_center()), dist)
+                        if v == 0:
+                            moved = True
+                            break
+                    if moved:
+                        break
+                if not moved:
+                    t.scale(1.0 / k)                 # 缩了仍不干净：还原字号，落最低分位置（残差照记非零）
+                    t.move_to(best[1])
+                    best = (min(best[0], score()), np.array(t.get_center()), best[2])
+        t.move_to(best[1])
+        tboxes[id(t)] = _box(t)
+        if best[2] > 0:
+            CLASH_MOVED.append((rec_text, best[2]))   # 复核真的挪了字（反空转证据）
+        if best[0] > 0:
+            UNRESOLVED.append((best[0], rec_text))
+        records.append((best[0], rec_text))
+    return records
 
 
 def reveal_keys(at, n: int) -> list:
@@ -847,11 +1506,151 @@ def _box_edge(d, half_w: float, half_h: float, rot: float = 0.0) -> float:
     return min(half_w / lx if lx > 1e-9 else math.inf, half_h / ly if ly > 1e-9 else math.inf)
 
 
+# ---------------- 81-S2 物理图示补齐：接触面刻线 / 平行四边形定则 / 正交分解 / 斜面下滑仿真 ----------------
+# 原 #79 C4 范围。画法依据 Ref_Physics_Diagram_Standards.txt：
+#   §3 面本体用一小段一段斜线表示（镜面口径，支持面同族）；§6 N 垂直接触面、f 沿接触面；
+#   §7 平行四边形定则：对角线=合力，平移/辅助边画虚线以区分真实力。
+# 以下全部是**新增**辅助（_force_lengths/_body_force_lengths/_box_edge 等锁定机器只调用、不修改）。
+
+def _surface_hatch(p0, p1, into, n: int = 6, length: float = 0.22) -> list:
+    """接触面本体的阴影斜刻线：沿 p0→p1 均布 n 条短线，各自朝**材料侧**斜后画。
+
+    into 是材料侧单位法向（刻线必须落进面背后，不许伸向物体一侧）。
+    返回线段端点列表 [((x,y,0),(x,y,0)),...]，纯几何、可单测；颜色/粗细由 builder 决定。
+    """
+    a = np.array([p0[0], p0[1], 0.0], dtype=float)
+    b = np.array([p1[0], p1[1], 0.0], dtype=float)
+    t = b - a
+    seg = float(np.hypot(t[0], t[1]))
+    if seg < 1e-9:
+        return []
+    u = t / seg
+    m = np.array([into[0], into[1], 0.0], dtype=float)
+    m = m / (np.linalg.norm(m) or 1.0)
+    h = (m - u) / math.sqrt(2.0) * length            # 与面成 45°、朝材料侧（教材斜线观感）
+    out = []
+    for i in range(n):
+        q = a + u * seg * (0.06 + 0.88 * (i + 0.5) / n)
+        out.append((tuple(q), tuple(q + h)))
+    return out
+
+
+def surface_layout(kind: str, half_w: float = 0.75, half_h: float = 0.5,
+                   span: float = 1.25) -> dict | None:
+    """支承面几何（force_diagram props=surface）：面线段端点、材料方向（刻线侧）、接触点。
+
+    对象 = 居中原点、半宽 half_w、半高 half_h 的方块；面与物块棱边**重合共触**
+    （接触面表示的第一要义：面是物体碰着的那块，不是装饰）。
+    kind: ground 下方支持面 | wall_left 左侧竖墙 | wall_right 右侧竖墙；未知 kind 返回 None（脏数据兜底）。
+    """
+    if kind == "ground":
+        return {"p0": (-span, -half_h), "p1": (span, -half_h), "into": (0.0, -1.0),
+                "contact": (0.0, -half_h)}
+    if kind == "wall_left":
+        return {"p0": (-half_w, -0.8 * span), "p1": (-half_w, 0.8 * span),
+                "into": (-1.0, 0.0), "contact": (-half_w, 0.0)}
+    if kind == "wall_right":
+        return {"p0": (half_w, -0.8 * span), "p1": (half_w, 0.8 * span),
+                "into": (1.0, 0.0), "contact": (half_w, 0.0)}
+    return None
+
+
+def compose_layout(f1, f2, L: float = 1.5, floor: float = FORCE_MIN_LEN) -> dict:
+    """平行四边形定则几何（规范§7）：两分力箭长走 _force_lengths（与受力图同一把尺子），
+
+    合力 = 对角线 v1+v2；对边是另一个分力向量的**精确平移**（平行且等长由向量加法保证，不是手绘）。
+    返回 {"v1","v2","result","lens","cross"}，均为二维 np 向量/标量，原点在共同作用点。
+    """
+    d1 = _dir_vec(f1.get("dir"))
+    d2 = _dir_vec(f2.get("dir"))
+    d1 = d1 / (np.linalg.norm(d1) or 1.0)
+    d2 = d2 / (np.linalg.norm(d2) or 1.0)
+    l1, l2 = _force_lengths([f1, f2], L, floor)
+    v1, v2 = d1 * l1, d2 * l2
+    r = v1 + v2
+    return {"v1": v1, "v2": v2, "result": r, "lens": [l1, l2],
+            "cross": float(v1[0] * v2[1] - v1[1] * v2[0])}
+
+
+def resolve_layout(force, axis_deg: float = 0.0, L: float = 1.5) -> dict:
+    """正交分解几何（规范§7 推论）：F 沿两根互相垂直的轴取**精确投影**（画出来的长度由
+
+    fx=F·e1、fy=F·e2 算出，与 |F|·cosθ 恒等），分量之和向量恒等于 F。
+    """
+    d = _dir_vec(force.get("dir"))
+    d = d / (np.linalg.norm(d) or 1.0)
+    v = d * L
+    ax = math.radians(float(axis_deg or 0.0))
+    e1 = np.array([math.cos(ax), math.sin(ax), 0.0])
+    e2 = np.array([-math.sin(ax), math.cos(ax), 0.0])
+    return {"v": v, "e1": e1, "e2": e2,
+            "fx": float(v[0] * e1[0] + v[1] * e1[1]),
+            "fy": float(v[0] * e2[0] + v[1] * e2[1]),
+            "cos": float((v[0] * e1[0] + v[1] * e1[1]) / L)}
+
+
+def incline_slide_layout(angle_deg, mu: float = 0.0, g: float = 9.8,
+                         T: float = 6.0, n: int = 6) -> dict:
+    """斜面下滑仿真采样（81-S2；SIM_DT 口径——数学驱动、与渲染帧率解耦，禁手填关键帧）。
+
+    a = g(sinθ − μcosθ) 恒加速（规范§6：N 垂斜面、f 沿斜面与相对运动反向——箭头由 builder 画，
+    这里只管数）；v(t)=at、s(t)=½at²，按 n 等分时间 {t_k=kT/n} 逐点算出。
+    μ ≥ tanθ → a=0：从静止释放**不滑**，v≡0（物理正确的"静止"，不是画法失败）。
+    斜面三角尺寸沿用 _v_incline 的钳制（base 4.4、h≤2.6），保证与旧图元同一几何语言。
+    """
+    deg = max(10.0, min(float(angle_deg), 60.0))
+    a = math.radians(deg)
+    n = max(3, min(int(n), 8))
+    T = max(1.0, float(T))
+    acc = max(0.0, float(g) * (math.sin(a) - float(mu) * math.cos(a)))
+    ts = [k * T / n for k in range(n + 1)]
+    vs = [acc * t for t in ts]
+    ss = [0.5 * acc * t * t for t in ts]
+    base = 4.4
+    h = base * math.tan(a)
+    if h > 2.6:
+        h = 2.6
+        base = h / math.tan(a)
+    return {"deg": deg, "rad": a, "a": acc, "g": float(g), "mu": float(mu), "T": T, "n": n,
+            "ts": ts, "vs": vs, "ss": ss, "vmax": vs[-1], "smax": ss[-1], "base": base, "h": h}
+
+
+def _equal_ticks(mid, d, k: int = 1, half: float = 0.07, spread: float = 0.09) -> list:
+    """等长复制标记：边中点处 k 条垂直于边的小刻度线（同数刻度 = 一对平移复制、等长的边）。
+
+    d 为沿边的单位向量；返回线段端点对列表，供 builder 画 Line（规范§7 辅助线要可辨识）。
+    """
+    nrm = np.array([-d[1], d[0], 0.0], dtype=float)
+    nrm = nrm / (np.linalg.norm(nrm) or 1.0)
+    out = []
+    for i in range(max(1, int(k))):
+        off = (i - (k - 1) / 2.0) * spread
+        c = np.array(mid, dtype=float) + np.array(d, dtype=float) * off
+        out.append((tuple(c - nrm * half), tuple(c + nrm * half)))
+    return out
+
+
 # ---------------- 电路版式（79-C1） ----------------
 CIRCUIT_R = 0.3                      # 灯泡/电流表/电压表圆半径
-CIRCUIT_HALF = {"battery": 0.55, "resistor": 0.55, "switch": 0.55}   # 其余类型（圆形元件）半宽 = CIRCUIT_R
+CIRCUIT_HALF = {"battery": 0.55, "resistor": 0.55, "switch": 0.55,
+                "capacitor": 0.18, "inductor": 0.5, "rheostat": 0.55}   # 其余类型（圆形元件）半宽 = CIRCUIT_R
 CIRCUIT_TAP = 0.2                    # 电压表支路分接点离被测元件端子的距离
 CIRCUIT_VRISE = 1.05                 # 电压表支路高出主回路顶边的距离（让开被测元件的标签）
+AMMETER_MAX_DEFLECT = 60.0           # 指针满偏角（度）：示数=满量程时指针偏离竖直 60°，可读且不撞圆框
+
+
+def ammeter_needle_angle(reading, full_scale=1.0) -> float:
+    """电流表指针偏转角（度，竖直向上为 0，正值右偏、负值左偏）：θ = 60°·reading/full_scale，
+    钳在 ±60°（超量程打满）。示数字段缺失/非法 → 0°（旧行为：只有圆圈 A，无指针）。
+    方向随电流符号翻转是楞次定律刚需（Audit_79A §1.1 circuit 行、规范§16）。"""
+    try:
+        r = float(reading)
+        f = float(full_scale)
+    except (TypeError, ValueError):
+        return 0.0
+    if f <= 0:
+        f = 1.0
+    return max(-AMMETER_MAX_DEFLECT, min(AMMETER_MAX_DEFLECT, AMMETER_MAX_DEFLECT * r / f))
 
 
 def _circuit_half(e) -> float:
@@ -881,17 +1680,34 @@ def _voltmeter_target(e, i, elems, main) -> int | None:
 
 
 def circuit_layout(elems: list) -> dict:
-    """单回路电路的纯几何（不建 Mobject，便于测试）。
+    """电路的纯几何布局（不建 Mobject，便于测试）。
 
-    主回路：非电压表元件沿顶边等距排开，导线一直接到每个元件的端子（圆形元件即圆周 x±R），
+    主回路：非电压表、未标 branch 的元件沿顶边等距排开，导线一直接到每个元件的端子（圆形元件即圆周 x±R），
     其余三边是导线；电压表不进主回路，跨接在被测元件两端：从元件两侧的分接点竖直上引，
     电压表居中在上方支路里（规范§2、§16「电压表并联」）。
-    连接点：只在 ≥3 根导线交汇处（即电压表支路的分接点）画实心点；拐角、元件端子不画。
+    并联支路（81-S1，规范§16）：元件带可选字段 branch=k（整数或 "1"/"2" 数字串）即离开主回路，
+    按 k 分组、各自挂成一条**竖直支路**（上下端接主回路顶边/底边的分接点，元件沿支路纵向排开），
+    同一 k 的多个元件在该支路内首尾顺次串联——两支路并列连接，即并联。
+    连接点：只在 ≥3 根导线交汇处（电压表分接点、支路上下脚）画实心点；拐角、元件端子不画。
+    电流箭头（81-S1，规范§16「正极→外电路→负极」）：主回路含 battery 时给出 current.arrows——
+    顶边两段沿 −x（+ 极在电池左侧，与 symbol 画法制）、左边 −y、右边 +y、底边 +x；
+    每条竖直支路一个箭头（电池右侧支路电流自下而上、电池左侧自上而下，KCL 连续）；
+    电池不在主回路时 arrows=[]。
     返回 hw/hh（主回路半宽/半高）、wires[(a,b)]、junctions[(x,y)]、pos[元件中心，按 elems 顺序]、
-    terminals[(左端子, 右端子)]、main（串在主回路的元件下标）、parallel{电压表下标: 被测下标}。
+    terminals[(近端,远端)：横放=(左,右)，竖放=(上,下)]、main（串在主回路的元件下标）、parallel{电压表下标: 被测下标}、
+    branch_cols[{"x","branch","elems","ys"}]、current{"arrows":[{"p","d"}],"battery"}。
     """
-    main = [i for i, e in enumerate(elems) if str(e.get("type")) != "voltmeter"]
-    volts = [i for i, e in enumerate(elems) if str(e.get("type")) == "voltmeter"]
+    groups = {}
+    for i, e in enumerate(elems):
+        b = e.get("branch") if isinstance(e, dict) else None
+        if b is None or (isinstance(b, str) and not b.strip()):
+            continue
+        key = str(b).strip() if isinstance(b, str) else b
+        groups.setdefault(key, []).append(i)
+    brset = {i for ids in groups.values() for i in ids}
+    main = [i for i, e in enumerate(elems)
+            if i not in brset and str(e.get("type")) != "voltmeter"]
+    volts = [i for i, e in enumerate(elems) if i not in brset and str(e.get("type")) == "voltmeter"]
     parallel = {}
     for i in volts:
         t = _voltmeter_target(elems[i], i, elems, main)
@@ -903,10 +1719,19 @@ def circuit_layout(elems: list) -> dict:
     n = max(len(main), 1)
     W = max(4.0, 1.7 * n + 0.8)
     H = 1.6
-    hw, hh = W / 2, H / 2
+    hw = W / 2
+    hh = H / 2
+    # 81-S1 修正：支路元件沿支路方向占 2×_circuit_half（框类旋转后长轴沿支路），
+    # 均分 ys 会让相邻元件重叠、导线倒插进电容断口（视觉上短路）——先按元件尺寸
+    # 估支路所需高度，不够则整体加高主回路，再自上而下顺次排布留足接线段。
+    _lead_min = 0.12
+    for _ids in groups.values():
+        _need = sum(_circuit_half(elems[i]) for i in _ids) + (len(_ids) + 1) * _lead_min
+        hh = max(hh, _need)
     wires = [((-hw, hh), (-hw, -hh)), ((-hw, -hh), (hw, -hh)), ((hw, -hh), (hw, hh))]
     pos = [None] * len(elems)
     terminals = [None] * len(elems)
+    top_gaps = []                # 顶边上相邻元件（含拐角）之间的空档 (起x, 止x)，给竖直支路挑位
     prev = -hw
     for k, i in enumerate(main):
         x = -hw + (k + 1) * W / (n + 1)
@@ -914,8 +1739,53 @@ def circuit_layout(elems: list) -> dict:
         pos[i] = (x, hh)
         terminals[i] = ((x - gw, hh), (x + gw, hh))
         wires.append(((prev, hh), (x - gw, hh)))
+        if (x - gw) - prev >= 0.5:
+            top_gaps.append((prev, x - gw))
         prev = x + gw
     wires.append(((prev, hh), (hw, hh)))
+    if hw - prev >= 0.5:
+        top_gaps.append((prev, hw))
+    # ---- 并联支路列（81-S1）----
+    branch_cols = []
+    col_x = []
+    keys = sorted(groups.keys(), key=lambda k: groups[k][0])
+    xs_pool = [0.5 * (a + b) for a, b in top_gaps]
+    if len(keys) <= len(xs_pool):
+        step = len(xs_pool) / len(keys) if keys else 1
+        col_x = [xs_pool[min(int((j + 0.5) * step), len(xs_pool) - 1)] for j in range(len(keys))]
+    elif xs_pool:
+        col_x = list(xs_pool) + [-hw + (j + 1) * W / (len(keys) - len(xs_pool) + 1)
+                                 for j in range(len(keys) - len(xs_pool))]
+    else:
+        col_x = [-hw + (j + 1) * W / (len(keys) + 1) for j in range(len(keys))]
+    used_x = set()
+    for j, kk in enumerate(keys):
+        xc = col_x[j]
+        while any(abs(xc - ux) < 0.5 for ux in used_x):
+            xc += 0.5
+        used_x.add(xc)
+        ids = groups[kk]
+        m = len(ids)
+        hvs = [_circuit_half(elems[i]) for i in ids]
+        lead = max(_lead_min, (2 * hh - 2 * sum(hvs)) / (m + 1))
+        ys, _cur = [], hh
+        for hv in hvs:
+            _cur -= lead + hv
+            ys.append(_cur)
+            _cur -= hv
+        col_e, col_ys = [], []
+        cursor = hh
+        for t, i in enumerate(ids):
+            hv = _circuit_half(elems[i])
+            y = ys[t]
+            pos[i] = (xc, y)
+            terminals[i] = ((xc, y + hv), (xc, y - hv))
+            wires.append(((xc, cursor), (xc, y + hv)))
+            cursor = y - hv
+            col_e.append(i)
+            col_ys.append(y)
+        wires.append(((xc, cursor), (xc, -hh)))
+        branch_cols.append({"x": xc, "branch": kk, "elems": col_e, "ys": col_ys})
     junctions = []
     stack = {}
     for i, t in parallel.items():
@@ -931,8 +1801,33 @@ def circuit_layout(elems: list) -> dict:
                   ((tx + CIRCUIT_R, vy), (rx, vy)), ((rx, vy), (rx, hh))]
         if level == 0:           # 同一被测元件的第二块表从同一对分接点上引，点不重复
             junctions += [(lx, hh), (rx, hh)]
+    for col in branch_cols:      # 支路上下脚都是三线交汇：实心点（规范§2 连接点）
+        junctions += [(col["x"], hh), (col["x"], -hh)]
+    # ---- 电流方向箭头（81-S1）：电池 + 极（左侧长板）→ 外电路 → − 极 ----
+    arrows = []
+    batt = next((i for i in main if str(elems[i].get("type")) == "battery"), None)
+    if batt is not None:
+        bx = pos[batt][0]
+        gbh = _circuit_half(elems[batt])
+        for a, b in top_gaps:    # 电池两侧顶边各一支，方向都沿 −x
+            if abs(b - (bx - gbh)) < 1e-9 or abs(a - (bx + gbh)) < 1e-9:
+                arrows.append({"p": (0.5 * (a + b), hh), "d": (-1, 0), "side": "top"})
+        arrows.append({"p": (-hw, 0.0), "d": (0, -1), "side": "left"})
+        arrows.append({"p": (hw, 0.0), "d": (0, 1), "side": "right"})
+        feet = sorted([c["x"] for c in branch_cols])
+        segs = list(zip([-hw] + feet, feet + [hw]))
+        a0, b0 = max(segs, key=lambda s: s[1] - s[0]) if segs else (-hw, hw)
+        arrows.append({"p": (0.5 * (a0 + b0), -hh), "d": (1, 0), "side": "bottom"})
+        for col in branch_cols:  # 支路电流：电池右侧自下而上，左侧自上而下（KCL 连续）
+            top_y = col["ys"][0] + _circuit_half(elems[col["elems"][0]])
+            # 箭头须整支落在母线与首元件之间的接线段内：短支路时自动缩短，
+            # 不再压到母线/连接点上（81-S1 冒烟实拍发现箭头骑跨顶栏）。
+            half = max(0.06, min(0.2, 0.5 * (hh - top_y) - 0.02))
+            arrows.append({"p": (col["x"], 0.5 * (hh + top_y)), "half": half,
+                           "d": (0, 1 if col["x"] > bx else -1), "side": "branch"})
     return {"hw": hw, "hh": hh, "wires": wires, "junctions": junctions, "pos": pos,
-            "terminals": terminals, "main": main, "parallel": parallel}
+            "terminals": terminals, "main": main, "parallel": parallel,
+            "branch_cols": branch_cols, "current": {"arrows": arrows, "battery": batt}}
 
 
 # ---------------- 条形磁铁磁感线（79-C1） ----------------
@@ -983,6 +1878,179 @@ def magnet_field_line(y0: float, hx: float = 1.2, hh: float = 0.45, max_steps: i
         raise ValueError(f"magnet field line from y0={y0} did not reach x=0")
     mirror = [(-px, py) for px, py in reversed(half[:-1])]
     return half + mirror
+
+
+# ---------------- 电场线 / 螺线管 / 小磁针（81-S1，Audit_79A §1.1 field P1 行） ----------------
+# 口径全部来自 Ref_Physics_Diagram_Standards：§20 电场线（正→负、不断裂、不相交、疏密示强弱、
+# 匀强场平行等距）、§18 螺线管（安培定则二：四指顺电流、拇指=N 极；外 N→S、内 S→N 闭合）、
+# §19 小磁针（静止 N 极指向=该点磁场方向，N 端画红）。
+# 等量异号电场线与 magnet_field_line 同法：±点电荷解析场（3D 型 q·r̂/r²）RK4 单位化流线，
+# 追到中线 x=0 再按 (x,y)→(−x,y) 镜像——中线处 E 恰沿 +x（垂直穿中线），镜像后曲线光滑、
+# 起点终点由构造落在两电荷的 r0 圆上（规范§20「出发/终止」）。
+
+EFIELD_D, EFIELD_R0 = 1.0, 0.16       # 电荷半间距 d、电场线起/终半径 r0
+EFIELD_PAIR_SEEDS = (30.0, 65.0, 100.0)
+
+
+def _pair_E(x: float, y: float, d: float = EFIELD_D):
+    ex = ey = 0.0
+    for a, q in ((-d, 1.0), (d, -1.0)):
+        dx, dy = x - a, y
+        r3 = (dx * dx + dy * dy) ** 1.5
+        ex += q * dx / r3
+        ey += q * dy / r3
+    return ex, ey
+
+
+def efield_pair_line(phi_deg: float, d: float = EFIELD_D, r0: float = EFIELD_R0,
+                     max_steps: int = 4000) -> list:
+    """从 +q(−d,0) 面出发、终于 −q(+d,0) 面的一条电场线（上半平面，phi_deg∈(0,180)）。
+
+    出发点 = 正电荷周围 r0 圆上极角 phi_deg 处；RK4 沿单位化 E 追到中线 x=0（交点插值），
+    再 (x,y)→(−x,y) 镜像成完整线。确定性、只依赖入参。返回 [(x,y),...]，首尾分别落在
+    距 +q、−q 恰为 r0 的位置，且两端 y 相同（镜像构造保证）。
+    """
+    phi = math.radians(phi_deg)
+    x, y = -d + r0 * math.cos(phi), r0 * math.sin(phi)
+
+    def f(px, py):
+        ex, ey = _pair_E(px, py, d)
+        n = math.hypot(ex, ey) or 1e-12
+        return ex / n, ey / n
+
+    half = [(x, y)]
+    reached = False
+    for _ in range(max_steps):
+        h = 0.02 if (math.hypot(x + d, y) < 0.6 or math.hypot(x - d, y) < 0.6) else 0.05
+        k1 = f(x, y)
+        k2 = f(x + .5 * h * k1[0], y + .5 * h * k1[1])
+        k3 = f(x + .5 * h * k2[0], y + .5 * h * k2[1])
+        k4 = f(x + h * k3[0], y + h * k3[1])
+        nx = x + h * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6
+        ny = y + h * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6
+        if abs(nx) > 4 * d or abs(ny) > 4 * d:
+            raise ValueError(f"efield line from phi={phi_deg} escaped")
+        if nx >= 0.0:
+            t = x / (x - nx)
+            half.append((0.0, y + (ny - y) * t))
+            reached = True
+            break
+        x, y = nx, ny
+        half.append((x, y))
+    if not reached:
+        raise ValueError(f"efield line from phi={phi_deg} did not reach midplane")
+    mirror = [(-px, py) for px, py in reversed(half[:-1])]
+    return half + mirror
+
+
+def efield_point_layout(charge: str = "pos", spokes: int = 8,
+                        r0: float = 0.42, r1: float = 1.9) -> dict:
+    """点电荷辐射状电场线（规范§20）：sgn=+1 从电荷向外、−1 从无穷会向电荷。
+
+    spokes 条同半径射线段（方向沿 ±r̂，天然互不相交、只有起点/终点与电荷重合）；
+    每条线中点放一个箭头，方向 = sgn·r̂（正外负内）。angle 为极角（弧度）。
+    返回 {"sgn", "r0", "r1", "lines": [{"angle","p0","p1","arrow":{"pos","d"}}]}。
+    """
+    sgn = -1 if str(charge).strip().lower() in ("neg", "negative", "-", "−") else 1
+    s = max(int(spokes), 1)
+    lines = []
+    for k in range(s):
+        a = 2 * math.pi * k / s
+        ca, sa = math.cos(a), math.sin(a)
+        mid = (0.5 * (r0 + r1) * ca, 0.5 * (r0 + r1) * sa)
+        lines.append({"angle": a, "p0": (r0 * ca, r0 * sa), "p1": (r1 * ca, r1 * sa),
+                      "arrow": {"pos": mid, "d": (sgn * ca, sgn * sa)}})
+    return {"sgn": sgn, "r0": r0, "r1": r1, "lines": lines}
+
+
+EFIELD_PLATE_GAP, EFIELD_PLATE_H, EFIELD_PLATE_N, EFIELD_PLATE_FRINGE = 2.2, 1.9, 5, 2
+
+
+def efield_plate_layout(gap: float = EFIELD_PLATE_GAP, h: float = EFIELD_PLATE_H,
+                        n: int = EFIELD_PLATE_N, fringe: int = EFIELD_PLATE_FRINGE,
+                        samples: int = 33) -> dict:
+    """平行板电容器匀强场 + 边缘 fringe（规范§20「匀强电场画平行等距箭头」）。
+
+    板面在 x=±gap/2、竖直范围 ±h/2；左板 +、右板 −，场内方向恒 +x。
+    uniform：n 条横贯板间的直线，y 等间距（匀强→平行等距，间距=0.9h/(n−1)），每条中点箭头 +x；
+    fringe：upper/lower 各 fringe 条正弦隆起线 y(t)=yb+b·sin(πt)，两端贴板面、越靠外隆得越高、
+    顶点越过板缘（|顶点 y|>h/2 即「边缘略弯」），顶点箭头 +x（t=0.5 切线水平）。
+    返回 {"gap","h","uniform":[{"y","p","q","arrow"}],"fringe":[{"pts","apex","arrow"}],"plates"}。
+    """
+    g = gap / 2
+    n = max(int(n), 2)
+    sp = 0.9 * h / (n - 1)
+    uniform = []
+    for i in range(n):
+        y = (i - (n - 1) / 2) * sp
+        uniform.append({"y": y, "p": (-g, y), "q": (g, y),
+                        "arrow": {"pos": (0.0, y), "d": (1.0, 0.0)}})
+    fringe_n = max(int(fringe), 0)
+    fringe = []
+    for j in range(fringe_n):
+        b = 0.28 + 0.3 * j
+        for sg in (1, -1):
+            yb = sg * (h / 2 - 0.12)
+            pts = [(-g + 2 * g * t / (samples - 1),
+                    yb + sg * b * math.sin(math.pi * t / (samples - 1)))
+                   for t in range(samples)]
+            apex = (0.0, yb + sg * b)
+            fringe.append({"pts": pts, "apex": apex,
+                           "arrow": {"pos": apex, "d": (1.0, 0.0)}})
+    return {"gap": gap, "h": h, "uniform": uniform, "fringe": fringe,
+            "plates": [(-g, -h / 2, -1), (g, -h / 2, 1)]}
+
+
+SOLENOID_HX, SOLENOID_HH, SOLENOID_TURNS = 1.15, 0.42, 5
+SOLENOID_SEEDS = (0.62, 0.8, 0.95)     # 外线种子（占端面半高，同磁铁口径：近极面密）
+
+
+def solenoid_layout(turns: int = SOLENOID_TURNS, wind: str = "up_front") -> dict:
+    """通电螺线管的纯几何（规范§18 安培定则二）。
+
+    wind="up_front"：电流在朝向读者的一侧竖直向上 → 磁矩 m=(1/2)∮r×dl 沿 −x → N 极在 −x 端；
+    "down_front" 反向。ns = N 端的 x 符号（−1/1），全部方向由它导出，内外自洽：
+    bars：turns 根绕线（前侧可见段，电流 (0, −ns)）；
+    inner：内部 3 条平行等距线（S→N，方向 (ns,0)，"内部近匀强"）；
+    seeds：外部磁感线种子高度，渲染端用 magnet_field_line(y0, hx, hh) 追踪——
+    其镜像构造保证每条外线一端落 (hx,y0)、另一端落 (−hx,y0)：ns=1 时起点即 N 端（外 N→S），
+    ns=−1 时整线按 x→−x 镜像，起点即左 N 端、终于右 S 面（安培定则与磁铁等价）。
+    返回 {"hx","hh","ns","bars":[{"x","dir"}],"inner":[{"y","dir"}],"seeds"}。
+    """
+    t = max(int(turns), 3)
+    ns = -1 if str(wind).strip().lower() != "down_front" else 1
+    hx, hh = SOLENOID_HX, SOLENOID_HH
+    xb = hx - 0.12                     # 绕线杆分布范围：留出端面给磁感线收口
+    bars = []
+    for k in range(t):
+        x = -xb + 2 * xb * k / (t - 1) if t > 1 else 0.0
+        bars.append({"x": x, "dir": (0.0, float(-ns))})
+    inner = [{"y": (i - 1) * 0.66 * hh, "dir": (float(ns), 0.0)} for i in range(3)]
+    return {"hx": hx, "hh": hh, "ns": ns, "bars": bars, "inner": inner,
+            "seeds": [s * hh for s in SOLENOID_SEEDS]}
+
+
+COMPASS_LEN, COMPASS_W = 0.95, 0.3
+
+
+def compass_layout(angle_deg: float = 0.0, length: float = COMPASS_LEN,
+                   width: float = COMPASS_W) -> dict:
+    """小磁针纯几何（规范§19：静止 N 极指向=该点磁场方向；N 端红）。
+
+    angle_deg：N 端指向（数学角，+x=0°、逆时针为正）。菱形两半：
+    n_half=[tip, sideA, sideB]（含指向 tip 的三角，渲染填红）、s_half=[tail, sideA, sideB]。
+    返回 {"angle","u","tip","tail","poly","n_half","s_half","pivot"}。
+    """
+    th = math.radians(float(angle_deg))
+    u = (math.cos(th), math.sin(th))
+    w = (-math.sin(th), math.cos(th))
+    tip = (0.5 * length * u[0], 0.5 * length * u[1])
+    tail = (-tip[0], -tip[1])
+    sA = (0.5 * width * w[0], 0.5 * width * w[1])
+    sB = (-sA[0], -sA[1])
+    return {"angle": th, "u": u, "tip": tip, "tail": tail,
+            "poly": [tip, sA, tail, sB], "n_half": [tip, sA, sB],
+            "s_half": [tail, sA, sB], "pivot": (0.0, 0.0)}
 
 
 # ---------------- 光学透镜成像 / 通电导线磁场（79-C2a，纯几何，便于测试） ----------------
@@ -1095,6 +2163,65 @@ def wire_field_layout(current: str = "out", r0: float = WIRE_FIELD_R0,
     return {"radii": radii, "ccw": ccw, "arrows": arrows}
 
 
+MECH_BULGE_K = 0.30      # 弯箭头默认鼓度 = 0.30 × 弦长（弯月形一眼可辨，不贴死弦线）
+MECH_HEAD_LEN = 0.26     # 箭刺（鱼钩/全头两刺）长度
+MECH_BARB_DEG = 26.0     # 箭刺从终点切线反向张开的半角
+
+
+def mech_arrow_geom(p0, p1, bulge=None, full_head=True,
+                    head_len=MECH_HEAD_LEN, barb_deg=MECH_BARB_DEG) -> dict | None:
+    """机理弯箭头（电子流向）纯几何：三次贝塞尔控制点 + 顶点 + 终点切向 + 箭刺线段。
+
+    画法口径（IUPAC 推荐符号／有机教材惯例，Projrct_Plan 与语料白名单内无化学机理规范，
+    自定并在此钉死）：
+      · 弯箭头尾部落在**电子源**（孤对电子或成键电子对）、箭头落在**电子汇**（原子或新键位）；
+      · full_head=True（type="cov"，电子对流向／异裂机理）→ 全头：终点两侧对称张开的**双刺**；
+      · full_head=False（type="hom"，单电子流向／均裂机理）→ 鱼钩：终点单侧**一刺**，
+        弯侧取鼓度同一侧（钩尖朝曲线凹侧，与弯月走向一致，读起来才像"钩着电子走"）；
+      · bulge>0 时曲线鼓向行进方向的**左手侧**（弦的 +法向，n=R90°(d̂)），bulge<0 反侧；
+        缺省鼓度 MECH_BULGE_K×弦长。弯月弧的顶点（t=0.5）偏离弦线 |bulge|·0.75。
+    退化（起终点重合，弦长<1e-9）返回 None——调用方跳过，绝不画零长箭。
+    返回 {"ctrl":[p0,c1,c2,p1] 各 (x,y), "apex":(x,y), "head_dir":单位(ux,uy),
+          "tail_dir":单位(ux,uy), "barbs":[((x0,y0),(x1,y1)),…1或2条], "bulge": float}。
+    """
+    x0, y0 = float(p0[0]), float(p0[1])
+    x1, y1 = float(p1[0]), float(p1[1])
+    dx, dy = x1 - x0, y1 - y0
+    L = math.hypot(dx, dy)
+    if L < 1e-9:
+        return None
+    ux, uy = dx / L, dy / L                 # 弦向单位向量
+    nx, ny = -uy, ux                       # 行进方向左法向（R90°）
+    b = MECH_BULGE_K * L if bulge is None else float(bulge)
+    c1 = (x0 + dx / 3.0 + nx * b, y0 + dy / 3.0 + ny * b)
+    c2 = (x0 + 2.0 * dx / 3.0 + nx * b, y0 + 2.0 * dy / 3.0 + ny * b)
+    apex = ((x0 + 3.0 * c1[0] + 3.0 * c2[0] + x1) / 8.0,
+            (y0 + 3.0 * c1[1] + 3.0 * c2[1] + y1) / 8.0)   # B(0.5) 精确式
+    tx, ty = x1 - c2[0], y1 - c2[1]        # 终点切向（B'(1)=3(p1−c2)，方向与系数无关）
+    tl = math.hypot(tx, ty) or 1.0
+    hd = (tx / tl, ty / tl)                # 箭头行进方向（进入终点）
+    ang = math.radians(barb_deg)
+    ca, sa = math.cos(ang), math.sin(ang)
+
+    def _rot(vx, vy, c, s):                # 逆时针旋 c,s
+        return (vx * c - vy * s, vx * s + vy * c)
+
+    back = (-hd[0], -hd[1])                # 从终点回拉的方向
+    rb_p = _rot(back[0], back[1], ca, sa)  # +侧（左手侧）
+    rb_m = _rot(back[0], back[1], ca, -sa)
+    if full_head:
+        barbs = [((x1, y1), (x1 + rb_p[0] * head_len, y1 + rb_p[1] * head_len)),
+                 ((x1, y1), (x1 + rb_m[0] * head_len, y1 + rb_m[1] * head_len))]
+    else:
+        r = rb_p if b >= 0 else rb_m       # 鱼钩单刺：钩向曲线凹侧
+        barbs = [((x1, y1), (x1 + r[0] * head_len, y1 + r[1] * head_len))]
+    tdx, tdy = c1[0] - x0, c1[1] - y0
+    td = math.hypot(tdx, tdy) or 1.0
+    return {"ctrl": [(x0, y0), c1, c2, (x1, y1)], "apex": apex,
+            "head_dir": hd, "tail_dir": (tdx / td, tdy / td),
+            "barbs": barbs, "bulge": b}
+
+
 def _halo_ring(mob, color, buff=0.22, width=8, opacity=0.3):
     """P3 假辉光（halo，调研 1.2 的 ExplosionMarker 做法）：同中心叠一圈粗描边、
     低不透明度、无填充的环，垫在"本镜主角"（关键图形/公式）底下。
@@ -1126,7 +2253,7 @@ class Explainer(Scene):
     # ---------------- 版式原语 ----------------
     def _v_title(self, p, th):
         main = str(p.get("main", ""))
-        if main and not _MARKUP.search(main) and not _UNISUB.search(main):
+        if main and not _has_scripts(main):
             # P2 艺术字：标题渐变（调研 2.1：Text 自带 gradient 参数，按字数在渐变上采样取色）。
             # 字体栈不变（仍走 T() 的 SimSun/Times 双字体）；含上下标标记时退回 rich()
             # （分段拼接无法做连续渐变）。
@@ -2005,6 +3132,12 @@ class Explainer(Scene):
         """
         obj = str(p.get("object") or "box")
         forces = [f for f in p.get("forces", []) if isinstance(f, dict)]
+        # 81-S2 扩展入口：synthesize/decompose 走平行四边形/正交分解 builder（数据不足则落回旧受力路径，
+        # 旧 props 下本分支永不触发——回归锁见 tests/test_new_kinds.py::Test81S2BehaviorLock）。
+        if p.get("synthesize") and len(forces) >= 2:
+            return self._f_compose_forces(p, th)
+        if p.get("decompose") and len(forces) >= 1:
+            return self._f_compose_forces(p, th)
         if obj == "point":
             body = VGroup(Dot([0, 0, 0], radius=0.1, color=th["key"]))
         else:
@@ -2014,6 +3147,21 @@ class Explainer(Scene):
                 lab = rich(str(p["label_in"]), 30, th["fg"])
                 lab.move_to(frame)
                 body.add(lab)
+        # 81-S2 扩展：surface=ground|wall_left|wall_right 时在物块棱边处画支承面
+        # （面线 + 材料侧斜刻线 + 接触点高亮，规范§3/§6）；未给 props 时 surf=None，旧行为逐字不变。
+        surf = None
+        sk = str(p.get("surface") or "").strip().lower()
+        if sk:
+            lay = surface_layout(sk, 0.3, 0.12) if obj == "point" else surface_layout(sk)
+            if lay is not None:
+                sp0, sp1 = lay["p0"], lay["p1"]
+                face = Line([sp0[0], sp0[1], 0], [sp1[0], sp1[1], 0], color=th["dim"], stroke_width=3)
+                hatch = VGroup(*[Line(np.array(a, dtype=float), np.array(b, dtype=float),
+                                      color=th["dim"], stroke_width=2)
+                                 for a, b in _surface_hatch(sp0, sp1, lay["into"])])
+                contact = Dot(np.array([lay["contact"][0], lay["contact"][1], 0.0]),
+                              radius=0.07, color=th["hi"])
+                surf = VGroup(face, hatch, contact)
         L = 1.25
         units = []
         raw = [np.array(_dir_vec(f.get("dir")), dtype=float) for f in forces]
@@ -2040,18 +3188,144 @@ class Explainer(Scene):
             for u, key in zip(units, reveal_keys(p.get("at"), len(units))):
                 tag_reveal(u, key)
         g = VGroup(body, *units)
+        if surf is not None:        # 81-S2：给了 surface 才把支承面并进组；旧路径逐字不变
+            g = VGroup(body, surf, *units)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_compose_forces(self, p, th):
+        """力的合成与分解（81-S2，规范§7）：平行四边形定则 + 正交分解，与受力分析共用一把尺子。
+
+        箭长机器 = _dir_vec + _force_lengths（规范§5 同图长度∝mag）；平行四边形对边是
+        分力向量的**精确平移**（对边顶点=v1+v2，向量加法恒等），"平行且等长"由数学保证，不是手绘。
+        synthesize：两分力实箭 + 平移边虚线（辅助线，非真实力）+ 对角线合力（加粗）+ 等长刻度标记
+          （同数刻度=平移复制的等长边）+ 夹角 θ 写在角平分线上（不画弧：弧线是数学记号）。
+        decompose：F 实箭 + 两根互相垂直的轴（淡虚线）+ 精确投影 fx=F·e1、fy=F·e2 的分量箭
+          + 分量尖端到 F 尖端的虚矩边 + F 与轴夹角 θ。零分量不画零长箭、共线不画退化平行四边形、
+          等大反向不画零合力——脏数据自动降级，绝不画错。
+        """
+        forces = [f for f in p.get("forces", []) if isinstance(f, dict)]
+        O = np.zeros(3)
+
+        def tone(f, dflt="key"):
+            return th.get(str(f.get("tone") or dflt), th[dflt])
+
+        def flabel(f, dflt=""):
+            return str(f.get("label") or f.get("name") or dflt)
+
+        def farrow(start, end, color, sw, label=""):
+            a = np.array(start, dtype=float)
+            b = np.array(end, dtype=float)
+            ar = Arrow(a, b, color=color, buff=0, stroke_width=sw,
+                       max_tip_length_to_length_ratio=0.35)
+            u = VGroup(ar)
+            if label:
+                d = b - a
+                d = d / (np.linalg.norm(d) or 1.0)
+                u.add(rich(label, 26, color).next_to(b, d, buff=0.08))
+            return u
+
+        def ticks_of(mid, d, k, color):
+            return VGroup(*[Line(np.array(a, dtype=float), np.array(b, dtype=float),
+                                 color=color, stroke_width=2.5)
+                            for a, b in _equal_ticks(mid, d, k)])
+
+        body = VGroup(Dot(O, radius=0.08, color=th["key"]))
+        L = max(0.8, min(float(p.get("L") or 1.5), 2.2))
+
+        if p.get("synthesize"):
+            cl = compose_layout(forces[0], forces[1], L)
+            v1, v2, r, (l1, l2) = cl["v1"], cl["v2"], cl["result"], cl["lens"]
+            d1u = v1 / max(np.linalg.norm(v1), 1e-9)
+            d2u = v2 / max(np.linalg.norm(v2), 1e-9)
+            col = abs(cl["cross"]) < 0.05 * l1 * l2      # |sin∠|<0.05：近似共线，平行四边形退化
+            units = [farrow(O, v1, tone(forces[0]), 5, flabel(forces[0], "F₁")),
+                     farrow(O, v2, tone(forces[1]), 5, flabel(forces[1], "F₂"))]
+            if not col:
+                aux = VGroup(
+                    DashedLine(v1, r, dash_length=0.1, color=th["dim"], stroke_width=2),
+                    DashedLine(v2, r, dash_length=0.1, color=th["dim"], stroke_width=2),
+                    ticks_of(v1 + v2 / 2, d2u, 1, tone(forces[1])),
+                    ticks_of(v2 + v1 / 2, d1u, 2, tone(forces[0])),
+                    ticks_of(v2 / 2, d2u, 1, tone(forces[1])),
+                    ticks_of(v1 / 2, d1u, 2, tone(forces[0])),
+                )
+                bis = d1u + d2u
+                bn = float(np.linalg.norm(bis))
+                if bn > 0.2:                              # 几乎反向：角平分线方向不可靠，θ 不画
+                    aux.add(rich(str(p.get("angle_label") or "θ"), 26, th["fg"])
+                            .move_to(bis / bn * (0.45 * min(l1, l2) + 0.3)))
+                units.append(aux)
+            if float(np.linalg.norm(r)) >= 0.15:          # 等大反向：合力为零，不画零长箭
+                units.append(farrow(O, r, th["accent"], 6, str(p.get("result_label") or "合力")))
+            g = VGroup(body, *units)
+            if len(units) >= 2:
+                for u, k in zip(units, reveal_keys(p.get("at"), len(units))):
+                    tag_reveal(u, k)
+            if p.get("label"):
+                g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+            return g
+
+        rl = resolve_layout(forces[0], float(p.get("axis_deg") or 0.0), L)
+        v, e1, e2, fx, fy = rl["v"], rl["e1"], rl["e2"], rl["fx"], rl["fy"]
+        dF = v / max(np.linalg.norm(v), 1e-9)
+        axes = VGroup(*[DashedLine(-e * 0.3, e * (L + 0.35), dash_length=0.08,
+                                   color=th["dim"], stroke_width=1.5) for e in (e1, e2)])
+        px, py = e1 * fx, e2 * fy
+        units = [farrow(O, v, tone(forces[0]), 6, flabel(forces[0], "F"))]
+        comps = VGroup()
+        if abs(fx) >= 0.05:
+            comps.add(farrow(O, px, th["accent"], 5, str(p.get("x_label") or "F_x")))
+        if abs(fy) >= 0.05:
+            comps.add(farrow(O, py, th["accent"], 5, str(p.get("y_label") or "F_y")))
+        if comps:
+            units.append(axes)
+            units.append(comps)
+        if abs(fx) >= 0.05 and abs(fy) >= 0.05:
+            aux = VGroup(
+                DashedLine(px, v, dash_length=0.1, color=th["dim"], stroke_width=2),
+                DashedLine(py, v, dash_length=0.1, color=th["dim"], stroke_width=2),
+            )
+            d1u = (v - py) / max(float(np.linalg.norm(v - py)), 1e-9)
+            d2u = (v - px) / max(float(np.linalg.norm(v - px)), 1e-9)
+            aux.add(ticks_of(py / 2, d2u, 1, th["accent"]),
+                    ticks_of((px + v) / 2, d2u, 1, th["accent"]),
+                    ticks_of(px / 2, d1u, 2, th["accent"]),
+                    ticks_of((py + v) / 2, d1u, 2, th["accent"]))
+            bis = dF + e1
+            bn = float(np.linalg.norm(bis))
+            if bn > 0.2 and 1.0 - float(np.dot(dF, e1)) > 0.002:   # 与轴重合：没有夹角可标
+                aux.add(rich(str(p.get("angle_label") or "θ"), 26, th["fg"])
+                        .move_to(bis / bn * (0.42 * L + 0.22)))
+            units.append(aux)
+        g = VGroup(body, *units)
+        if len(units) >= 2:
+            for u, k in zip(units, reveal_keys(p.get("at"), len(units))):
+                tag_reveal(u, k)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
 
     def _v_field(self, p, th):
         """场图示：region（垂直纸面向里×/向外·）、wire（通电导线截面+安培定则环绕磁感线）、
-        magnet（条形磁铁 N→S 闭合磁感线）。"""
+        magnet（条形磁铁 N→S 闭合磁感线）；81-S1 新增电场/螺线管/小磁针 mode：
+        efield_point / efield_pair / efield_plate / solenoid / compass（缺 mode 仍是 region，旧行为）。"""
         mode = str(p.get("mode") or "region")
         if mode == "wire":
             return self._f_field_wire(p, th)
         if mode == "magnet":
             return self._f_field_magnet(p, th)
+        if mode == "efield_point":
+            return self._f_field_efield_point(p, th)
+        if mode == "efield_pair":
+            return self._f_field_efield_pair(p, th)
+        if mode == "efield_plate":
+            return self._f_field_efield_plate(p, th)
+        if mode == "solenoid":
+            return self._f_field_solenoid(p, th)
+        if mode == "compass":
+            return self._f_field_compass(p, th)
         return self._f_field_region(p, th)
 
     def _f_field_region(self, p, th):
@@ -2152,11 +3426,183 @@ class Explainer(Scene):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
 
-    def _v_circuit(self, p, th):
-        """单回路电路图（GB/T 4728 符号）：元件沿顶边排开，其余三边是导线，连接点实心圆点。
+    def _f_arrow(self, a, th, half=0.22, sw=4):
+        """按布局箭头 {"pos","d"} 画一支小方向箭头（场线/电流共用）。"""
+        px, py = a["pos"]
+        dx, dy = a["d"]
+        return Arrow([px - dx * half, py - dy * half, 0], [px + dx * half, py + dy * half, 0],
+                     color=th["warn"], buff=0, stroke_width=sw,
+                     max_tip_length_to_length_ratio=0.5)
 
-        符号：电池=长线正极+短线负极、电阻=矩形、开关=断开斜刃、灯泡=圆圈内×、
-        电表=圆圈内 A/V；导线横平竖直拐直角。
+    def _f_field_efield_point(self, p, th):
+        """点电荷电场线（规范§20）：spokes 条辐射线，正电荷箭头朝外、负电荷朝内；
+        线只从 r0 画到 r1，不到电荷中心（不断裂、不相交，交点只在电荷处与电荷重合）。"""
+        lay = efield_point_layout(str(p.get("charge") or "pos"), int(p.get("spokes", 8)))
+        pos_c = th["warn"] if lay["sgn"] > 0 else th["accent"]
+        charge = Circle(radius=0.24, color=pos_c, stroke_width=4).set_fill(pos_c, 0.9)
+        glyph = T("+" if lay["sgn"] > 0 else "−", font_size=34, color=WHITE).move_to([0, 0, 0])
+        lines = VGroup()
+        arrows = VGroup()
+        for ln in lay["lines"]:
+            x0, y0 = ln["p0"]
+            x1, y1 = ln["p1"]
+            lines.add(Line([x0, y0, 0], [x1, y1, 0], color=th["dim"], stroke_width=2.5))
+            arrows.add(self._f_arrow(ln["arrow"], th))
+        g = VGroup(lines, charge, glyph, arrows)
+        cap = "正电荷：电场线向外" if lay["sgn"] > 0 else "负电荷：电场线向内"
+        g = VGroup(g, rich(cap, 22, th["fg"])).arrange(DOWN, buff=0.2)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_field_efield_pair(self, p, th):
+        """等量异号点电荷电场线（efield_pair_line 解析场流线，镜像构造保证从 +q 出发、
+        终止 −q、上下对称嵌套不相交；中线箭头 +x=正→负，规范§20）。含轴线与两外侧半线。"""
+        d, r0 = EFIELD_D, EFIELD_R0
+        pos_c, neg_c = th["warn"], th["accent"]
+        charges = VGroup(
+            Circle(radius=0.2, color=pos_c, stroke_width=4).set_fill(pos_c, 0.9).move_to([-d, 0, 0]),
+            Circle(radius=0.2, color=neg_c, stroke_width=4).set_fill(neg_c, 0.9).move_to([d, 0, 0]),
+            T("+", font_size=30, color=WHITE).move_to([-d, 0, 0]),
+            T("−", font_size=30, color=WHITE).move_to([d, 0, 0]),
+        )
+        lines = VGroup()
+        arrows = VGroup()
+        for phi in EFIELD_PAIR_SEEDS:
+            pts = efield_pair_line(phi, d, r0)
+            apex_i = len(pts) // 2
+            for sg in (1, -1):
+                ln = VMobject(color=th["dim"], stroke_width=2.5)
+                ln.set_points_as_corners([[x, sg * y, 0] for x, y in pts])
+                lines.add(ln)
+                ay = sg * pts[apex_i][1]
+                arrows.add(self._f_arrow({"pos": (0.0, ay), "d": (1.0, 0.0)}, th))
+        # 轴线：+q→−q 直线（箭头 +x）；两外侧半线（离开 +q 向 −∞ / 从 +∞ 会入 −q，箭头都 −x）。
+        ax_len = 0.9
+        lines.add(Line([-d + r0, 0, 0], [d - r0, 0, 0], color=th["dim"], stroke_width=2.5),
+                  Line([-d - r0, 0, 0], [-d - ax_len, 0, 0], color=th["dim"], stroke_width=2.5),
+                  Line([d + ax_len, 0, 0], [d + r0, 0, 0], color=th["dim"], stroke_width=2.5))
+        arrows.add(self._f_arrow({"pos": (0.0, 0.0), "d": (1.0, 0.0)}, th))
+        for xm in ((-d - 0.5 * (r0 + ax_len)), (d + 0.5 * (r0 + ax_len))):
+            arrows.add(self._f_arrow({"pos": (xm, 0.0), "d": (-1.0, 0.0)}, th))
+        g = VGroup(lines, charges, arrows)
+        g = VGroup(g, rich("电场线从 + 出发、终止于 −，不相交、不断裂", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_field_efield_plate(self, p, th):
+        """平行板电容器：板间匀强场=平行等距带箭头直线，边缘 fringe 略弯外凸（规范§20
+        「匀强电场画平行等距箭头」；efield_plate_layout 正弦隆起，顶点越过板缘）。左 + 右 −。"""
+        lay = efield_plate_layout()
+        g = lay["gap"] / 2
+        h = lay["h"]
+        plates = VGroup(
+            Line([-g, -h / 2, 0], [-g, h / 2, 0], color=th["warn"], stroke_width=9),
+            Line([g, -h / 2, 0], [g, h / 2, 0], color=th["accent"], stroke_width=9),
+            T("+", font_size=30, color=th["warn"]).move_to([-g - 0.3, h / 2 + 0.2, 0]),
+            T("−", font_size=30, color=th["accent"]).move_to([g + 0.3, h / 2 + 0.2, 0]),
+        )
+        lines = VGroup()
+        arrows = VGroup()
+        for u in lay["uniform"]:
+            lines.add(Line([u["p"][0], u["p"][1], 0], [u["q"][0], u["q"][1], 0],
+                           color=th["dim"], stroke_width=2.5))
+            arrows.add(self._f_arrow(u["arrow"], th, half=0.2))
+        for fr in lay["fringe"]:
+            ln = VMobject(color=th["dim"], stroke_width=2.5)
+            ln.set_points_as_corners([[x, y, 0] for x, y in fr["pts"]])
+            lines.add(ln)
+            arrows.add(self._f_arrow(fr["arrow"], th, half=0.2))
+        g = VGroup(lines, plates, arrows)
+        g = VGroup(g, rich("板间平行等距=匀强场；边缘略弯（fringe）", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_field_solenoid(self, p, th):
+        """通电螺线管（规范§18）：绕线杆+顶底半圆成线圈，前侧电流箭头与绕向一致；
+        外部磁感线复用 magnet_field_line（极面磁荷解析场流线，闭合、N→S），内部 3 条
+        平行等距 S→N（近匀强），两端标 N/S。安培定则：电流前侧向上 ⇒ N 在 −x 端。"""
+        lay = solenoid_layout(int(p.get("turns", SOLENOID_TURNS)),
+                              str(p.get("wind") or "up_front"))
+        hx, hh, ns = lay["hx"], lay["hh"], lay["ns"]
+        bars = VGroup()
+        arcs = VGroup()
+        cur_arrows = VGroup()
+        for k, b in enumerate(lay["bars"]):
+            x = b["x"]
+            dy = b["dir"][1]
+            bars.add(Line([x, -hh, 0], [x, hh, 0], color=th["key"], stroke_width=4))
+            cur_arrows.add(self._f_arrow({"pos": (x, 0.0), "d": (0.0, dy)}, th, half=0.2, sw=4))
+            if k + 1 < len(lay["bars"]):
+                x2 = lay["bars"][k + 1]["x"]
+                arcs.add(ArcBetweenPoints([x, hh, 0], [x2, hh, 0], angle=0.5,
+                                          color=th["key"], stroke_width=3))
+                arcs.add(ArcBetweenPoints([x, -hh, 0], [x2, -hh, 0], angle=-0.5,
+                                          color=th["key"], stroke_width=3))
+        outer = VGroup()
+        inner = VGroup()
+        arrows = VGroup()
+        for s in lay["seeds"]:
+            pts = magnet_field_line(s, hx, hh)
+            if ns < 0:
+                pts = [(-px, py) for px, py in pts]
+            apex_i = len(pts) // 2
+            for sg in (1, -1):
+                ln = VMobject(color=th["accent"], stroke_width=2.5)
+                ln.set_points_as_corners([[x, sg * y, 0] for x, y in pts])
+                outer.add(ln)
+                ay = sg * pts[apex_i][1]
+                # 中线顶点处外线方向 = N→S = −ns·x̂
+                arrows.add(self._f_arrow({"pos": (0.0, ay), "d": (float(-ns), 0.0)}, th))
+        ax_len = 1.1
+        outer.add(Line([ns * hx, 0, 0], [ns * (hx + ax_len), 0, 0], color=th["accent"], stroke_width=2.5),
+                  Line([-ns * (hx + ax_len), 0, 0], [-ns * hx, 0, 0], color=th["accent"], stroke_width=2.5))
+        for xm in (ns * (hx + 0.55 * ax_len), -ns * (hx + 0.45 * ax_len)):
+            arrows.add(self._f_arrow({"pos": (xm, 0.0), "d": (float(ns), 0.0)}, th))
+        for it in lay["inner"]:      # 内部 S→N：平行等距 3 条（近匀强），箭头在各自线上
+            inner.add(Line([-hx, it["y"], 0], [hx, it["y"], 0], color=th["dim"],
+                           stroke_width=2.0, stroke_opacity=0.9))
+            arrows.add(self._f_arrow({"pos": (0.0, it["y"]), "d": it["dir"]}, th))
+        poles = VGroup(T("N", font_size=26, color=th["warn"]).move_to([ns * (hx + 0.35), 0.5, 0]),
+                       T("S", font_size=26, color=th["dim"]).move_to([-ns * (hx + 0.35), 0.5, 0]))
+        g = VGroup(arcs, bars, outer, inner, poles, arrows, cur_arrows)
+        g = VGroup(g, rich("右手握螺线管：四指顺电流、拇指指 N 极；外 N→S、内 S→N", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_field_compass(self, p, th):
+        """小磁针（规范§19）：菱形指针，N 端填红、S 端填蓝，指向角 angle（度，+x=0 逆时针）；
+        静止时 N 极指向即该点磁场方向。"""
+        lay = compass_layout(float(p.get("angle", 0.0)))
+        A, B, C, D = lay["poly"]
+        outline = Polygon([A[0], A[1], 0], [B[0], B[1], 0], [C[0], C[1], 0], [D[0], D[1], 0],
+                          color=th["fg"], stroke_width=3)
+        nh = Polygon([A[0], A[1], 0], [B[0], B[1], 0], [D[0], D[1], 0],
+                     color=th["warn"], stroke_width=2).set_fill(th["warn"], 1.0)
+        sh = Polygon([C[0], C[1], 0], [B[0], B[1], 0], [D[0], D[1], 0],
+                     color=th["accent"], stroke_width=2).set_fill(th["accent"], 1.0)
+        tip = lay["tip"]
+        tail = lay["tail"]
+        labs = VGroup(
+            T("N", font_size=22, color=th["warn"]).move_to([tip[0] * 1.35 + 0.12, tip[1] * 1.35 + 0.12, 0]),
+            T("S", font_size=22, color=th["accent"]).move_to([tail[0] * 1.35 - 0.12, tail[1] * 1.35 - 0.12, 0]),
+        )
+        g = VGroup(nh, sh, outline, Dot([0, 0, 0], radius=0.045, color=th["fg"]), labs)
+        g = VGroup(g, rich("N 端（红）指向=该点磁场方向", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _v_circuit(self, p, th):
+        """电路图（GB/T 4728 符号，按 circuit_layout 画）：导线横平竖直拐直角，连接点实心圆点。
+
+        符号：电池=长线正极+短线负极、电阻=矩形、开关=断开斜刃（closed=true 落下成通路）、
+        灯泡=圆圈内×、电表=圆圈内 A/V（ammeter 可带 reading 指针）、
+        81-S1 新增 capacitor=双板、inductor=半圆线圈、rheostat=框+斜箭头滑片。
+        元件带 branch=k 挂成竖直并联支路（规范§16）；current_arrows=true 沿导线画电流箭头。
         """
         elems = [e for e in p.get("elements", []) if isinstance(e, dict)]
         lay = circuit_layout(elems)
@@ -2169,7 +3615,7 @@ class Explainer(Scene):
         for jx, jy in lay["junctions"]:
             g.add(Dot([jx, jy, 0], radius=0.065, color=wire).set_fill(wire, 1.0))
 
-        def symbol(e, x, y):
+        def symbol(e, x, y, vertical=False):
             ty = str(e.get("type"))
             gw = CIRCUIT_HALF[ty] if ty in CIRCUIT_HALF else CIRCUIT_R
             sg = VGroup()
@@ -2181,25 +3627,65 @@ class Explainer(Scene):
             elif ty == "resistor":
                 sg.add(Rectangle(width=2 * gw, height=0.5, color=col, stroke_width=3).move_to([x, y, 0]))
             elif ty == "switch":
-                sg.add(Line([x - gw, y, 0], [x + gw * 0.55, y + 0.5, 0], color=col, stroke_width=3))
+                if e.get("closed"):     # 闭合态：闸刀落下成水平导线，回路导通（81-S1）
+                    sg.add(Line([x - gw, y, 0], [x + gw, y, 0], color=col, stroke_width=3))
+                else:                   # 断开态（旧行为）：斜刃只接左端子
+                    sg.add(Line([x - gw, y, 0], [x + gw * 0.55, y + 0.5, 0], color=col, stroke_width=3))
             elif ty == "bulb":
                 c = Circle(radius=CIRCUIT_R, color=col, stroke_width=3).move_to([x, y, 0])
                 d = CIRCUIT_R * 0.7
                 sg.add(c, Line([x - d, y - d, 0], [x + d, y + d, 0], color=col, stroke_width=3),
                        Line([x - d, y + d, 0], [x + d, y - d, 0], color=col, stroke_width=3))
+            elif ty == "capacitor":     # 两等长竖板、中间断口（GB/T 4728.4，规范§2）
+                sg.add(Line([x - gw, y - 0.25, 0], [x - gw, y + 0.25, 0], color=col, stroke_width=4),
+                       Line([x + gw, y - 0.25, 0], [x + gw, y + 0.25, 0], color=col, stroke_width=4))
+            elif ty == "inductor":      # 四个半圆凸起（线圈，GB/T 4728.4）
+                a0 = x - gw
+                step = 2 * gw / 4
+                for k in range(4):
+                    sg.add(ArcBetweenPoints([a0 + k * step, y, 0], [a0 + (k + 1) * step, y, 0],
+                                            angle=math.pi, color=col, stroke_width=3))
+            elif ty == "rheostat":      # 电阻框+斜箭头滑片（GB/T 4728.7 变阻器，规范§2）
+                sg.add(Rectangle(width=2 * gw, height=0.5, color=col, stroke_width=3).move_to([x, y, 0]))
+                sg.add(Arrow([x + 0.35, y + 0.8, 0], [x - 0.1, y + 0.28, 0], color=col, buff=0,
+                             stroke_width=3, max_tip_length_to_length_ratio=0.4))
             else:  # ammeter / voltmeter / 未知类型按电表圆画
                 c = Circle(radius=CIRCUIT_R, color=col, stroke_width=3).move_to([x, y, 0])
                 sg.add(c, T("A" if ty == "ammeter" else "V", font_size=26, color=col).move_to(c))
-            if e.get("label"):
+                if e.get("reading") is not None and ty == "ammeter":
+                    # 可选读数指针：偏转角 ∝ reading/full_scale（ammeter_needle_angle，楞次刚需）
+                    rad = math.radians(ammeter_needle_angle(e.get("reading"),
+                                                            e.get("full_scale", 1.0)))
+                    sg.add(Line([x, y, 0], [x + 0.85 * CIRCUIT_R * math.sin(rad),
+                                            y + 0.85 * CIRCUIT_R * math.cos(rad), 0],
+                                 color=th["warn"], stroke_width=3))
+            if e.get("label") and not vertical:
                 sg.add(rich(str(e["label"]), 22, col).next_to([x, y, 0], UP, buff=0.34))
+            if vertical:                # 竖直支路元件：整体转 90°（字母除外，保持水平可读）
+                txts = [m for m in sg if isinstance(m, Text)]
+                for m in txts:
+                    sg.remove(m)
+                sg.rotate(math.pi / 2, about_point=[x, y, 0])
+                if e.get("label"):
+                    sg.add(rich(str(e["label"]), 22, col).next_to([x, y, 0], LEFT, buff=0.34))
+                sg.add(*txts)
             return sg
 
-        syms = [symbol(e, x, y) for e, (x, y) in zip(elems, lay["pos"])]
+        syms = [symbol(e, x, y, e.get("branch") is not None)
+                for e, (x, y) in zip(elems, lay["pos"])]
         if len(syms) >= 2:
             for s, key in zip(syms, reveal_keys(p.get("at"), len(syms))):
                 tag_reveal(s, key)
         for s in syms:
             g.add(s)
+        if p.get("current_arrows"):     # 沿导线的电流方向小箭头（正极→外电路→负极，串联回路连续）
+            for a in lay["current"]["arrows"]:
+                px, py = a["p"]
+                dx, dy = a["d"]
+                hl = a.get("half", 0.2)   # 支路箭头按可用接线段缩短（见 circuit_layout）
+                g.add(Arrow([px - dx * hl, py - dy * hl, 0], [px + dx * hl, py + dy * hl, 0],
+                            color=th["warn"], buff=0, stroke_width=4,
+                            max_tip_length_to_length_ratio=0.45))
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
@@ -2347,7 +3833,12 @@ class Explainer(Scene):
         力的 dir 除 force_diagram 的绝对方向词/角度外，还认斜面相对方向：
         normal（垂直斜面向外）、into（垂直斜面向里，压力）、along_up / along_down（沿斜面）。
         倾角只在底角写 θ，不画角度弧线（弧线是数学记号）。
+        81-S2 扩展（旧 props 下全部不触发，回归锁见 Test81S2BehaviorLock）：
+          vt=true → 转入 _f_incline_vt（右侧 v-t 图同步生长）；hatch_face → 斜面表面刻线；
+          contact → 接触点高亮圆点（规范§3：面是物块真正碰着的那条线）。
         """
+        if p.get("vt"):
+            return self._f_incline_vt(p, th)
         deg = max(10.0, min(float(p.get("angle", 30)), 60.0))
         a = math.radians(deg)
         base = 4.4
@@ -2399,6 +3890,176 @@ class Explainer(Scene):
             for u, k in zip(units, reveal_keys(p.get("at"), len(units))):
                 tag_reveal(u, k)
         g.add(*units)
+        # 81-S2：斜面表面刻线（朝材料侧、45°斜后画，规范§3）+ 接触点高亮（规范§6 N⊥面的落点）。
+        if p.get("hatch_face"):
+            hc0 = np.array([x0, y0, 0.0]) + u_along * 0.35
+            hc1 = np.array([x0 + base, y0 + h, 0.0]) - u_along * 0.25
+            g.add(*[Line(np.array(a, dtype=float), np.array(b, dtype=float),
+                         color=th["dim"], stroke_width=2)
+                    for a, b in _surface_hatch((hc0[0], hc0[1]), (hc1[0], hc1[1]), -u_norm)])
+        if p.get("contact"):
+            g.add(Dot(foot, radius=0.07, color=th["hi"]))
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
+    def _f_incline_vt(self, p, th):
+        """斜面下滑 · v-t 图联动动画（81-S2）：频闪式同步。
+
+        同步口径：左图每个滑块的"位置影"与右图对应的数据点装进**同一个揭示单元**——
+        collect_reveals 把同批成员与同一条字幕淡入在同一帧，同步是构造性质，不是对表。
+        一切坐标由公式生成（SIM_DT 纪律、禁手填关键帧，见 incline_slide_layout）：
+          a = g(sinθ−μcosθ) 恒加速（规范§6：N⊥斜面、f 沿斜面且与相对运动反向——默认箭 G/N/f
+          的画法即此，mag 取物理比值 1 : cosθ : μcosθ，同图箭长∝大小，规范§5）；
+          v = at、s = ½at²、t_k = kT/n。滑块屏幕行程 = s_k·(D/smax)，等比映射不撒谎。
+        μ≥tanθ → a=0：从静止释放**不滑**——影块与行程整组不画，v-t 就是 t 轴上的水平线，
+        这是物理正确的静止而不是画法失败。
+        props: angle/mu(0)/g(9.8)/T(6)/n(3..8)/show_velocity(True)/forces(可覆盖默认三力)/
+               vt_label(默认 "a = … m·s⁻²")/vt_x_label("t/s")/vt_y_label("v/(m·s⁻¹)")/label。
+        """
+        la = incline_slide_layout(float(p.get("angle", 30)), float(p.get("mu") or 0.0),
+                                  float(p.get("g") or 9.8), float(p.get("T") or 6.0),
+                                  int(p.get("n") or 6))
+        rad, acc, base, h = la["rad"], la["a"], la["base"], la["h"]
+        ttot, n, vmax, smax = la["T"], la["n"], la["vmax"], la["smax"]
+        ts, vs, ss = la["ts"], la["vs"], la["ss"]
+        x0, y0 = -base / 2, -h / 2
+        u_along = np.array([math.cos(rad), math.sin(rad), 0.0])
+        u_norm = np.array([-math.sin(rad), math.cos(rad), 0.0])
+        bw, bh = 1.0, 0.66
+
+        left = VGroup()
+        ramp = Polygon([x0, y0, 0], [x0 + base, y0, 0], [x0 + base, y0 + h, 0],
+                       color=th["dim"], stroke_width=4).set_fill(th["dim"], 0.12)
+        left.add(ramp)
+        for i in range(7):            # 地面刻线：与旧斜面逐字同口径
+            xx = x0 - 0.3 + i * (base + 0.6) / 6
+            left.add(Line([xx, y0, 0], [xx - 0.22, y0 - 0.22, 0], color=th["dim"], stroke_width=2))
+        hc0 = np.array([x0, y0, 0.0]) + u_along * 0.35
+        hc1 = np.array([x0 + base, y0 + h, 0.0]) - u_along * 0.25
+        for a_, b_ in _surface_hatch((hc0[0], hc0[1]), (hc1[0], hc1[1]), -u_norm):
+            left.add(Line(np.array(a_, dtype=float), np.array(b_, dtype=float),
+                          color=th["dim"], stroke_width=2))
+        left.add(rich("θ", 26, th["fg"]).move_to([x0 + 0.75, y0 + 0.2, 0]))
+
+        sl = base / math.cos(rad)
+        d_start = min(0.85 * sl, sl - bw / 2 - 0.15)
+        D = max(0.0, min(d_start - (bw / 2 + 0.15), 0.62 * sl))
+        k_s = D / smax if smax > 1e-9 else 0.0
+
+        def foot_at(d):
+            return np.array([x0, y0, 0.0]) + u_along * d
+
+        f0 = foot_at(d_start)
+        c0 = f0 + u_norm * (bh / 2)
+        block = Rectangle(width=bw, height=bh, color=th["key"], stroke_width=4).set_fill(th["key"], 0.15)
+        block.rotate(rad).move_to(c0)
+        left.add(block)
+        left.add(Dot(f0, radius=0.07, color=th["hi"]))    # 接触点高亮（起始位）
+
+        forces = [f for f in p.get("forces", []) if isinstance(f, dict)]
+        if not forces:                                    # 默认三力：箭长取真实物理比值
+            forces = [{"dir": "down", "label": "G", "mag": 1.0},
+                      {"dir": "normal", "label": "N", "mag": round(math.cos(rad), 4)}]
+            if la["mu"] > 1e-9:
+                forces.append({"dir": "along_up", "label": "f",
+                               "mag": round(la["mu"] * math.cos(rad), 4)})
+        rel = {"normal": u_norm, "into": -u_norm, "along_up": u_along, "along_down": -u_along}
+        keys = [str(f.get("dir")).strip().lower() for f in forces]
+        dirs = []
+        for f, key in zip(forces, keys):
+            d = rel[key] if key in rel else _dir_vec(f.get("dir"))
+            dirs.append(d / (np.linalg.norm(d) or 1.0))
+        lengths = _body_force_lengths(forces, dirs, 1.2, bw / 2, bh / 2, rot=rad,
+                                      edge_ok=[k != "into" for k in keys])
+        for f, key, d, ln in zip(forces, keys, dirs, lengths):
+            start = f0 if key == "into" else c0
+            color = th.get(str(f.get("tone") or "key"), th["key"])
+            arrow = Arrow(start, start + d * ln, color=color, buff=0, stroke_width=5,
+                          max_tip_length_to_length_ratio=0.35)
+            u = VGroup(arrow)
+            label = str(f.get("label") or f.get("name") or "")
+            if label:
+                u.add(rich(label, 24, color).next_to(arrow.get_end(), d, buff=0.08))
+            left.add(u)
+
+        gxl, gyl = 4.6, 3.4
+        x_hi = ttot * 1.15
+        y_hi = (vmax if vmax > 1e-9 else max(ttot * 0.25, 1.0)) * 1.25
+        sx, sy = _grid_step(0.0, x_hi), _grid_step(0.0, y_hi)
+        gx = base / 2 + gxl / 2 + 0.55
+        plane = NumberPlane(x_range=[0, x_hi, sx], y_range=[0, y_hi, sy],
+                            x_length=gxl, y_length=gyl,
+                            background_line_style={"stroke_color": th["grid"], "stroke_width": 1},
+                            axis_config={"stroke_color": th["dim"]})
+        plane.move_to([gx, 0.15, 0])
+
+        def tick(text, pos, shift, escape):
+            t = T(text, font_size=20, color=th["dim"]).move_to(pos).shift(shift)
+            t._tick_dir = escape
+            t._tick_anchor = np.array(t.get_center())
+            return t
+
+        ticks = VGroup(
+            *[tick(_fmt_tick(v_), plane.c2p(v_, 0), DOWN * 0.3, DOWN)
+              for v_ in _tick_values(0, x_hi, sx) if v_ != 0],
+            *[tick(_fmt_tick(v_), plane.c2p(0, v_), LEFT * 0.42, LEFT)
+              for v_ in _tick_values(0, y_hi, sy) if v_ != 0],
+            tick("0", plane.c2p(0, 0), DOWN * 0.3 + LEFT * 0.3, DOWN + LEFT),
+        )
+        xlab = rich(str(p.get("vt_x_label") or "t/s"), 22, th["dim"])
+        xlab.move_to([plane.get_right()[0] + AXIS_NAME_GAP + xlab.width / 2,
+                      plane.c2p(x_hi, 0)[1] + 0.16, 0])
+        ylab = rich(str(p.get("vt_y_label") or "v/(m·s⁻¹)"), 22, th["dim"])
+        ylab.move_to([plane.c2p(0, y_hi)[0] + ylab.width / 2 + 0.2,
+                      plane.c2p(0, y_hi)[1] - 0.12, 0])
+        graph = VGroup(plane, ticks, xlab, ylab)
+
+        show_v = bool(p.get("show_velocity", True))
+        units, segs_list, cursors, dots = [], [], [], []
+        for k in range(1, n + 1):
+            p_prev = plane.c2p(ts[k - 1], vs[k - 1])
+            p_now = plane.c2p(ts[k], vs[k])
+            seg = _polyline([p_prev, p_now], th["key"], 5)
+            dotk = Dot(p_now, radius=0.08, color=th["accent"])
+            u = VGroup()
+            if smax > 1e-9:
+                d_k = d_start - ss[k] * k_s
+                fk = foot_at(d_k)
+                ck = fk + u_norm * (bh / 2)
+                ghost = Rectangle(width=bw, height=bh, color=th["accent"], stroke_width=3)
+                ghost.rotate(rad).move_to(ck)
+                u.add(ghost, Dot(fk, radius=0.06, color=th["hi"]))
+                if show_v:
+                    lv = min(0.7 * vs[k] / max(vmax, 1e-9),
+                             max(d_k - bw / 2 - 0.12, 0.0))
+                    if lv >= 0.15:
+                        s0 = ck - u_along * (bw / 2 + 0.02)
+                        u.add(Arrow(s0, s0 - u_along * lv, color=th["hi"], buff=0,
+                                    stroke_width=4, max_tip_length_to_length_ratio=0.3))
+            if float(np.linalg.norm(p_now - plane.c2p(ts[k], 0))) >= 0.06:
+                cur = DashedLine(p_now, plane.c2p(ts[k], 0), dash_length=0.08,
+                                 color=th["dim"], stroke_width=2)
+                curh = DashedLine(p_now, plane.c2p(0, vs[k]), dash_length=0.08,
+                                  color=th["dim"], stroke_width=2)
+                u.add(cur, curh)
+                cursors.extend([cur, curh])
+            u.add(seg, dotk)
+            segs_list.append(seg)
+            dots.append(dotk)
+            units.append(u)
+        self._clear_ticks(ticks, segs_list + cursors,
+                          [_pad_box(_box(xlab), AXIS_LABEL_PAD),
+                           _pad_box(_box(ylab), AXIS_LABEL_PAD)], plane)
+        if units:
+            ltxt = str(p.get("vt_label") or f"a = {acc:.2f} m·s⁻²")
+            taken = ([_box(xlab), _box(ylab)] + graph_obstacles(plane, ticks)
+                     + [_box(d) for d in dots])
+            units[-1].add(_place_label(rich(ltxt, 24, th["key"]), segs_list[-1],
+                                       plane, taken, [_sample(m, 24) for m in segs_list]))
+            for u, kkey in zip(units, reveal_keys(p.get("at"), n)):
+                tag_reveal(u, kkey)
+        g = VGroup(left, graph, *units)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
@@ -2472,6 +4133,130 @@ class Explainer(Scene):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
 
+    def _v_mechanism(self, p, th):
+        """有机化学推电子箭头机理图（81-S3）：物种 + 键 + 弯月箭头，逐箭揭示。
+
+        画法口径（mech_arrow_geom 的文档钉死几何部分，这里是编排部分）：
+          · 弯箭头 = 电子的移动：尾在电子源（孤对点/键中点），头在电子汇（原子/新键位）；
+            直箭头（物种整体位移、平衡移动）留给后续批次——本 kind 先只做弯箭头机理排版；
+          · type="cov"（默认，电子对流向/异裂）全头双刺；type="hom"（单电子/均裂）鱼钩单刺；
+          · 骨架不做完整骨架式渲染器：物种=文本节点（走 rich()，S5 电荷上标归一化自动生效，
+            Cu²⁺/SO₄²⁻ 级排版 + TOFU 兜底），键=短线（order 1~3；kind="break" 断=warn 虚线、
+            kind="form" 成=accent 虚线），孤对/电子源=成对小圆点 lps；
+          · 分批揭示：一支箭头 = 一个揭示单元（曲线+箭刺+随箭出现的物种/键/孤对点，
+            由 attach=箭下标绑定），at 数组长度 = 箭头数（reveal_keys 口径，长度不符回均匀铺批）；
+            不带 attach 的物种从 cue0 就在屏上（机理图的"地图"），caption 图注同旧口径追加。
+        props: species:[{text, pos:[x,y], tone?, attach?}]
+               bonds:[{from:[x,y], to:[x,y], order?:1|2|3, kind?:"break"|"form", attach?}]
+               lps:[{pos:[x,y], attach?}]
+               arrows:[{from:[x,y], to:[x,y], bulge?, type?:"cov"|"hom", label?, tone?}]
+               at:[0~1 比例或字幕片段] × 箭头数, label?: 图注。
+        脏 props 兜底：pos 缺失的物种按行均布自动排位；退化箭头（起终点重合）跳过不画。
+        """
+        def _pt(v, default=None):
+            if isinstance(v, (list, tuple)) and len(v) >= 2:
+                try:
+                    return (float(v[0]), float(v[1]))
+                except (TypeError, ValueError):
+                    return default
+            return default
+
+        def _tone(t, fallback):
+            return th.get(str(t or "").strip().lower(), th[fallback])
+
+        g = VGroup()
+        species = [s for s in (p.get("species") or []) if isinstance(s, dict)]
+        bonds = [b for b in (p.get("bonds") or []) if isinstance(b, dict)]
+        lps = [l for l in (p.get("lps") or []) if isinstance(l, dict)]
+        arrows = [a for a in (p.get("arrows") or []) if isinstance(a, dict)]
+
+        # 静态层：键线（先画，垫在文本底下）
+        bond_mobs = []
+        for b in bonds:
+            q0, q1 = _pt(b.get("from")), _pt(b.get("to"))
+            if q0 is None or q1 is None:
+                continue
+            kind = str(b.get("kind") or "").strip().lower()
+            color = _tone(b.get("tone"), "fg") if kind == "" else \
+                th["warn"] if kind == "break" else th["accent"] if kind == "form" else _tone(None, "fg")
+            cls = DashedLine if kind in ("break", "form") else Line
+            try:
+                order = max(1, min(int(b.get("order") or 1), 3))
+            except (TypeError, ValueError):
+                order = 1
+            dx, dy = q1[0] - q0[0], q1[1] - q0[1]
+            ln_ = math.hypot(dx, dy)
+            if ln_ < 1e-9:
+                continue
+            nx, ny = -dy / ln_, dx / ln_
+            offs = [0.0] if order == 1 else [-0.09, 0.09] if order == 2 else [-0.11, 0.0, 0.11]
+            unit = VGroup(*[cls(np.array([q0[0] + nx * o, q0[1] + ny * o, 0.0]),
+                                np.array([q1[0] + nx * o, q1[1] + ny * o, 0.0]),
+                                color=color, stroke_width=4) for o in offs])
+            bond_mobs.append((unit, b.get("attach")))
+        lp_mobs = []
+        for l in lps:
+            q = _pt(l.get("pos"))
+            if q is None:
+                continue
+            pair = VGroup(Dot(np.array([q[0] - 0.085, q[1], 0.0]), radius=0.05, color=th["accent"]),
+                          Dot(np.array([q[0] + 0.085, q[1], 0.0]), radius=0.05, color=th["accent"]))
+            lp_mobs.append((pair, l.get("attach")))
+        sp_mobs = []
+        auto_row = [s for s in species if _pt(s.get("pos")) is None]
+        for s in species:
+            txt = str(s.get("text") or "")
+            if not txt.strip():
+                continue
+            q = _pt(s.get("pos"))
+            if q is None:
+                j = len(sp_mobs)   # 缺 pos 的物种：按已收集序均布在一横排（保底不叠死）
+                q = ((j - (len(auto_row) - 1) / 2.0) * 2.6, 1.6)
+            mob = rich(txt, int(s.get("size") or 30), _tone(s.get("tone"), "fg"))
+            mob.move_to([q[0], q[1], 0.0])
+            sp_mobs.append((mob, s.get("attach")))
+
+        # 揭示层：一支箭头一个单元，attach==i 的物种/键/孤对点随第 i 支箭同批淡入
+        # （i 按**声明**的 arrows 下标计，退化箭跳过不占单元但占下标，attach 语义不漂移）
+        units = []
+        unit_by_decl = {}
+        for i, a in enumerate(arrows):
+            q0, q1 = _pt(a.get("from")), _pt(a.get("to"))
+            geom = mech_arrow_geom(q0, q1, a.get("bulge"),
+                                  full_head=str(a.get("type") or "cov").strip().lower() != "hom") \
+                if (q0 is not None and q1 is not None) else None
+            if geom is None:      # 退化/脏箭头（缺坐标或起终点重合）：跳过不画，零长箭不上屏
+                continue
+            color = _tone(a.get("tone"), "accent")
+            curve = CubicBezier(*[np.array([x, y, 0.0]) for x, y in geom["ctrl"]],
+                                stroke_color=color, stroke_width=4)
+            u = VGroup(curve)
+            for (bx, by), (ex, ey) in geom["barbs"]:
+                u.add(Line(np.array([bx, by, 0.0]), np.array([ex, ey, 0.0]),
+                           color=color, stroke_width=4))
+            lab = str(a.get("label") or "")
+            if lab:
+                u.add(rich(lab, 22, color).move_to([geom["apex"][0], geom["apex"][1] + 0.32, 0.0]))
+            unit_by_decl[i] = u
+            units.append(u)
+        keys = reveal_keys(p.get("at"), len(units))
+        if len(units) >= 2:
+            for u, k in zip(units, keys):
+                tag_reveal(u, k)
+        for mob, at in sp_mobs + bond_mobs + lp_mobs:
+            try:
+                j = int(at)
+            except (TypeError, ValueError):
+                j = -1
+            if j >= 0 and j in unit_by_decl and len(units) >= 2:
+                unit_by_decl[j].add(mob)
+            else:
+                g.add(mob)
+        g.add(*units)
+        if p.get("label"):
+            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        return g
+
     BUILDERS = {
         "axis_graph": "_v_axis_graph",
         "particle_box": "_v_particle_box",
@@ -2486,6 +4271,7 @@ class Explainer(Scene):
         "optics": "_v_optics",
         "incline": "_v_incline",
         "trajectory": "_v_trajectory",
+        "mechanism": "_v_mechanism",
         "title": "_v_title",
         "formula": "_v_formula",
         "callout": "_v_callout",
@@ -2565,6 +4351,9 @@ class Explainer(Scene):
         for v in shot["visuals"]:
             m = getattr(self, self.BUILDERS[v["kind"]])(v["props"], th)
             m._kind = v["kind"]    # 渲染动效点名用（P2）：_render_shot 按版式类型挂 Indicate/ShowPassingFlash
+            # 81-S4：锁定图元里的裸放置标签不许动画法，只在装配层做"只挪字"的全量复核；
+            # 走 _place_label 的图线标签（_placed）与刻度数字（_tick_*）已在各自机器里钉死，复核跳过。
+            PLACEMENTS.extend(_resolve_label_clashes(m))
             blocks.append(m)
         # 第四轮 F-5（评审 A D3、B 复检1）：不带内部揭示标记的正文块此前随整镜在 t=0
         # 一次铺满——20 个镜次从头到尾画面不变（占比 13%~49%）。steps/summary/callout 早

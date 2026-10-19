@@ -40,6 +40,12 @@ KP_DIR = MVP_DIR / "pipeline" / "data" / "kp"
 RUNNER = WEB_DIR / "jobrunner.py"
 PY = sys.executable
 MAX_JOB_SECONDS = 30 * 60
+# 81-W1 超时分级：≤300s 旧档维持 30 分钟上限（行为不变）；长片档（600/1200s）的渲染墙钟
+# 按目标时长×画质系数外推（短片 120s@1080p 实测约 100s，1080p 取 6×、720p 3×、480p 1.5×，
+# 另加 600s 固定余量给检索/配音/合成段）。语义不变：
+# 超时 = 杀掉子进程、失败原因用人话报出该档上限分钟数。
+QUALITY_TIMEOUT_FACTOR = {"draft": 1.5, "hd": 3.0, "fullhd": 6.0}
+LONG_TIERS = (600, 1200)   # 新时长档：只有它们走分级放宽，与 DURATIONS 的新档同口径
 FEEDBACK_DIR = Path(os.environ.get("QX_FEEDBACK_DIR") or (WEB_DIR / "feedback"))
 FEEDBACK_READ_TOKEN = os.environ.get("QX_FEEDBACK_TOKEN", "").strip()
 # 容器文件系统重启即清空，反馈另外写穿到一个 ModelScope 私有数据集；两项都配了才启用。
@@ -76,9 +82,17 @@ from pipeline.ir import (  # noqa: E402
 SUBJECTS = [("math", "数学"), ("physics", "物理"), ("chemistry", "化学")]
 GRADES = [("G8", "初二"), ("G9", "初三"), ("H1", "高一"), ("H2", "高二"), ("H3", "高三"), ("U1", "大一"), ("U2", "大二")]
 STYLES = [("clean", "clean · 白底板书"), ("board", "board · 深色黑板")]
-DURATIONS = [60, 120, 180, 300]
-QUALITIES = [("draft", "480p 草稿（约 30s，演示用）"), ("hd", "720p（约 60s）"),
-             ("fullhd", "1080p 正式（约 100s）")]
+DURATIONS = [60, 120, 180, 300, 600, 1200]
+# 81-W1 诚实标注：长片（600/1200s）在 2 核容器的渲染墙钟时间远超旧档，选择器上就把
+# 预计耗时说在前面（口径：短片 120s@1080p 实测墙钟约 100s，线性外推再按 2 核实测余量放大）。
+DURATION_LABELS = {
+    60: "60 秒 · 1 分钟", 120: "120 秒 · 2 分钟", 180: "180 秒 · 3 分钟",
+    300: "300 秒 · 5 分钟",
+    600: "600 秒 · 10 分钟（长片：1080p 在演示机要数十分钟，建议 480p/720p）",
+    1200: "1200 秒 · 20 分钟（超长片：1080p 在演示机可能要 1 小时以上，强烈建议 480p/720p）",
+}
+QUALITIES = [("draft", "480p 草稿（约 30s，演示用；长片建议档）"), ("hd", "720p（约 60s；长片建议档）"),
+             ("fullhd", "1080p 正式（短片约 100s；600/1200s 长片很慢，建议改用 480p/720p）")]
 STAGE_LABELS = {"retrieve": "检索知识点库", "draft": "起草知识点（库外）", "storyboard": "生成分镜", "narration": "配音合成",
                 "review": "静态监督检查", "render": "画面渲染", "mux": "音幕合成",
                 "done": "已完成", "failed": "失败", "queued": "排队中", "starting": "启动中"}
@@ -293,6 +307,19 @@ def new_id(mode: str) -> str:
     return f"{mode}{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(3).hex()}"
 
 
+def job_timeout_seconds(brief: dict | None, quality: str | None) -> int:
+    """任务超时上限（秒）：旧档（<600s）保持 30 分钟口径；长档按目标时长×画质系数分级放宽。"""
+    tgt = (brief or {}).get("target_seconds")
+    try:
+        tgt = int(float(tgt))
+    except (TypeError, ValueError):
+        tgt = 0
+    if not any(tgt >= t for t in LONG_TIERS):
+        return MAX_JOB_SECONDS
+    factor = QUALITY_TIMEOUT_FACTOR.get(quality or "", QUALITY_TIMEOUT_FACTOR["fullhd"])
+    return int(tgt * factor) + 600
+
+
 def spawn(job_id: str, argv: list[str], job_dir: Path) -> None:
     logf = open(job_dir / "runner.log", "wb")
     try:
@@ -302,9 +329,12 @@ def spawn(job_id: str, argv: list[str], job_dir: Path) -> None:
             _jobs[job_id].update(state="failed", error=f"子进程启动失败：{e}", finished=time.time())
             persist(job_id)
         return
+    with _lock:
+        j = _jobs.get(job_id) or {}
+        limit = job_timeout_seconds(j.get("brief"), j.get("quality"))
 
     def watch() -> None:
-        deadline = time.time() + MAX_JOB_SECONDS
+        deadline = time.time() + limit
         while proc.poll() is None:
             if time.time() > deadline:
                 proc.kill()
@@ -318,7 +348,8 @@ def spawn(job_id: str, argv: list[str], job_dir: Path) -> None:
                 j.update(state="done", finished=time.time(), result=result)
             elif rc == -9 or time.time() > deadline:
                 j.update(state="failed", finished=time.time(),
-                         error=f"任务超时被终止（>{MAX_JOB_SECONDS // 60} 分钟）")
+                         error=f"任务超时被终止（本档上限 {limit // 60} 分钟）："
+                               f"长片在演示机渲染很慢，建议降低画质或缩短目标时长后重试")
             else:
                 err = result.get("error")
                 if not err and (job_dir / "runner.log").is_file():
@@ -587,7 +618,23 @@ class Handler(BaseHTTPRequestHandler):
     def send_file(self, path: Path, download=False):
         if not path.is_file():
             return self.send_text("not found", 404)
-        size = path.stat().st_size
+        st = path.stat()
+        size = st.st_size
+        # 81-W1 加载优化：内容指纹 ETag（mtime+size）+ 可缓存 Cache-Control。
+        # 产物媒体按角色 key 取到的是各自 run 目录里的文件，内容稳定，给 7 天新鲜期；
+        # 页面三件套每次带 If-None-Match 回源校验，命中走 304——部署后不会用脏的旧 JS/CSS，
+        # 二次打开也几乎零字节。旧片被手改覆盖时 mtime 变、ETag 变，缓存自动失效。
+        etag = f'"{st.st_mtime_ns:x}-{size:x}"'
+        suffix = path.suffix.lower()
+        cache = "public, max-age=604800" if suffix in (".mp4", ".wav", ".png", ".jpg", ".srt") \
+            else "no-cache"
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", cache)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         start, end, partial = 0, size - 1, False
         rng = self.headers.get("Range")
         if rng:
@@ -612,6 +659,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(206 if partial else 200)
         self.send_header("Content-Type", MIME.get(path.suffix.lower(), "application/octet-stream"))
         self.send_header("Accept-Ranges", "bytes")
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", cache)
         self.send_header("Content-Length", str(end - start + 1))
         if partial:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
@@ -680,6 +729,8 @@ class Handler(BaseHTTPRequestHandler):
                 "grades": [{"value": v, "label": l} for v, l in GRADES],
                 "styles": [{"value": v, "label": l} for v, l in STYLES],
                 "durations": DURATIONS,
+                # 长档（600/1200）的预计耗时与画质建议如实下发（81-W1），前端拼选择器文案用。
+                "duration_labels": {str(k): v for k, v in DURATION_LABELS.items()},
                 "qualities": [{"value": v, "label": l} for v, l in QUALITIES],
                 "topics": kp_entries(),
                 # 时间轴常量随枚举一起下发，前端不再各写一份 —— 改 SHOT_HEAD/SHOT_TAIL 不必动 app.js。

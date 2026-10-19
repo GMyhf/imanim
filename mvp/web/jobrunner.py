@@ -190,27 +190,36 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     out_dir.mkdir(parents=True, exist_ok=True)
     log = {"steps": {}, "brief": plan.brief.__dict__}
 
-    # 配音：时长以实测语音时长为准；用户手写的 seconds 只作下限（否则口播会被截断）
-    # 用户改过 narration 后，旧 voiceover 已失效，先重写配音稿再配音（网关关闭则回退正则）。
+    # 配音：时长以实测语音时长为唯一真源（与 run.generate/_synthesize 同一口径，81-A2）：
+    # spoken 回写实测秒（字幕窗口按真实语音铺，不铺满整镜），秒数用 _spread_surplus 把
+    # 用户手写的旧 seconds 只当**缺口封顶到 MAX_SHOT_IDLE** 的下限——旧版 max(user, need)
+    # 把过期规划秒整块留在镜尾，语音早讲完、字幕还按全镜铺，正是 regenerate/improve 路径的
+    # 音画不同步来源。
     log["voiceover"] = voiceover.apply(plan)
     pg.begin("narration")
     step = time.time()
     audio_dir = out_dir / "audio"
     audio_dir.mkdir(exist_ok=True)
-    shot_wavs: list[tuple[float, Path]] = []
-    offset = 0.0
+    fps = cli.QUALITY_FPS.get(quality, 30)
+    needs: list[float] = []
+    floors: list[float] = []
     for s in plan.shots:
         wav = audio_dir / f"shot_{s.index:02d}.wav"
         user_secs = round(float(s.seconds), 2)
+        floors.append(user_secs)
         if plan.brief.narration:
             dur = tts.synth(s.voiceover or s.narration, wav, audio_dir)
             # 镜头总时长 = 淡入留白 + 实测口播 + 淡出留白；与 run.py / IR 用同一组常量。
             need = round(SHOT_HEAD + dur + SHOT_TAIL, 2)
+            s.spoken = need       # 实测秒回写：subtitles()/speak_window 从此按语音铺
         else:
             need = 0.0
-        s.seconds = max(user_secs, need) if need else user_secs
-        shot_wavs.append((offset, wav))
-        offset += s.seconds
+        needs.append(need)
+    seconds = cli._spread_surplus(needs, floors) if plan.brief.narration else floors
+    shot_wavs: list[tuple[float, Path]] = []
+    for s, sec, start in zip(plan.shots, seconds, mux.cumulative_offsets(seconds, fps)):
+        s.seconds = sec
+        shot_wavs.append((start, audio_dir / f"shot_{s.index:02d}.wav"))
     log["steps"]["narration"] = round(time.time() - step, 2)
     pg.end("narration")
     log["audio_floor"] = {str(s.index): s.seconds for s in plan.shots}
@@ -282,7 +291,11 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     pg.begin("mux")
     step = time.time()
     plan_dict = json.loads(plan_path.read_text(encoding="utf-8"))
-    mux.build_track(shot_wavs, total, out_dir / "track.wav")
+    sec_list = [float(s["seconds"]) for s in plan_dict["shots"]]
+    # 与 run.generate 同一口径：缓冲盖住帧网格量化后的末镜终点，越界部分由 -shortest 裁，
+    # 不再截弃片尾语音。
+    track_secs = max(total, mux.cumulative_offsets(sec_list + ([0.0] if sec_list else []), fps)[-1])
+    mux.build_track(shot_wavs, track_secs, out_dir / "track.wav")
     onsets = mux.speech_onsets(out_dir / "track.wav")
     align = []
     for start, _ in shot_wavs:
@@ -297,10 +310,10 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
         raise cli.GenerationError(
             "tool", f"音画时间轴错位（>0.35s）：{bad}",
             "音画时间轴错位，成片会声画不同步。请反馈这条知识点并附上 plan.json。")
-    n_subs = mux.write_srt(plan_dict, out_dir / "subs.srt")
+    n_subs = mux.write_srt(plan_dict, out_dir / "subs.srt", fps=fps)
     final = cli._retry(lambda: mux.mux(out_dir / "silent.mp4", out_dir / "track.wav", out_dir / "final.mp4",
                                        out_dir / "subs.srt",
-                                       shot_seconds=[float(s["seconds"]) for s in plan_dict["shots"]]),
+                                       shot_seconds=sec_list, fps=fps),
                        desc="音画合成")
     log["steps"]["mux"] = round(time.time() - step, 2)
     log["sfx"] = os.environ.get("MVP_SFX", "0")
