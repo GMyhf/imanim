@@ -1108,6 +1108,97 @@ def _polyline(coords, color, width: int):
     return curve
 
 
+# ---- 82-SD2b 连续过程动画小工具 ----
+# 与 SD2a1/SD2a2 同一纪律：beats 构造期生成，几何每帧从**已变换的静态参考件**现算
+# （_fit 缩放/位移后仍贴合），tracker 停住即不再写状态——退场/强调动画不被 updater 抢回。
+
+
+def _swing_to(mob, u_of, angle_of):
+    """把线段绕**当前**起点连续转到 ``angle_of(u)``（绝对角，+x 轴逆时针，弧度）。
+
+    服务的理解：开关闸臂落下 / 表针从 0 偏到读数——转角是过程量，不是两帧定格。
+    构造期几何保持终点角（测试锁死终点坐标）；首帧只记一次实角，此后按增量转，
+    不在装配期缓存坐标，所以 _fit 缩放/位移后转轴仍在闸刀起点（82-SD2a1 同则）。
+    """
+    st = {"a": None}
+
+    def _upd(m):
+        v = m.get_end() - m.get_start()
+        if st["a"] is None:
+            st["a"] = math.atan2(float(v[1]), float(v[0]))
+        tgt = float(angle_of(_clamp01(u_of())))
+        d = tgt - st["a"]
+        if abs(d) > 1e-7:
+            m.rotate(d, about_point=m.get_start())
+            st["a"] = tgt
+
+    mob.add_updater(_upd)
+    return mob
+
+
+def _grow_partial(mob, u_of, start: float = 0.0, end: float = 1.0):
+    """按 tracker 把**已有路径**逐段露出（前缀裁剪，Create 语义但可分段续画）。
+
+    首帧才拷一份全点快照（此时 _fit 已定稿）：若在构造期拷，缩放前的点列会把线画歪；
+    拷贝后只改点不改样式，退场 FadeOut 照常接管透明度。
+    """
+    st = {"f": None, "full": None}
+
+    def _upd(m):
+        if st["full"] is None:
+            st["full"] = m.copy()
+        f = _clamp01((_clamp01(u_of()) - start) / max(end - start, 1e-9))
+        if st["f"] is not None and abs(f - st["f"]) < 1e-9:
+            return
+        st["f"] = f
+        m.pointwise_become_partial(st["full"], 0.0, f)
+
+    mob.add_updater(_upd)
+    return mob
+
+
+def _dashed_grow(mob, u_of, model_pts, ref_of, color, stroke_width: float = 2.0,
+                 num_dashes: int = 30):
+    """虚线轨迹随运动体生长：按前缀点列重建 Dash 数随进度增（虚线长度不随生长变密）。"""
+    st = {"f": -1.0}
+
+    def _upd(m):
+        f = _clamp01(u_of())
+        if abs(f - st["f"]) < 1e-9:
+            return
+        st["f"] = f
+        if f <= 1e-6:
+            m.set_stroke(opacity=0.0)
+            return
+        cx, cy, s = ref_of()
+        pp = _partial_polyline(model_pts, f)
+        base = VMobject()
+        base.set_points_as_corners([[cx + s * float(x), cy + s * float(y), 0.0] for x, y in pp])
+        # 固定 dash 数：Dash 是子对象，数目变化会让 become 留下旧子对象残影（82-SD2b 实测口径）。
+        fresh = DashedVMobject(base, num_dashes=max(2, int(num_dashes)))
+        m.become(fresh)
+        m.set_stroke(color, stroke_width, opacity=0.92)
+
+    mob.set_stroke(opacity=0.0)
+    mob.add_updater(_upd)
+    return mob
+
+
+def _follow_uv(mob, u_of, pt_of):
+    """让图元跟着 ``pt_of(u)`` 走（小球/滑块/游标共用；只定位，不改角度与样式）。"""
+    st = {"p": None}
+
+    def _upd(m):
+        p = pt_of(_clamp01(u_of()))
+        q = np.array([float(p[0]), float(p[1]), 0.0])
+        if st["p"] is None or float(np.abs(q - st["p"]).sum()) > 1e-9:
+            st["p"] = q
+            m.move_to(q)
+
+    mob.add_updater(_upd)
+    return mob
+
+
 def _box(mob):
     a, b = mob.get_corner(LEFT + DOWN), mob.get_corner(RIGHT + UP)
     return (a[0], a[1], b[0], b[1])
@@ -3536,7 +3627,17 @@ class Explainer(Scene):
         return g
 
     def _v_particle_box(self, p, th):
-        """粒子盒子：before（隔板左侧挤着）/ after（均匀占满）/ both（前后对照，中间一支箭头）。"""
+        """粒子盒子：before（隔板左侧挤着）/ after（均匀占满）/ both（前后对照，中间一支箭头）。
+
+        82-SD2b M5：三态都必须是过程动画——
+          · both：前态粒子从边界成波进入；随后右盘粒子**逐颗**从前盘位置滑到新位置
+            （LaggedStart 语义的错峰滑移，起点=左盘同位粒子，落点=右盘最终排布），
+            观众看到的是「扩散发生」而不是两幅静图；
+          · before：粒子从左侧边界成波进入左室并排布到位；
+          · after：粒子从左侧半室（隔板刚抽走）成波扩开占满全室。
+        粒子最终坐标仍由**原有 rng 调用顺序**的 fill() 生成（同 seed 落定形态不变；
+        额外需要的「起始位」全部用几何映射，不再抽随机数）。
+        """
         import random
         rng = random.Random(int(p.get("seed", 7)))
         n = max(2, min(int(p.get("n", 24)), 60))
@@ -3552,34 +3653,114 @@ class Explainer(Scene):
                     pts.append(q)
             return pts
 
-        def box(state):
-            frame = Rectangle(width=W, height=H, color=th["dim"], stroke_width=3)
-            parts = VGroup(frame)
-            if state == "before":
-                parts.add(DashedLine([0, -H / 2, 0], [0, H / 2, 0], dash_length=0.12, color=th["warn"], stroke_width=3))
-                pts = fill(-W / 2, 0.0)
-            else:
-                pts = fill(-W / 2, W / 2)
-            parts.add(*[Dot([x, y, 0], radius=0.07, color=th["accent"]) for x, y in pts])
-            return parts
+        def frame():
+            return Rectangle(width=W, height=H, color=th["dim"], stroke_width=3)
+
+        def dots_of(pts):
+            return VGroup(*[Dot([x, y, 0], radius=0.07, color=th["accent"]) for x, y in pts])
+
+        def panel_pt(fr, local):
+            c = fr.get_center()
+            k = float(fr.width) / W
+            return (float(c[0]) + k * float(local[0]), float(c[1]) + k * float(local[1]), 0.0)
+
+        def glide(fr0, loc0, fr1, loc1, d, a, b, u_of):
+            st = {"p": None}
+
+            def _upd(m):
+                f = _clamp01((_clamp01(u_of()) - a) / max(b - a, 1e-9))
+                p0 = panel_pt(fr0, (loc0[0], loc0[1]))
+                p1 = panel_pt(fr1, (loc1[0], loc1[1]))
+                p = (p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f, 0.0)
+                if st["p"] is None or float(abs(p[0] - st["p"][0]) + abs(p[1] - st["p"][1])) > 1e-9:
+                    st["p"] = p
+                    m.move_to(p)
+
+            d.add_updater(_upd)
+            return d
 
         state = str(p.get("state") or "both")
         cap = {"before": str(p.get("before_label") or ""), "after": str(p.get("after_label") or "")}
+        lag = 0.55
         if state == "both":
-            def panel(s):
-                b = box(s)
-                return VGroup(b, rich(cap[s], 24, th["fg"])).arrange(DOWN, buff=0.2) if cap[s] else b
-            left, right = panel("before"), panel("after")
+            f_left = frame()
+            left_body = VGroup(f_left,
+                               DashedLine([0, -H / 2, 0], [0, H / 2, 0], dash_length=0.12,
+                                          color=th["warn"], stroke_width=3),
+                               dots_of(fill(-W / 2, 0.0)))          # rng 顺序①：前态
+            left = (VGroup(left_body, rich(cap["before"], 24, th["fg"])).arrange(DOWN, buff=0.2)
+                    if cap["before"] else left_body)
+            f_right = frame()
+            right_body = VGroup(f_right, dots_of(fill(-W / 2, W / 2)))   # rng 顺序②：后态
+            right = (VGroup(right_body, rich(cap["after"], 24, th["fg"])).arrange(DOWN, buff=0.2)
+                     if cap["after"] else right_body)
             arrow = Arrow(LEFT * 0.5, RIGHT * 0.5, color=th["key"], buff=0, stroke_width=6)
             g = VGroup(left, arrow, right).arrange(RIGHT, buff=0.45)
-            tag_reveal(right, 0.5)
-            tag_reveal(arrow, 0.5)
+            left_dots = [m for m in left_body.submobjects if isinstance(m, VGroup)][0]
+            right_dots = [m for m in right_body.submobjects if isinstance(m, VGroup)][0]
+            # 布排定稿后再量偏移（_fit 缩放由 panel_pt 每帧按框宽折算）
+            l_loc = [tuple(m.get_center()[:2] - f_left.get_center()[:2]) for m in left_dots]
+            r_loc = [tuple(m.get_center()[:2] - f_right.get_center()[:2]) for m in right_dots]
+            tr_in = ValueTracker(0.0)
+            tr_m = ValueTracker(0.0)
+            for k, d in enumerate(left_dots):
+                a, b = _lag_slot(k, n, lag)
+                glide(f_left, (-W / 2 + 0.10, l_loc[k][1]), f_left, l_loc[k], d, a, b,
+                      tr_in.get_value)
+                _opacity_gate(d, tr_in.get_value, a, a + 0.10)
+            for k, d in enumerate(right_dots):
+                a, b = _lag_slot(k, n, lag)
+                # 起点=左盘同位粒子（跨盘飞越），落点=右盘最终格位：迁移逐颗发生
+                glide(f_left, l_loc[k], f_right, r_loc[k], d, a, b, tr_m.get_value)
+                _opacity_gate(d, tr_m.get_value, a, a + 0.12)
+            beats = []
+            b = _mo.advance_to(tr_in, 1.0, cue=0,
+                               note="时钟演化：前态粒子从边界成波进入左室——隔板左边挤着的是「前」")
+            b.run_time = 2.6
+            beats.append(b)
+            b = _mo.advance_to(tr_m, 0.55, cue=1,
+                               note="时钟演化：右盘粒子逐颗从前盘同位起点滑向新位置（错峰迁移=扩散过程）")
+            b.run_time = 2.6
+            beats.append(b)
+            b = _mo.advance_to(tr_m, 1.0, cue=2,
+                               note="时钟演化：后半批粒子落位，后态均匀占满——两态是同一批粒子的两种排布")
+            b.run_time = 2.6
+            beats.append(b)
         else:
-            g = box(state)
-            if cap[state]:
-                g = VGroup(g, rich(cap[state], 24, th["fg"])).arrange(DOWN, buff=0.2)
+            fr = frame()
+            body = VGroup(fr)
+            if state == "before":
+                body.add(DashedLine([0, -H / 2, 0], [0, H / 2, 0], dash_length=0.12,
+                                    color=th["warn"], stroke_width=3))
+                pts = fill(-W / 2, 0.0)                              # rng 顺序：旧口径
+            else:
+                pts = fill(-W / 2, W / 2)
+            ds = dots_of(pts)
+            body.add(ds)
+            g = (VGroup(body, rich(cap[state], 24, th["fg"])).arrange(DOWN, buff=0.2)
+                 if cap[state] else body)
+            loc = [tuple(m.get_center()[:2] - fr.get_center()[:2]) for m in ds]
+            tr = ValueTracker(0.0)
+            for k, d in enumerate(ds):
+                a, b = _lag_slot(k, n, lag)
+                if state == "before":       # 边界进入：同 y 从左侧壁滑到自己的格位
+                    st_l = (-W / 2 + 0.10, loc[k][1])
+                else:                       # 隔板抽走：从被压在左半室的位置扩开
+                    st_l = (-W / 2 + 0.10 + (loc[k][0] + W / 2) * 0.45, loc[k][1])
+                glide(fr, st_l, fr, loc[k], d, a, b, tr.get_value)
+                _opacity_gate(d, tr.get_value, a, a + 0.10)
+            beats = []
+            for k, tgt in enumerate((1.0 / 3.0, 2.0 / 3.0, 1.0)):
+                b = _mo.advance_to(
+                    tr, tgt, cue=k,
+                    note=("时钟演化：粒子从边界成波进入并排布到位（前态不是一张贴图）"
+                          if state == "before" else
+                          "时钟演化：隔板抽走后粒子成波扩开、均匀占满（后态由同一批粒子走出来）"))
+                b.run_time = 2.6
+                beats.append(b)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 26, th["key"])).arrange(DOWN, buff=0.25)
+        _mo.mount_motion(g, beats)
         return g
 
     def _v_microstate(self, p, th):
@@ -4853,10 +5034,14 @@ class Explainer(Scene):
         wire = th["dim"]
         col = th["key"]
         g = VGroup()
+        wires = VGroup()
         for a, b in lay["wires"]:
-            g.add(Line([a[0], a[1], 0], [b[0], b[1], 0], color=wire, stroke_width=3))
+            wires.add(Line([a[0], a[1], 0], [b[0], b[1], 0], color=wire, stroke_width=3))
+        g.add(wires)
+        jdots = VGroup()
         for jx, jy in lay["junctions"]:
-            g.add(Dot([jx, jy, 0], radius=0.065, color=wire).set_fill(wire, 1.0))
+            jdots.add(Dot([jx, jy, 0], radius=0.065, color=wire).set_fill(wire, 1.0))
+        g.add(jdots)
 
         def symbol(e, x, y, vertical=False):
             ty = str(e.get("type"))
@@ -4878,8 +5063,11 @@ class Explainer(Scene):
             elif ty == "resistor":
                 sg.add(Rectangle(width=2 * gw, height=0.5, color=col, stroke_width=3).move_to([x, y, 0]))
             elif ty == "switch":
-                if e.get("closed"):     # 闭合态：闸刀落下成水平导线，回路导通（81-S1）
-                    sg.add(Line([x - gw, y, 0], [x + gw, y, 0], color=col, stroke_width=3))
+                if e.get("closed"):     # 闭合态：闸刀落在水平位置（构造期=旧几何，SD2b 从斜角转下）
+                    blade = Line([x - gw, y, 0], [x + gw, y, 0], color=col, stroke_width=3)
+                    sg.add(blade)
+                    sg._blade = blade
+                    sg._blade_open = math.atan2(0.5, 2 * gw)   # 合闸前抬起的斜角
                 else:                   # 断开态（旧行为）：斜刃只接左端子
                     sg.add(Line([x - gw, y, 0], [x + gw * 0.55, y + 0.5, 0], color=col, stroke_width=3))
             elif ty == "bulb":
@@ -4905,11 +5093,14 @@ class Explainer(Scene):
                 sg.add(c, T("A" if ty == "ammeter" else "V", font_size=26, color=col).move_to(c))
                 if e.get("reading") is not None and ty == "ammeter":
                     # 可选读数指针：偏转角 ∝ reading/full_scale（ammeter_needle_angle，楞次刚需）
-                    rad = math.radians(ammeter_needle_angle(e.get("reading"),
-                                                            e.get("full_scale", 1.0)))
-                    sg.add(Line([x, y, 0], [x + 0.85 * CIRCUIT_R * math.sin(rad),
-                                            y + 0.85 * CIRCUIT_R * math.cos(rad), 0],
-                                 color=th["warn"], stroke_width=3))
+                    ndeg = ammeter_needle_angle(e.get("reading"), e.get("full_scale", 1.0))
+                    rad = math.radians(ndeg)
+                    needle = Line([x, y, 0], [x + 0.85 * CIRCUIT_R * math.sin(rad),
+                                              y + 0.85 * CIRCUIT_R * math.cos(rad), 0],
+                                  color=th["warn"], stroke_width=3)
+                    sg.add(needle)
+                    sg._needle = needle
+                    sg._needle_deg = ndeg
             if e.get("label") and not vertical:
                 sg.add(rich(str(e["label"]), 22, col).next_to([x, y, 0], UP, buff=0.34))
             if vertical:                # 竖直支路元件：整体转 90°（字母除外，保持水平可读）
@@ -4920,25 +5111,136 @@ class Explainer(Scene):
                 if e.get("label"):
                     sg.add(rich(str(e["label"]), 22, col).next_to([x, y, 0], LEFT, buff=0.34))
                 sg.add(*txts)
+            # 82-SD2b：转轴件（闸刀/表针）记下**当前**实角——支路转过 90° 后仍按屏幕方向回摆
+            if getattr(sg, "_blade", None) is not None:
+                bv = sg._blade.get_end() - sg._blade.get_start()
+                sg._blade_base = math.atan2(float(bv[1]), float(bv[0]))
+            if getattr(sg, "_needle", None) is not None:
+                nv = sg._needle.get_end() - sg._needle.get_start()
+                sg._needle_base = math.atan2(float(nv[1]), float(nv[0]))
             return sg
 
         syms = [symbol(e, x, y, e.get("branch") is not None)
                 for e, (x, y) in zip(elems, lay["pos"])]
-        if len(syms) >= 2:
-            for s, key in zip(syms, reveal_keys(p.get("at"), len(syms))):
+        # 82-SD2b：带转轴件的符号（闸刀/读数表针）不做分批淡入——它们从第一帧就在屏上，
+        # 由 tracker 演「合闸/偏转」；否则被 collect_reveals 摘走，动作播在画面外。
+        moving_ids = {id(s) for s in syms
+                      if getattr(s, "_blade", None) is not None
+                      or getattr(s, "_needle", None) is not None}
+        still = [s for s in syms if id(s) not in moving_ids]
+        if len(still) >= 2:
+            for s, key in zip(still, reveal_keys(p.get("at"), len(still))):
                 tag_reveal(s, key)
         for s in syms:
             g.add(s)
+        arrows = VGroup()
         if p.get("current_arrows"):     # 沿导线的电流方向小箭头（正极→外电路→负极，串联回路连续）
             for a in lay["current"]["arrows"]:
                 px, py = a["p"]
                 dx, dy = a["d"]
                 hl = a.get("half", 0.2)   # 支路箭头按可用接线段缩短（见 circuit_layout）
-                g.add(Arrow([px - dx * hl, py - dy * hl, 0], [px + dx * hl, py + dy * hl, 0],
-                            color=th["warn"], buff=0, stroke_width=4,
-                            max_tip_length_to_length_ratio=0.45))
+                arrows.add(Arrow([px - dx * hl, py - dy * hl, 0], [px + dx * hl, py + dy * hl, 0],
+                                 color=th["warn"], buff=0, stroke_width=4,
+                                 max_tip_length_to_length_ratio=0.45))
+            g.add(arrows)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+
+        # ---- 82-SD2b M4：导线逐段描出 → 合闸（电流箭头分时点亮）→ 表针 0→读数偏转 ----
+        # 全部由 ValueTracker + updater 现算；beats 只借既有 hold 帧，cue 显式绑定。
+        sw_syms = [s for s in syms if getattr(s, "_blade", None) is not None]
+        nd_syms = [s for s in syms if getattr(s, "_needle", None) is not None]
+        tr_wire = ValueTracker(0.0)
+        n_wire = max(len(wires), 1)
+        for i, w in enumerate(wires):
+            f0, f1 = _seq_slot(i, n_wire, span=0.96)
+            _grow_partial(w, tr_wire.get_value, f0, f1)
+        for jd in jdots:
+            jc = jd.get_center()[:2]
+            jf = 0.0
+            for i, (a, b) in enumerate(lay["wires"]):
+                if (abs(a[0] - jc[0]) < 1e-6 and abs(a[1] - jc[1]) < 1e-6) or \
+                        (abs(b[0] - jc[0]) < 1e-6 and abs(b[1] - jc[1]) < 1e-6):
+                    jf = max(jf, _seq_slot(i, n_wire, span=0.96)[1])
+            _opacity_gate(jd, tr_wire.get_value, max(jf - 0.10, 0.0), min(jf + 0.02, 1.0))
+        tr_sw = ValueTracker(0.0)
+        for s in sw_syms:
+            _swing_to(s._blade, tr_sw.get_value,
+                      lambda u, b=s._blade_base, o=s._blade_open: b + o * (1.0 - u))
+        tr_nd = ValueTracker(0.0)
+        for s in nd_syms:
+            _swing_to(s._needle, tr_nd.get_value,
+                      lambda u, b=s._needle_base, a=math.radians(float(s._needle_deg)):
+                      b + a * (1.0 - u))
+        tr_ar = ValueTracker(0.0)
+        arr_tracker = tr_sw if sw_syms else tr_ar
+        for i, ar in enumerate(arrows):
+            f0, f1 = _seq_slot(i, max(len(arrows), 1), span=0.9)
+            _opacity_gate(ar, arr_tracker.get_value, f0, f1)
+
+        has_sw, has_ar, has_nd = bool(sw_syms), bool(arrows), bool(nd_syms)
+        # 通电后电流箭头沿自身方向轻微往复（包络 sin 在通电段两端归零）：
+        # 合闸拍 + 表针拍接力推进「持续流动」的观感，不影响箭头点亮顺序与最终位置。
+        for i, ar in enumerate(arrows):
+            st_ar = {"c": None}
+
+            def _flow(m, i=i, st=st_ar):
+                if st["c"] is None:
+                    st["c"] = m.get_center().copy()
+                v = m.get_end() - m.get_start()
+                nv = float(np.linalg.norm(v))
+                if nv < 1e-9:
+                    return
+                if has_sw or has_nd:
+                    u = _clamp01((tr_sw.get_value() + tr_nd.get_value()) / 2.0)
+                else:
+                    u = _clamp01(tr_ar.get_value())
+                off = 0.14 * math.sin(math.pi * u) * math.sin(4.0 * math.pi * u - 0.8 * i)
+                m.move_to(st["c"] + v / nv * off)
+
+            ar.add_updater(_flow)
+        n_prog = 1 + int(has_sw) + int(has_ar and not has_sw) + int(has_nd)
+        rt_w = 2.6
+        beats = []
+        if n_prog == 1:            # 只有导线可演：分三拍描完，不让任何一条 cue 空转
+            for k, tgt in enumerate((1.0 / 3.0, 2.0 / 3.0, 1.0)):
+                b = _mo.advance_to(tr_wire, tgt, cue=k,
+                                   note="时钟演化：导线沿回路逐段描出（本镜无开关/读数，骨架即过程）")
+                b.run_time = rt_w
+                beats.append(b)
+        elif n_prog == 2:          # 导线分两拍画完，第二个程序收在末拍
+            for k, tgt in enumerate((0.55, 1.0)):
+                b = _mo.advance_to(tr_wire, tgt, cue=k, note="时钟演化：导线沿回路逐段描出")
+                b.run_time = rt_w
+                beats.append(b)
+        else:
+            b = _mo.advance_to(tr_wire, 1.0, cue=0,
+                               note="时钟演化：导线沿回路逐段描出（先立回路骨架，再通电）")
+            b.run_time = rt_w
+            beats.append(b)
+        if has_sw:
+            # 三拍固定分工：0 导线 / 1 合闸(+电流) / 2 表针；导线要分两拍时合闸收在末拍。
+            # （契约里的 close_at 是「合闸拍」语义，这里在既有三 cue 布局内固定为 1/2。）
+            cue_sw = 1 if n_prog >= 3 else 2
+            b = _mo.advance_to(
+                tr_sw, 1.0, cue=cue_sw,
+                note=("时钟演化：闸臂从断开斜角落到水平——合闸，电流箭头沿回路分时点亮"
+                      if has_ar else "时钟演化：闸臂从断开斜角落到水平——合闸（闭合回路才有电流）"))
+            b.run_time = rt_w
+            beats.append(b)
+        elif has_ar:
+            b = _mo.advance_to(
+                tr_ar, 1.0, cue=(2 if n_prog == 2 else 1),
+                note="时钟演化：电流箭头沿回路顺序点亮（正极→外电路→负极）")
+            b.run_time = rt_w
+            beats.append(b)
+        if has_nd:
+            b = _mo.advance_to(
+                tr_nd, 1.0, cue=2,
+                note="时钟演化：表针从 0 连续偏转到读数角（θ=60°·reading/full_scale）")
+            b.run_time = rt_w
+            beats.append(b)
+        _mo.mount_motion(g, beats)
         return g
 
     def _v_optics(self, p, th):
@@ -5206,7 +5508,8 @@ class Explainer(Scene):
         block = Rectangle(width=bw, height=bh, color=th["key"], stroke_width=4).set_fill(th["key"], 0.15)
         block.rotate(rad).move_to(c0)
         left.add(block)
-        left.add(Dot(f0, radius=0.07, color=th["hi"]))    # 接触点高亮（起始位）
+        live_dot = Dot(f0, radius=0.07, color=th["hi"])    # 接触点高亮（随滑块下滑）
+        left.add(live_dot)
 
         forces = [f for f in p.get("forces", []) if isinstance(f, dict)]
         if not forces:                                    # 默认三力：箭长取真实物理比值
@@ -5295,13 +5598,64 @@ class Explainer(Scene):
                                   color=th["dim"], stroke_width=2)
                 u.add(cur, curh)
                 cursors.extend([cur, curh])
-            u.add(seg, dotk)
+            u.add(dotk)
             segs_list.append(seg)
             dots.append(dotk)
             units.append(u)
         self._clear_ticks(ticks, segs_list + cursors,
                           [_pad_box(_box(xlab), AXIS_LABEL_PAD),
                            _pad_box(_box(ylab), AXIS_LABEL_PAD)], plane)
+
+        # ---- 82-SD2b M2：连续位移是主运动，频闪影/数据点降为辅助 ----
+        # 同一 ValueTracker（单位=秒）驱动：滑块位 → s=½at²（与 incline_slide_layout 同源）、
+        # 接触点、v-t 线生长、图上游标。_fit 之后从静态件（斜面三角/坐标面）现算坐标尺。
+        tr_t = ValueTracker(0.0)
+
+        def ramp_ref():
+            vs = ramp.get_vertices()
+            x0v, y0v = float(vs[0][0]), float(vs[0][1])
+            x1v, y1v = float(vs[1][0]), float(vs[1][1])
+            k = math.hypot(x1v - x0v, y1v - y0v) / max(base, 1e-9)
+            return x0v - k * x0, y0v - k * y0, k
+
+        def dist_at(t):
+            return 0.5 * acc * t * t
+
+        def block_pt(t):
+            d = d_start - dist_at(t) * k_s
+            cx, cy, k = ramp_ref()
+            return (cx + k * (x0 + d * math.cos(rad) + u_norm[0] * (bh / 2)),
+                    cy + k * (y0 + d * math.sin(rad) + u_norm[1] * (bh / 2)), 0.0)
+
+        def foot_pt(t):
+            d = d_start - dist_at(t) * k_s
+            cx, cy, k = ramp_ref()
+            return (cx + k * (x0 + d * math.cos(rad)), cy + k * (y0 + d * math.sin(rad)), 0.0)
+
+        # 82-SD2b 修正：tracker 单位是秒（0..ttot），_follow_uv/_grow_partial 的进度口径是
+        # 0..1——先归一化再取点，否则 t>1 后全被 clamp 卡死（首轮冒烟实测滑块只动了 1/6 段）。
+        def u_t():
+            return tr_t.get_value() / max(ttot, 1e-9)
+
+        _follow_uv(block, u_t, lambda u: block_pt(u * ttot))
+        _follow_uv(live_dot, u_t, lambda u: foot_pt(u * ttot))
+
+        line_t = [ttot * i / 48.0 for i in range(49)]
+        # 折线按平面坐标现建（与 plane 同组随 _fit 等比缩放），生长用自身前缀裁剪。
+        vline = VMobject(color=th["key"], stroke_width=5)
+        vline.set_points_as_corners([plane.c2p(t, acc * t) for t in line_t])
+        vline.set_stroke(th["key"], 5)
+        _grow_partial(vline, u_t)
+        live_cur = Dot([0.0, 0.0, 0.0], radius=0.09, color=th["accent"])
+
+        def cur_pt(t):
+            q = plane.c2p(t, acc * t)
+            return (float(q[0]), float(q[1]), 0.0)
+
+        live_cur.move_to(cur_pt(0.0))
+        _follow_uv(live_cur, u_t, lambda u: cur_pt(u * ttot))
+        graph.add(vline, live_cur)
+
         if units:
             ltxt = str(p.get("vt_label") or f"a = {acc:.2f} m·s⁻²")
             taken = ([_box(xlab), _box(ylab)] + graph_obstacles(plane, ticks)
@@ -5313,6 +5667,18 @@ class Explainer(Scene):
         g = VGroup(left, graph, *units)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        # M2 三段同时钟：滑块/接触点/v-t 线/游标一起走；每拍 2.6s（10s 镜 78% 覆盖，预算 80%）。
+        # μ≥tanθ（acc=0）时滑块不动是物理正确：同一条拍只让 v-t 游标沿 t 轴走出 v≡0。
+        beats = []
+        for k, tgt in enumerate((ttot / 3.0, 2.0 * ttot / 3.0, ttot)):
+            b = _mo.advance_to(
+                tr_t, tgt, cue=k,
+                note=("时钟演化：滑块沿斜面连续下滑 s=½at²，接触点与 v-t 线/游标同值源同步"
+                      if acc > 1e-9 else
+                      "时钟演化：a=0（μ≥tanθ）不滑——v-t 游标沿 t 轴走出 v≡0，静止是物理结论"))
+            b.run_time = 2.6
+            beats.append(b)
+        _mo.mount_motion(g, beats)
         return g
 
     def _v_rod_rails(self, p, th):
@@ -5640,10 +6006,20 @@ class Explainer(Scene):
         if mode == "circle":
             R = 1.9
             g.add(DashedLine([0, 0, 0], [R, 0, 0], dash_length=0.1, color=th["dim"], stroke_width=2))
-            g.add(Circle(radius=R, color=th["dim"], stroke_width=2))
+            circle = Circle(radius=R, color=th["dim"], stroke_width=2)
+            g.add(circle)
             g.add(Dot([0, 0, 0], radius=0.06, color=th["dim"]), rich("O", 22, th["dim"]).move_to([-0.22, -0.22, 0]))
+            u_pts = [k / n for k in range(n)]
             pts = [(R * math.cos(t), R * math.sin(t), -math.sin(t), math.cos(t))
                    for t in (2 * math.pi * k / n for k in range(n))]
+
+            def pos_u(u, R=R):
+                t = 2 * math.pi * u
+                return R * math.cos(t), R * math.sin(t)
+
+            def ref():
+                c = circle.get_center()
+                return float(c[0]), float(c[1]), float(circle.width) / (2.0 * R)
         elif mode == "cycloid":
             # 配速法：静止释放 → 匀速直线(圆心平移) + 匀速圆周 合成摆线；x=R(φ-sinφ)，y=-R(1-cosφ)
             arches = max(1, min(int(p.get("arches", 2)), 3))
@@ -5653,12 +6029,24 @@ class Explainer(Scene):
             ox = -span * s / 2
             def at(ph):
                 return ox + R * (ph - math.sin(ph)), R * (1 - math.cos(ph)) * -1 + R
-            g.add(Line([ox - 0.3, R, 0], [ox + span * s + 0.3, R, 0], color=th["dim"], stroke_width=3))
+            base_line = Line([ox - 0.3, R, 0], [ox + span * s + 0.3, R, 0], color=th["dim"], stroke_width=3)
+            g.add(base_line)
             path = VMobject(color=th["dim"], stroke_width=2)
             path.set_points_smoothly([[*at(ph), 0] for ph in np.linspace(0, span, 80)])
-            g.add(DashedVMobject(path, num_dashes=40))
+            trail = DashedVMobject(path, num_dashes=40)
+            g.add(trail)
+            u_pts = [k / (n - 1) for k in range(n)]
             pts = [(*at(ph), 1 - math.cos(ph), -math.sin(ph))
                    for ph in (span * k / (n - 1) for k in range(n))]
+
+            def pos_u(u, ox=ox, R=R, span=span):
+                ph = span * u
+                return ox + R * (ph - math.sin(ph)), R * (1 - math.cos(ph)) * -1 + R
+
+            def ref(ln=base_line, ox=ox, R=R, span=span):
+                k = float(ln.get_length()) / max(span * s + 0.6, 1e-9)
+                st = ln.get_start()
+                return float(st[0]) - k * (ox - 0.3), float(st[1]) - k * R, k
         else:
             ang = math.radians(max(0.0, min(float(p.get("angle", 0)), 75.0)))
             vx, vy, gacc = math.cos(ang), math.sin(ang), 1.0
@@ -5673,11 +6061,25 @@ class Explainer(Scene):
             ox, oy = -(max(xs) + min(xs)) / 2 * s, -(max(ys) + min(ys)) / 2 * s
             pts = [(x * s + ox, y * s + oy, vxx, vyy) for x, y, vxx, vyy in raw]
             ground = min(q[1] for q in pts) - 0.1
-            g.add(Line([pts[0][0] - 0.5, ground, 0], [pts[-1][0] + 0.5, ground, 0], color=th["dim"], stroke_width=3))
+            ground_line = Line([pts[0][0] - 0.5, ground, 0], [pts[-1][0] + 0.5, ground, 0],
+                               color=th["dim"], stroke_width=3)
+            g.add(ground_line)
+            # 轨迹用同一 T 归一化采样：Create 的“画到哪”与小球位置同尺。
             path = VMobject(color=th["dim"], stroke_width=2)
             path.set_points_smoothly([[vx * t * s + ox, (vy * t - 0.5 * gacc * t * t) * s + oy, 0]
                                       for t in np.linspace(0, T, 40)])
-            g.add(DashedVMobject(path, num_dashes=30))
+            trail = DashedVMobject(path, num_dashes=30)
+            g.add(trail)
+            u_pts = [k / (n - 1) for k in range(n)]
+
+            def pos_u(u, vx=vx, vy=vy, gacc=gacc, T=T, s=s, ox=ox, oy=oy):
+                t = T * u
+                return vx * t * s + ox, (vy * t - 0.5 * gacc * t * t) * s + oy
+
+            def ref(ln=ground_line, x0=pts[0][0] - 0.5, y0=ground, x1=pts[-1][0] + 0.5):
+                k = float(ln.get_length()) / max(x1 - x0, 1e-9)
+                st = ln.get_start()
+                return float(st[0]) - k * x0, float(st[1]) - k * y0, k
         units = []
         for x, y, ux, uy in pts:
             u = VGroup(Dot([x, y, 0], radius=0.11, color=th["key"]))
@@ -5689,10 +6091,44 @@ class Explainer(Scene):
         for u, k in zip(units, reveal_keys(p.get("at"), len(units))):
             tag_reveal(u, k)
         g.add(*units)
+
+        # ---- 82-SD2b M2：小球沿真实轨迹连续运动；虚线轨迹随尾迹描出；点到即现 ----
+        # 位置点/速度箭头保留逐条 reveal（n 与测试锁死），但透明度再按「球到没到」把关：
+        # 球还没到就只留轨迹，不抢在运动前面把答案摆满屏。
+        tr = ValueTracker(0.0)
+        path_pts = [pos_u(i / 80.0) for i in range(81)]
+
+        def scr(u):
+            x, y = pos_u(u)
+            cx, cy, k = ref()
+            return (cx + k * x, cy + k * y, 0.0)
+
+        if mode == "circle":
+            trail = VMobject(color=th["accent"], stroke_width=4)
+            _draw_on(trail, tr.get_value, 0.0, 1.0, path_pts, ref, th["accent"], 4)
+            g.add(trail)
+        else:
+            _dashed_grow(trail, tr.get_value, path_pts, ref, th["dim"], 2.0,
+                         40 if mode == "cycloid" else 30)
+        ball = Dot([0.0, 0.0, 0.0], radius=0.12, color=th["accent"])
+        ball.move_to(scr(0.0))
+        _follow_uv(ball, tr.get_value, scr)
+        g.add(ball)
+        for uk, u in zip(u_pts, units):
+            _opacity_gate(u, tr.get_value, max(uk - 0.05, 0.0), min(uk + 0.02, 1.0))
         if show_v:
             g.add(rich(str(p.get("v_label") or "v"), 24, th["warn"]).next_to(units[0], UP, buff=0.1))
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        for k, tgt in enumerate((1.0 / 3.0, 2.0 / 3.0, 1.0)):
+            b = _mo.advance_to(
+                tr, tgt, cue=k,
+                note=("时钟演化：小球沿真实轨迹连续运动，轨迹随球尾迹描出，"
+                      "位置点与切向速度箭头在球到达该点时出现"))
+            b.run_time = 2.6
+            beats.append(b)
+        _mo.mount_motion(g, beats)
         return g
 
     def _v_mechanism(self, p, th):

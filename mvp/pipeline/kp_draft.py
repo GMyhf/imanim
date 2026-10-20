@@ -12,6 +12,7 @@ refs 只允许照抄命中清单（source=书名、locator=第 N 页），落盘
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import re
@@ -30,11 +31,25 @@ VISUAL_KINDS = ("axis_graph", "callout", "circuit", "compare", "derivation", "en
 MAX_ATTEMPTS = 3       # 第一版 + 两次带问题清单的重写
 # MIN_SHOTS / max_shots_for 见 storyboard（81-A1b）：镜头数上限随目标时长伸缩，短片仍是旧口径 10。
 MAX_PRIOR_CHARS = 12  # 点名镜头把它们逐条念出来并整行上屏，整句会爆字数与字号
+# 84-T1/T2：must_say 只允许「逐字摘自口播的连续片段」，超过这个长度的几乎都是重写出来的抽象断言——
+# 线上 g20261020-130402-8ae0e5 三条 30+ 字的 must_say 把整段生成打死的直接原因。
+MUST_SAY_MAX_CHARS = 25
 GRADE_ZH = {"G8": "初二", "G9": "初三", "H1": "高一", "H2": "高二", "H3": "高三", "U1": "大一", "U2": "大二"}
 
 
 class DraftError(RuntimeError):
     """起草失败。消息给人看，不含密钥，也不含半成品的伪成功。"""
+
+
+# 84-T4：DraftError 走到前端时必须带一句可直接照做的建议（web 与 CLI 共用同一处映射，别写两份）。
+DRAFT_ERROR_SUGGESTION = ("这条知识点一次讲不下或范围太宽：把知识点名收窄成一个具体概念（一支片只讲一个），"
+                          "或把目标时长放宽到 180 秒以上后重试。若反复失败，请通过问题反馈附上任务号。")
+
+
+def to_generation_error(e: DraftError):
+    """把 DraftError 映射成带人话建议的 GenerationError（kind=content，findings 留空不伪造清单）。"""
+    from run import GenerationError      # 延迟导入：run.py 模块级就 import kp_draft，不能反过来
+    return GenerationError("content", str(e), DRAFT_ERROR_SUGGESTION)
 
 
 def _norm(s: str) -> str:
@@ -105,6 +120,13 @@ def _check_shape(entry: dict, topic: str, allowed: list[dict] | None = None,
         v = entry.get(k)
         if not isinstance(v, list) or not v:
             errs.append(f"{k} 必须是非空字符串数组")
+    for i, item in enumerate(entry.get("must_say") if isinstance(entry.get("must_say"), list) else [], 1):
+        if not isinstance(item, str) or not _norm(item):
+            errs.append(f"must_say 第 {i} 条必须是非空字符串")
+        elif len(_norm(item)) > MUST_SAY_MAX_CHARS:
+            errs.append(f"must_say 第 {i} 条 {len(_norm(item))} 字超过 {MUST_SAY_MAX_CHARS} 字上限："
+                        f"must_say 必须是逐字摘自某一镜 narration 的连续片段——缩到 {MUST_SAY_MAX_CHARS}"
+                        " 字以内，直接从口播原文里剪，不要重写成整句断言")
     prior = entry.get("prior")
     if not isinstance(prior, list) or len(prior) > 3 or any(
             not isinstance(p, str) or not p.strip() or len(p) > MAX_PRIOR_CHARS for p in prior):
@@ -143,13 +165,28 @@ def _fold_flat_props(entry: dict) -> None:
                 v["props"] = {k: v.pop(k) for k in [k for k in v if k != "kind"]}
 
 
+def _must_say_miss_msg(entry: dict, phrase: str) -> str:
+    """报错要给模型可照做的动作：指出最接近的镜头，并把那镜口播前 60 字摆出来让它剪。"""
+    target = _norm(phrase)
+    best_i, best_len, best_narr = 0, -1, ""
+    for i, b in enumerate(entry.get("sequence") or [], 1):
+        narr = str(b.get("narration") or "")
+        m = difflib.SequenceMatcher(None, target, _norm(narr)).find_longest_match()
+        if m.size > best_len:
+            best_i, best_len, best_narr = i, m.size, narr
+    hint = (f"最接近的是第 {best_i} 镜口播：「{best_narr[:60]}」——从里面剪一段不超过 "
+            f"{MUST_SAY_MAX_CHARS} 字的连续片段换上，或把这条原句逐字写进该镜口播" if best_i else "")
+    return (f"must_say 里的「{phrase}」在任何一镜的口播/屏上文字里都找不到——"
+            f"要么写进口播，要么从 must_say 删掉。{hint}")
+
+
 def _check_content(entry: dict, target_seconds: float) -> list[str]:
     """闸门会查的三件事，先在起草层自查一轮，省掉一次注定失败的出片。"""
     errs: list[str] = []
     texts = _norm(_texts(entry))
     for phrase in entry.get("must_say") or []:
         if _norm(phrase) not in texts:
-            errs.append(f"must_say 里的「{phrase}」在任何一镜的口播/屏上文字里都找不到——要么写进口播，要么从 must_say 删掉")
+            errs.append(_must_say_miss_msg(entry, phrase))
     for word in entry.get("forbidden") or []:
         if _norm(word) and _norm(word) in texts:
             errs.append(
@@ -190,6 +227,88 @@ def _keep_rejected(subject: str, topic: str, raw: str, problems: list[str]) -> N
             "问题：\n" + "\n".join(problems) + "\n\n模型原始输出：\n" + raw, encoding="utf-8")
     except OSError:
         pass
+
+
+_MS_MISS_PREFIX = "must_say 里的「"
+
+
+def _all_must_say_misses(problems: list[str]) -> bool:
+    """问题清单里只剩 must_say 逐字未命中这一类——它不该再烧一次整篇重生成（84-T3）。"""
+    return bool(problems) and all(p.startswith(_MS_MISS_PREFIX) for p in problems)
+
+
+def _fallback_must_say(entry: dict) -> str | None:
+    """must_say 被剪空时兜底补一条：末镜 emphasis（为空退 title）的 ≤25 字连续片段，
+    保证 _check_shape 的「非空数组」不变量不被剪破。"""
+    seq = entry.get("sequence") or []
+    if not seq:
+        return None
+    last = seq[-1]
+    for key in ("emphasis", "title"):
+        text = str(last.get(key) or "").strip()
+        if text:
+            return text[:MUST_SAY_MAX_CHARS]   # 截断仍是原文里的连续片段，逐字判据成立
+    return None
+
+
+def _keep_reconciled(subject: str, topic: str, notes: list[str]) -> None:
+    """must_say 被 reconcile 改写/剪掉的留痕：只含文本，事后能审计哪条限定没站住。"""
+    try:
+        d = knowledge.AUTO_DIR / "_reconciled"
+        d.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        (d / f"{stamp}-{_id(subject, '', topic)[-10:]}.txt").write_text(
+            "\n".join(notes) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _reconcile_must_say(entry: dict, subject: str, topic: str) -> dict:
+    """must_say 逐字未命中的收口通道（84-T3）：一次小型网关调用，把每条未命中换成口播里
+    真实存在的连续片段（≤25 字）；换不了就剪掉（留痕），永不因 must_say 单独打死整段生成。"""
+    missed = [p for p in entry.get("must_say") or []
+              if isinstance(p, str) and _norm(p) not in _norm(_texts(entry))]
+    if not missed:
+        return entry
+    narrations = [{"shot": i, "narration": str(b.get("narration") or "")}
+                  for i, b in enumerate(entry.get("sequence") or [], 1)]
+    user = json.dumps({"missed_must_say": missed, "narrations": narrations}, ensure_ascii=False)
+    quotes: dict[str, str | None] = {}
+    notes: list[str] = []
+    try:
+        raw = llm_client.chat("K0", llm_prompts.K0_RECONCILE_SYSTEM, user,
+                              max_tokens=1200, json_mode=True)
+        got = llm_client.extract_json(raw)
+        items = got.get("quotes") if isinstance(got, dict) else (got if isinstance(got, list) else None)
+        for it in items or []:
+            if isinstance(it, dict) and isinstance(it.get("must_say"), str):
+                q = it.get("quote")
+                quotes[it["must_say"]] = q if isinstance(q, str) else None
+    except llm_client.LLMError:
+        notes.append("reconcile 网关调用失败，未命中条目按剪掉处理")
+
+    flat_texts = _norm(_texts(entry))
+    kept: list[str] = []
+    for item in entry.get("must_say") or []:
+        if item not in missed:
+            kept.append(item)
+            continue
+        quote = quotes.get(item)
+        # 模型给的 quote 必须本地复验：逐字在口播里、且不超长——伪造的一律剪掉而不是接受
+        if quote and _norm(quote) in flat_texts and len(_norm(quote)) <= MUST_SAY_MAX_CHARS:
+            kept.append(quote)
+            notes.append(f"改写：{item}\n  → {quote}")
+        else:
+            notes.append(f"剪掉（口播里找不到可逐字保留的连续片段）：{item}")
+    entry["must_say"] = kept
+    if not kept:
+        fallback = _fallback_must_say(entry)
+        if fallback:
+            entry["must_say"] = [fallback]
+            notes.append(f"兜底补一条（末镜 emphasis/title 的连续片段）：{fallback}")
+    if notes:
+        _keep_reconciled(subject, topic, notes)
+    return entry
 
 
 def _id(subject: str, grade: str, topic: str) -> str:
@@ -238,6 +357,14 @@ def draft(subject: str, grade: str, topic: str, target_seconds: float = 120.0,
         problems = _check_shape(entry, topic, allowed or None, target_seconds) + _check_content(entry, target_seconds)
         if not problems:
             break
+        if _all_must_say_misses(problems):
+            # 快速通道（84-T3）：只是限定句没逐字落进文本，不再整篇重生成，进 reconcile 就地收口；
+            # 收口后复验仍不过的（只可能是其他类问题）才回到整篇重试。
+            entry = _reconcile_must_say(entry, subject, topic)
+            problems = (_check_shape(entry, topic, allowed or None, target_seconds)
+                        + _check_content(entry, target_seconds))
+            if not problems:
+                break
     if problems:
         _keep_rejected(subject, topic, raw, problems)
         raise DraftError(f"知识点起草未通过自检（已重试 {MAX_ATTEMPTS - 1} 次）：" + "；".join(problems[:6]))

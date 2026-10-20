@@ -15,8 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import font_metrics as _fm  # noqa: E402  纯标准库：不破坏本文件「不 import scene/manim」的纪律
 import mech_anchors as _ma  # noqa: E402  82-SB mechanism 锚点表——与渲染侧同一份锚点语义/容差，纯标准库
 
-from .ir import (ACCEPTABLE_RATE, BUDGET_REF_KIND, FAST_CPS, GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
-                 MIN_SHOT_SECONDS, NATURAL_CPS, RATE_FACTOR, SHOT_HEAD, SHOT_TAIL, SPEED_LADDER,
+from .ir import (ACCEPTABLE_RATE, ANIMATION_PENDING as _PENDING, BUDGET_REF_KIND, FAST_CPS,
+                 GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
+                 MIN_SHOT_SECONDS, MOTION_CAPABLE, MOTION_REQUIRED, NATURAL_CPS, PHYS_FIGURE_KINDS,
+                 RATE_FACTOR, SHOT_HEAD, SHOT_TAIL, SPEED_LADDER, TEXT_ONLY_KINDS,
                  VISUAL_KINDS, Plan, Shot, cap_width, num)
 
 # 版面高度模型（Manim 单位，帧高 8）：底部字幕带 1.05，顶部页眉 0.6
@@ -69,11 +71,26 @@ _MECH_BOND_KINDS = {"break", "form"}
 # 空 violations 从此只在"这些码确实跑过"的意义下才算通过。
 # 这份清单由 test_review.py 与源码对撞（扫 add(...) 里真实出现的码），加检查忘登记会被测出来。
 CODES = (
-    "AXIS_LABEL", "COUNT", "DUR_SHARE", "DUR_SHORT", "GLYPH", "GRADE_SCOPE", "KIND", "LEGIBLE",
+    "ANIMATION", "AXIS_LABEL", "COUNT", "DUR_SHARE", "DUR_SHORT", "GLYPH", "GRADE_SCOPE",
+    "KIND", "LEGIBLE",
     "MECH_ARROW_DRIFT", "MECH_COORD",
     "MISSING_QUALIFIER", "NO_FIGURE", "NO_REF", "OVERLOAD", "PACING", "QUALIFIER_LOSS",
-    "SAFE_AREA", "SUB_OVERLAP", "SUB_RANGE", "SUB_WIDTH", "TARGET", "TERM",
+    "SAFE_AREA", "SUB_OVERLAP", "SUB_RANGE", "SUB_WIDTH", "TARGET", "TERM", "TEXT_ONLY",
 )
+
+# 82-SE：物理片口播/屏上出现具体装置词却没有对应图形 kind——从旧 NO_FIGURE 的记账级
+# 收紧为阻断（讲导轨不上导轨图=无处可指，D4 §2 汇总里「新片主力版式全落 B/C」的闸门化）。
+# 词表刻意保守：只收渲染层确有对应 kind 的装置名，宁漏不误伤。
+_DEVICE_WORDS = {
+    "导轨": ("rod_rails",), "磁杆": ("rod_rails",), "单杆": ("rod_rails",),
+    "电路": ("circuit",), "开关": ("circuit",), "电流表": ("circuit",),
+    "斜面": ("incline", "trajectory"),
+    "透镜": ("optics",), "成像": ("optics",), "光线": ("optics",),
+    "磁感线": ("field",), "电场线": ("field",), "小磁针": ("field",),
+    "受力": ("force_diagram",), "合力": ("force_diagram",), "分力": ("force_diagram",),
+    "抛体": ("trajectory",), "平抛": ("trajectory",), "圆周运动": ("trajectory",),
+    "隔板": ("particle_box",), "气体分子": ("particle_box", "microstate"),
+}
 
 # 32 号字下 1 个 cap_width 单位的场景单位宽，按新字体栈（SimSun + Times New Roman）分字符实测：
 #   CJK/全角 =0.44（10 汉字实测 4.3958）；ASCII 上包络 0.50（全库 55 行出处折行实测 ≤0.49，
@@ -413,7 +430,33 @@ def _flat(v: str) -> str:
                    if not c.isspace() and (c in _KEEP_PUNCT or not unicodedata.category(c).startswith("P")))
 
 
+# 限定语命中的虚词表：只收纯功能词，实义字（等/零/正/负/率…）一概不收。拆出来的每个内容词
+# 都必须在**同一镜**口播里出现，但允许语序变体——「图线的斜率表示加速度」与「加速度就是图线的斜率」
+# 是同一句物理定义，后者曾被精确子串匹配误拦（2026-10-20 图4-B 实测：改标题带出两条限定语旧账）。
+_QUAL_STOP = ("而不是", "并且", "必须", "应当", "应该", "不得", "不能", "不可", "表示", "就是",
+              "的", "与", "和", "或", "且", "则", "即", "在", "于", "为", "是", "要", "先", "再",
+              "只", "都", "也", "还", "而")
+
+
+def _qualifier_terms(phrase: str) -> list[str]:
+    """限定语按虚词拆成内容词。替换只可能把词变短、让匹配更宽，绝不会比整段子串更严。"""
+    t = _flat(phrase)
+    for w in _QUAL_STOP:
+        t = t.replace(w, " ")
+    return [x for x in t.split(" ") if x]
+
+
+def _qualifier_said(phrase: str, shots_flat: list[str], all_flat: str) -> bool:
+    """这条限定说出口过没有：拆不出多个内容词（纯短语/公式）维持旧的整段子串判定，逐字不变；
+    拆得出来时要求各内容词落在同一镜里——跨镜各说半个词不等于说出了这句限定。"""
+    terms = _qualifier_terms(phrase)
+    if len(terms) <= 1:
+        return (terms[0] if terms else _flat(phrase)) in all_flat
+    return any(all(t in st for t in terms) for st in shots_flat)
+
+
 _CN_NUM = {"两": 2, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6}
+_NUM_CN = {2: "两", 3: "三", 4: "四", 5: "五", 6: "六"}
 _COUNT_RE = re.compile(r"([两二三四五六])\s*[个条种]")
 
 
@@ -442,6 +485,25 @@ def _shot_items(shot: Shot):
             total += n
             listed = True
     return total if listed else None
+
+
+def _item_heads(shot: Shot) -> list[str]:
+    """屏上清单实际各条的抬头（compare 两侧的标题、steps/summary 的行首），
+    给 COUNT 报错指出路用：用户得看见屏上到底是哪几条，才知道该改标题还是补清单。"""
+    heads: list[str] = []
+    for v in _seq(shot.visuals):
+        props = v.props if isinstance(v.props, dict) else {}
+        if v.kind == "compare":
+            for side in ("left", "right"):
+                d = props.get(side)
+                if isinstance(d, dict) and _text(d.get("h")).strip():
+                    heads.append(_text(d.get("h")).strip())
+        elif v.kind in ("steps", "summary"):
+            for x in _seq(props.get("lines", props.get("points"))):
+                t = _text(x.get("text") if isinstance(x, dict) else x).strip()
+                if t:
+                    heads.append(t[:12])
+    return heads[:6]
 
 
 def _visual_height(shot: Shot) -> float:
@@ -656,6 +718,32 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
             else:
                 findings.append({"shot": s.index, "code": "DUR_SHARE", "blocking": False,
                                  "msg": f"单镜头占比 {share:.0%} 略超 {MAX_SHOT_SHARE:.0%}，节奏偏闷（未拦）"})
+
+        # ---- 82-SE 动画化闸门（尺子与 ir.MOTION_CAPABLE/MOTION_REQUIRED 同源）----
+        # 全片空 visuals 不判：还没分镜属 TARGET/KIND 的活，这里只拦"上了屏却没动画"。
+        if any(_seq(s.visuals) for s in plan.shots):
+            for v in _seq(s.visuals):
+                props = v.props if isinstance(v.props, dict) else {}
+                if v.kind not in MOTION_CAPABLE:
+                    # 施工顺序账：pending 中的 kind 由 SD3 逐批收口，本棒先不因它拦存量语料。
+                    if v.kind in _PENDING:
+                        continue
+                    if props.get("motion_exempt") and v.kind in TEXT_ONLY_KINDS:
+                        continue
+                    add(s.index, "ANIMATION",
+                        f"{v.kind} 尚未接入过程动画（builder 只有整块/逐条入场），B 级不算过；"
+                        f"见 ir.MOTION_CAPABLE 与 Plan_82 的 SD3 清单")
+                    continue
+                if v.kind in TEXT_ONLY_KINDS:
+                    findings.append({"shot": s.index, "code": "TEXT_ONLY", "blocking": False,
+                                     "msg": f"{v.kind} 为纯文字版式，帧密度复检按 TEXT_ONLY 豁免阈值"})
+                for field in MOTION_REQUIRED.get(v.kind, ()):
+                    val = props.get(field)
+                    empty = val is None or (isinstance(val, (list, dict, str)) and not val)
+                    if empty and not props.get("motion_exempt"):
+                        add(s.index, "ANIMATION",
+                            f"{v.kind} 缺动效绑定字段 {field!r}：过程动画会退化成开场一次性入场，"
+                            f"请把运动铺到各条 cue 上（或显式 motion_exempt 并说明理由）")
 
         # 屏上条目是同片某句强表述去掉前缀后的那半截 → 限定词被压掉了，打回让作者补回屏上。
         # 只认"后缀压缩"这一种形状（丢掉开头的限定语），因为它是实测发生的形状（"氧化型"三个字被吞掉）。
@@ -919,10 +1007,16 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                                         f"{USABLE_H / need:.0%}（字号约 {fs:.0f}px，仍可读）"})
 
         # 标题里的计数词是对这一屏的承诺：说"三个"却只画两张卡，学生数不到（v2 N2、批量 D13）。
+        # 报错必须带屏上实际清单与两条出路——用户改标题时看不见 visuals，只报"只有 2 条"会让人
+        # 以为是标题编辑被拒（2026-10-20 图4-B 实报）。
         said = _count_claim(_text(s.title))
         n = _shot_items(s)
         if said is not None and n is not None and n != said:
-            add(s.index, "COUNT", f"标题说「{said}」个/条，这一屏的清单只有 {n} 条")
+            heads = _item_heads(s)
+            detail = f"（屏上是：{'、'.join(heads)}）" if heads else ""
+            add(s.index, "COUNT",
+                f"标题说「{said}」个/条，这一屏的清单只有 {n} 条{detail}。"
+                f"把标题改成「{_NUM_CN.get(n, n)}个…」，或把清单补到 {said} 条")
 
         # 字形闸门：无 LaTeX 环境下，缺字形字符会上屏成豆腐块（评审 P1 第 2 条）。
         # 81-G：黑名单按 S5 渲染层兜底能力收窄（见 TOFU 注释），下标字母只在渲染层
@@ -988,6 +1082,28 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
     if plan.shots and not any(v.kind in GRAPHIC_KINDS
                               for s in plan.shots for v in _seq(s.visuals)):
         add(-1, "NO_FIGURE", "整片没有一张图（figure/graph_vt/axis_graph/粒子盒/微观态/统计图/思维导图等）：几何与函数关系全靠文字念，学生无处可指")
+    # 82-SE 收紧：物理片的"图"必须是**物理图示类**（PHYS_FIGURE_KINDS）。derivation 是推导版式、
+    # 不是物理装置图——旧口径里一条 derivation 就能顶掉 NO_FIGURE，物理片全程念公式没人画受力。
+    if (plan.shots and _text(getattr(plan.brief, "subject", "")) == "physics"
+            and not any(v.kind in PHYS_FIGURE_KINDS
+                        for s in plan.shots for v in _seq(s.visuals))):
+        add(-1, "NO_FIGURE", "物理片没有任何物理图示类版式（field/circuit/incline/trajectory/"
+                             "force_diagram/rod_rails/optics/graph_vt/figure 等）：物理片必须有物理图示，"
+                             "derivation/文字版式不能顶账")
+
+    # 82-SE：具体装置词所在镜必须有对应图形 kind（blocking，从旧记账收紧）。
+    for s in plan.shots:
+        if not _seq(s.visuals):
+            continue
+        kinds = {v.kind for v in _seq(s.visuals)}
+        screen = _texts([{"kind": v.kind, "props": v.props} for v in _seq(s.visuals)])
+        stream = _text(s.narration) + "".join(screen)
+        for word, need in _DEVICE_WORDS.items():
+            if word in stream and not (kinds & set(need)):
+                add(s.index, "ANIMATION",
+                    f"本镜讲「{word}」却没有对应图形版式（应使用 { '/'.join(need) }），"
+                    f"装置词无图=学生无处可指")
+                break
 
     tgt = _num(plan.brief.target_seconds)
     if tgt <= 0:
@@ -1010,10 +1126,12 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
 
     # 定义性限定闸门：条目用 must_say 声明"这条知识点必须说出口的那几句"（a ≠ 0、常数须大于焦距、
     # F 是合外力……）。评审 S 维度的失分点全是"少了这个限定就讲错了"，而精简口播时最容易误删它们，
-    # 所以这里正向钉住：任何一镜的口播里出现过即可，一句都没有就打回。
-    said = _flat("".join(_text(s.narration) for s in plan.shots))
+    # 所以这里正向钉住：任何一镜的口播里出现过即可（语序变体算说过，见 _qualifier_said），
+    # 一句都没有就打回。
+    shots_said = [_flat(_text(s.narration)) for s in plan.shots]
+    all_said = "".join(shots_said)
     for phrase in _seq((kp or {}).get("must_say")):
-        if _flat(_text(phrase)) not in said:
+        if not _qualifier_said(_text(phrase), shots_said, all_said):
             add(-1, "MISSING_QUALIFIER", f"条目声明的定义性限定在整片口播里一次都没出现：{phrase}")
 
     # 整片节奏闸门：Plan 里的镜头时长只是预算，成片时长由 TTS 实测反写（A6 对齐回路），
@@ -1076,9 +1194,53 @@ def blocking(findings: list[dict]) -> list[dict]:
     return [f for f in findings if f.get("blocking", True)]
 
 
-def report(plan: Plan, kp: dict | None = None) -> dict:
+# 手改重渲的归责口径（web 改分镜路径，jobrunner 用）：闸门照旧全跑，但只有「本次改动引入」的
+# 问题拦出片；稿子里原有的旧账降级成警告随 review.json 留痕——改个标题不该为旧口播的账出不了片
+# （2026-10-20 图4-B 实测：只改镜头2标题，被镜头3计数旧账+全片限定语旧账共 3 条拦下，
+# 没有一条与这次改动有关）。表里没有的码按最保守处理：任何字段变了都算相关。
+_EDIT_FIELDS = {
+    "COUNT": {"title", "visuals"},
+    "QUALIFIER_LOSS": {"visuals", "narration"},
+    "OVERLOAD": {"narration", "seconds"},
+    "PACING": {"narration", "seconds"},
+    "DUR_SHORT": {"seconds"},
+    "DUR_SHARE": {"seconds"},
+    "TARGET": {"seconds", "narration"},
+    "SUB_OVERLAP": {"narration", "seconds"},
+    "SUB_RANGE": {"narration", "seconds"},
+    "SUB_WIDTH": {"narration"},
+    "TERM": {"title", "narration", "visuals"},
+    "GRADE_SCOPE": {"title", "narration", "visuals"},
+    "MISSING_QUALIFIER": {"narration"},
+    "NO_REF": {"visuals"},
+    "GLYPH": {"title", "narration", "visuals"},
+}
+_ALL_FIELDS = {"title", "narration", "seconds", "visuals"}
+
+
+def mark_edit_related(findings: list[dict], changed: dict[int, set[str]] | None) -> None:
+    """给每条 finding 打 related 标记：它与本次手改的字段集合有没有交集。
+    changed=None（CLI 直传 plan、没有基线）时全部视为相关——行为与旧版逐字一致；
+    changed={}（同稿重渲）时没有任何阻断项算相关——已放行的内容不因重跑闸门翻车。"""
+    if changed is None:
+        for f in findings:
+            f["related"] = True
+        return
+    touched = set().union(*changed.values()) if changed else set()
+    for f in findings:
+        deps = _EDIT_FIELDS.get(_text(f.get("code")), _ALL_FIELDS)
+        shot = f.get("shot", -1)
+        if isinstance(shot, int) and shot >= 0:
+            f["related"] = bool(changed.get(shot, set()) & deps)
+        else:
+            # 全片级闸门（shot=-1）只跟自己依赖的字段走：限定语旧账与改标题无关。
+            f["related"] = bool(touched & deps)
+
+
+def report(plan: Plan, kp: dict | None = None, findings: list[dict] | None = None) -> dict:
     """交付件形态（第四轮 F-8）：跑过哪些码 + 违规清单。
 
     空清单从此只有一种读法——这些码确实跑过了；不再是"全绿"与"根本没跑"共用一个 []。
+    调用方已跑过 check 并做过标记（related）时把结果传进来，避免重跑一遍把标记丢掉。
     """
-    return {"checked": list(CODES), "violations": check(plan, kp)}
+    return {"checked": list(CODES), "violations": check(plan, kp) if findings is None else findings}

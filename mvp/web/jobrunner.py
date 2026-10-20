@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -34,7 +35,59 @@ from audio import tts  # noqa: E402
 from pipeline import knowledge, kp_draft, llm_client, mux, review, selfcheck, storyboard  # noqa: E402
 from pipeline import storyboard_llm  # noqa: E402
 from pipeline import voiceover  # noqa: E402
-from pipeline.ir import SHOT_HEAD, SHOT_TAIL, Brief, Plan  # noqa: E402
+from pipeline.ir import SHOT_HEAD, SHOT_TAIL, Brief, Plan, num  # noqa: E402
+
+_SOURCE_NAME_RE = re.compile(r"[A-Za-z0-9._-]+")
+
+
+def _load_source_plan(source_key: str, out_dir: Path) -> Plan | None:
+    """手改/改进的基线：source_key（"job:<id>" 或 "out:<目录名>"）指向源任务的 plan.json。
+    读不到就返回 None，下游按「无基线=全部相关」处理，与旧行为逐字一致。"""
+    root, sep, name = source_key.partition(":")
+    if not sep or not _SOURCE_NAME_RE.fullmatch(name) or name in (".", ".."):
+        return None
+    if root == "job":
+        base = out_dir.parent.parent / name
+    elif root == "out":
+        base = MVP_DIR / "out" / name
+    else:
+        return None
+    for cand in (base / "run" / "plan.json", base / "plan.json"):
+        try:
+            if cand.exists():
+                return Plan.load(cand)
+        except Exception:  # noqa: BLE001 基线读坏了不阻塞出片，只当没有
+            return None
+    return None
+
+
+def _diff_shots(prev: Plan, new: Plan) -> dict[int, set[str]]:
+    """逐镜对比 标题/口播/时长/版式 四个可编辑面，返回 {镜头号: 变过的字段集合}。
+    必须在对 new 做任何改写（voiceover/spoken/seconds 回写）之前调用。"""
+    old = {s.index: s for s in prev.shots}
+    changed: dict[int, set[str]] = {}
+    for s in new.shots:
+        o = old.get(s.index)
+        if o is None:
+            changed[s.index] = {"title", "narration", "seconds", "visuals"}
+            continue
+        diff = set()
+        if (o.title or "") != (s.title or ""):
+            diff.add("title")
+        if (o.narration or "") != (s.narration or ""):
+            diff.add("narration")
+        if round(num(o.seconds), 2) != round(num(s.seconds), 2):
+            diff.add("seconds")
+        if _visual_fingerprint(o) != _visual_fingerprint(s):
+            diff.add("visuals")
+        if diff:
+            changed[s.index] = diff
+    return changed
+
+
+def _visual_fingerprint(shot) -> str:
+    return json.dumps([(v.kind, v.props) for v in shot.visuals],
+                      ensure_ascii=False, sort_keys=True, default=str)
 
 # 阶段中文名（对应 Spec_Workflow 的 A2~A7，前端按这个顺序画进度条）
 STAGES = [
@@ -181,6 +234,9 @@ def do_generate(brief_data: dict, out_dir: Path, quality: str, pg: Progress) -> 
 def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source_key: str = "") -> dict:
     """分镜改完之后：按新 narration 重测语音时长 → 过闸门 → 重渲 → 重合成。"""
     plan = Plan.load(plan_file)
+    # 归责基线：在任何改写之前 diff（voiceover.apply 会写 voiceover/spoken，后面还会重排秒数）。
+    prev = _load_source_plan(source_key, out_dir)
+    changed = _diff_shots(prev, plan) if prev is not None else None
     # 字幕只允许一层（与 run.py `if burn: brief.subtitles=False` 同源）：重渲/改进这条路径
     # 稍后必然把 subs.srt 烧进成片（mux 固定传 srt 路径），若画面层再画一遍字幕就叠成两行
     # 互相打架（用户实报「字幕重叠」）。关掉画面内字幕后，揭示节奏仍按口播字幕时间轴走，
@@ -238,16 +294,27 @@ def do_render(plan_file: Path, out_dir: Path, quality: str, pg: Progress, source
     except Exception:  # 库里查不到时仍跑通用检查（不阻塞重渲），只在 sidecar 里记一笔
         log["kp_missing"] = True
     findings = review.check(plan, kp)
-    (out_dir / "review.json").write_text(json.dumps(review.report(plan, kp), ensure_ascii=False, indent=2), encoding="utf-8")
+    review.mark_edit_related(findings, changed)
+    (out_dir / "review.json").write_text(json.dumps(review.report(plan, kp, findings=findings), ensure_ascii=False, indent=2), encoding="utf-8")
     log["steps"]["review"] = round(time.time() - step, 2)
     pg.end("review")
-    hard = review.blocking(findings)
+    # 只拦「本次改动引入」的问题；稿子里原有的旧账降级为警告留痕（review.json + sidecar），
+    # 不拦出片——上一版成片本来就带着这些问题在线上，拦这次重渲并不会让它们消失，
+    # 只会把「改个标题」这种合法操作误杀（2026-10-20 图4-B 用户实报）。
+    hard = [f for f in review.blocking(findings) if f.get("related", True)]
+    stale = [f for f in review.blocking(findings) if not f.get("related", True)]
+    if stale:
+        log["pre_existing_findings"] = [
+            {"shot": f["shot"], "code": f["code"], "msg": f["msg"]} for f in stale]
     if hard:
         raise cli.GenerationError(
             "content",
             "静态监督未通过：\n" + "\n".join(
                 f"  shot {f['shot']} [{f['code']}] {f['msg']}" for f in hard),
-            "可在下方修改分镜后重出片；或按上面清单精简口播、补限定语、把目标时长放宽。",
+            "上面每条都是这次改动引入的，逐条改掉即可重出片"
+            + (f"；另有 {len(stale)} 条稿子里原有的校验问题与本次改动无关，"
+               f"不拦本次出片，已记入 review.json，建议另行修复" if stale else "")
+            + "；或按上面清单精简口播、补限定语、把目标时长放宽。",
             findings=[{"shot": f["shot"], "code": f["code"], "msg": f["msg"]} for f in hard])
 
     plan_path = out_dir / "plan.json"
@@ -433,6 +500,9 @@ def main() -> int:
         result["elapsed"] = round(time.time() - pg.started_at, 1)
         pg.finish(**result["names"])
     except Exception as e:  # noqa: BLE001 子进程的异常要变成前端可读的结果，不能只留 traceback
+        if isinstance(e, kp_draft.DraftError):
+            # 84-T4 保险绳：经典管线在 run.py 起草出口已做同一映射，这里兜住任何绕过它的路径。
+            e = kp_draft.to_generation_error(e)
         cause = e.__cause__
         detail = f"{type(e).__name__}: {e}"
         if isinstance(e, knowledge.KnowledgeNotFound) or getattr(cause, "candidates", None):

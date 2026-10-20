@@ -241,3 +241,67 @@ def _grab_frame(video: Path, t: float) -> Image.Image:
         raise RuntimeError(f"抓帧失败 @ {t:.3f}s：{video}")
     import io
     return Image.open(io.BytesIO(r.stdout)).convert("RGB")
+
+
+# ---- 82-SE：framediff 密度复检收编（D4/#28 同一把尺）----
+# 判据逐字对齐 .local/82D4_evidence/framediff.py：内容带行 [40,410)、相邻帧 |Δ|>16 的像素
+# 数 >50 记动帧、每镜去首尾 5 帧。解码走 PyAV（渲染环境无 ffmpeg 二进制也能跑；
+# 若 PyAV 缺失则如实抛错，闸门不许静默放行）。
+DIFF_BAND = (40, 410)   # 内容带（去掉页眉/字幕带），854×480 冒烟口径；fullhd 由调用方给
+DIFF_GRAY = 16
+DIFF_MIN_PX = 50
+DIFF_TRIM = 5           # 每镜首尾各排除 5 帧（边界装配帧）
+STATIC_SHARE_MAX = 0.40
+STATIC_SHARE_TEXT_MAX = 0.70   # 纯文字/公式镜豁免阈值（Phase B 书面豁免口径：SD1b 实测 62.5/66%）
+
+
+def animation_density(video: Path, plan: dict, band: tuple[int, int] = DIFF_BAND,
+                      fps: float | None = None) -> dict:
+    """逐镜静止帧占比复检。返回 {shots:[{shot,frames,static_share,text_only,over_limit}], unexpected:bool}。
+
+    `text_only`：本镜全部 visual.kind 都在 TEXT_ONLY_KINDS（纯文字版式）→ 用豁免阈值。
+    阈值口径来自 ir.MOTION_CAPABLE 批次（#82）：动画化镜头 ≤40%，纯文字镜 ≤70%。
+    """
+    import av
+
+    from .ir import TEXT_ONLY_KINDS
+
+    bounds = _shot_bounds(plan, fps)
+    total_frames = sum(int(round((e - b) * (fps or 0))) for b, e in bounds) if fps else None
+    prev = None
+    per_frame_changed: list[int] = []
+    n = 0
+    with av.open(str(video)) as c:
+        stream = c.streams.video[0]
+        rate = float(stream.average_rate)
+        fps = fps or rate
+        for frame in c.decode(video=0):
+            gray = frame.to_image().convert("L")
+            a = np.asarray(gray, dtype=np.int16)[band[0]:band[1], :]
+            if prev is not None:
+                d = np.abs(a - prev)
+                per_frame_changed.append(int((d > DIFF_GRAY).sum()))
+            else:
+                per_frame_changed.append(0)
+            prev = a
+            n += 1
+    if total_frames and abs(n - total_frames) > len(bounds):
+        # 帧数与 Plan 轴对不上（差超过每镜一帧的取整余量）：不能装作检过。
+        raise RuntimeError(f"帧数不符：解码 {n}，按 plan 期望 ~{total_frames}（fps={fps}）")
+
+    out = []
+    for i, (start, end) in enumerate(bounds):
+        lo = int(round(start * fps)) + DIFF_TRIM
+        hi = min(int(round(end * fps)) - DIFF_TRIM, n)
+        seg = per_frame_changed[max(lo, 1):max(hi, lo + 1)]
+        static = sum(1 for x in seg if x <= DIFF_MIN_PX)
+        share = round(static / len(seg), 3) if seg else 0.0
+        shot = plan["shots"][i]
+        kinds = [v.get("kind") for v in shot.get("visuals", []) if isinstance(v, dict)]
+        text_only = bool(kinds) and all(k in TEXT_ONLY_KINDS for k in kinds)
+        limit = STATIC_SHARE_TEXT_MAX if text_only else STATIC_SHARE_MAX
+        out.append({"shot": i, "frames": len(seg), "static_share": share,
+                    "text_only": text_only, "limit": limit, "over_limit": share > limit})
+    return {"fps": round(fps, 3), "total_frames": n, "shots": out,
+            "unexpected": any(s["over_limit"] for s in out)}
+

@@ -317,8 +317,13 @@ def generate(brief: Brief, out_dir: Path, quality: str = "fullhd", burn: bool = 
     try:
         kp = knowledge.load(brief.subject, brief.topic, brief.grade)
     except knowledge.KnowledgeNotFound:
-        kp = kp_draft.draft(brief.subject, brief.grade, brief.topic,
-                            brief.target_seconds, brief.raw_text)
+        try:
+            kp = kp_draft.draft(brief.subject, brief.grade, brief.topic,
+                                brief.target_seconds, brief.raw_text)
+        except kp_draft.DraftError as e:
+            # 84-T4：起草失败也走 GenerationError 分类并带一句可照做的建议，
+            # 前端不再只见「作业在执行中出错」（线上 g20261020-130402-8ae0e5 的原始体验）。
+            raise kp_draft.to_generation_error(e) from e
         log["kp_draft"] = {"id": kp["id"], "topic": kp["topic"],
                            "model": llm_client.model_for("K0"),
                            "note": ("知识点库里没有这一条，内容由模型起草，出处来自教材检索命中（未经人工核对）"

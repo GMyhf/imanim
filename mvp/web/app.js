@@ -299,6 +299,15 @@ function showResult(meta, plan, d) {
   $("#resultTts").textContent = ttsNote || "";
   $("#resultTts").classList.toggle("hidden", !ttsNote);
 
+  // 稿子里原有的校验旧账（与本次改动无关，已在后端降级不拦出片）：成功页也要让人看见欠了什么。
+  const stale = side.pre_existing_findings || [];
+  const staleNote = stale.length
+    ? `稿子里原有 ${stale.length} 条校验问题（与本次改动无关，未拦出片）：` +
+      stale.map((f) => `[${f.code}] ${f.msg}`).join("；") + "。详见 review.json，建议另行修复。"
+    : "";
+  $("#resultStale").textContent = staleNote;
+  $("#resultStale").classList.toggle("hidden", !staleNote);
+
   const player = $("#player");
   const wrap = $(".player-wrap");
   if (meta.video) {

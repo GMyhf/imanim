@@ -39,7 +39,7 @@ license: MIT
 Brief（学科/学段/知识点/时长/风格）
   → Knowledge（本地资料库检索，命中教材锚点，无 LLM）
   → Plan（分镜 IR：24 种视觉原语）
-  → review（22 类静态监督闸门，不过则拒绝出片）
+  → review（24 类静态监督闸门，不过则拒绝出片）
   → ManimCE 渲染（无声画面；公式走 latex+dvisvgm，缺 TeX 自动退回 Pango 排版）
   → TTS（网关 qwen3-tts-flash，HTTP POST /v1/audio/speech）→ 字幕对齐 → subs.srt
   → ffmpeg 混流 → 时长/音画漂移闸门 → 成片 + sidecar.json

@@ -1,7 +1,7 @@
 # project1（澄象）
 
 把**结构化知识点**直接变成**可上课用的讲解短视频**的最小可演示管线。
-定位是 MVP（最小演示），当前聚焦初中—大二学段的数理化知识讲解。
+定位是 MVP（最小演示），当前覆盖初中至大学基础课的数理化讲解（学段 G8–U2，按可核教材来源标注）。
 
 一句话主张：**讲得对 + 讲得完 + 敢直接拿去上课**——不是"更好看"。
 
@@ -13,29 +13,45 @@
 - **中间产物可见可改**：分镜脚本（plan.json）是结构化 IR，老师能看到、能改、能重渲；
 - **时长是硬约束**：先按自然语速实测配音，再反推每个镜头的秒数，成片落在目标 ±10% 内；
 - **不交付赶课的片子**：整片口播量除以可说窗口，反解出需要的 TTS 提速档，超过 +2 档直接打回，
-  并给出"精简到 N 字"或"放宽到 M 秒"两个可执行数字——网关中文语音自然讲课实测 4.7 字/秒；
+  并给出"精简到 N 字"或"放宽到 M 秒"两个可执行数字——网关中文语音自然讲课实测 4.7 字/秒
+  （网关 TTS 的 speed 参数实测无效，一律按自然语速合成，sidecar 里如实记账）；
 - **定义性限定钉得住**：每个知识点条目用 `must_say` 声明"这条必须说出口的几句"（`a ≠ 0`、
   椭圆定义里的"常数大于两定点间距离"、`F` 是**合**外力……），整片一次都没说即打回。
-  精简口播最容易误删的恰好是这些限定，所以由闸门正向钉住，而不是靠人记着。
-- **敢自我打回**：渲染前有 18 类静态监督闸门（超载、节奏、安全区、字形、术语、限定缺失……），
-  不合格就不出片，而不是默默出一支坏的；
-- **零 LLM 依赖**：检索、分镜、渲染、配音全部本地可跑，边际成本接近于电费。
+  精简口播最容易误删的恰好是这些限定，所以由闸门正向钉住，而不是靠人记着；
+- **敢自我打回**：渲染前有 24 类静态监督码（超载、节奏、安全区、字形、术语、限定缺失、
+  动效缺位……），阻断类不合格就不出片，而不是默默出一支坏的；
+- **物理是真算出来的**：`physics/` 的定步长 RK4 积分模块驱动过程动画（斜面、轨迹、粒子盒、场线……），
+  画面随数值演化，不是摆关键帧；
+- **检索、校验、渲染、合成零 LLM 依赖**，全部本地可跑，边际成本接近电费；
+  模型棒次集中在少数起草与表达环节（见下），关闭时管线走确定性兜底照常出片。
 
 ## 管线
 
 ```
 Brief（学科/学段/知识点/时长/风格）
   → Knowledge（本地资料库检索，命中教材锚点，无 LLM）
-  → Plan（分镜 IR：镜头、视觉原语、旁白、提示点）
-  → review（静态监督闸门，不过则拒绝出片）
-  → ManimCE 渲染（无声画面，逐镜头时长由 IR 决定）
-  → TTS（Windows SAPI 离线中文配音）→ 字幕对齐 → subs.srt
-  → ffmpeg 混流（1080p30 + 48kHz 立体声 AAC）
-  → 时长/音画漂移闸门 → 成片 + sidecar.json
+  → Plan（分镜 IR：24 种视觉原语）
+  → review（24 类静态监督码，含动效闸与记账码；阻断类不过即拒绝出片）
+  → ManimCE 渲染（无声画面；公式走 LaTeX(xelatex+dvisvgm)，缺 TeX 自动退回 Pango 排版）
+  → TTS（网关 qwen3-tts-flash）→ 字幕对齐 → subs.srt
+  → ffmpeg 混流（1080p30 + 48kHz AAC）→ 时长/音画漂移闸门 → 成片 + sidecar.json
 ```
 
-八种视觉原语（Spec_Product A5）：`title` `formula` `compare` `graph_vt` `figure`
-`steps` `summary` `callout`。学科 `math/physics/chemistry`，学段 `G8/G9/H1/H2`。
+模型使用纪律（如实）：大模型棒次集中在**库外条目的起草（K0）、分镜生成与改写（A3）、
+朗读稿转写（VOICEOVER）、成片视觉回审（A8）**等少数环节，另有独立评分的模型辅助判分（S22，
+只依据分镜文本打分、不产内容，扣分须带分镜原文引文方可生效）。`pipeline/llm_client.py`
+统一管理：两套 provider（缺省 ModelScope API-Inference，可 `QX_LLM_PROVIDER=gateway` 切回
+旧网关），各棒次默认关闭、按环境变量逐棒开启（部署侧 `deploy/start.sh` 缺省开 K0/A3/VOICEOVER）。
+`pipeline/flow/` 另有一版多棒次视觉化流程（K1→K2→P→V0→M1→M2→…→A8→S22，AgentFlow v2）
+在试行，尚未进入产品链路。
+
+知识分两层：
+
+- **已核对知识库** `pipeline/data/kp/`：16 条（数学 5 / 物理 6 / 化学 5），逐条人工核对并带
+  教材章节与课标出处；学段按可核教材来源标注——12 条覆盖初二至高二，化学另有 4 条为大学
+  基础课（U2）。
+- **草稿库** `pipeline/data/kp_auto/`：库外知识点由 K0 起草，出处只允许来自语料字面命中并
+  写明书名页码，未命中则显式标记"模型起草、未核对出处"；人工逐字核对后才晋升进已核对知识库。
 
 ## 快速开始
 
@@ -46,13 +62,16 @@ Brief（学科/学段/知识点/时长/风格）
 | Python | 3.14.8 |
 | manimce | 0.22.0（`pip install manim`）|
 | ffmpeg | 单文件即可，需带 libass；**不需要 ffprobe** |
-| LaTeX | **不需要**——全片用 Text/Pango 排版，公式由管线自己做斜体与上下标 |
-| 配音 | Windows SAPI + Huihui Desktop 中文语音（离线，免费）|
+| LaTeX | **可选**——公式版走 `xelatex` + `dvisvgm`；探测不到自动退回 Unicode/Pango 排版，不挡出片 |
+| 字体 | 本机默认 SimSun / Times New Roman（可用 `MVP_TEXT_FONT` / `MVP_LATIN_FONT` 覆盖），容器走开源替代 |
+| 配音 | 网关 TTS（`qwen3-tts-flash`），需 `QX_TTS_API_KEY`；不配则生成如实报错，画廊不受影响 |
 
 ```bash
-# 路径可通过环境变量覆盖，默认值见 run.py
-export MVP_FFMPEG_DIR=/path/to/ffmpeg      # 含 ffmpeg.exe 的目录
-export MVP_MANIM_BIN=/path/to/manim        # manim 可执行文件
+# 路径与密钥均通过环境变量配置，密钥绝不入库
+set MVP_FFMPEG_DIR=D:\path\to\ffmpeg       # 含 ffmpeg.exe 的目录
+set MVP_MANIM_BIN=D:\path\to\manim         # manim 可执行文件
+set QX_TTS_API_KEY=...                     # 配音网关密钥（必需）
+set QX_LLM_API_KEY=...                     # 推理后端密钥（缺省 ModelScope API-Inference）
 
 cd mvp
 python run.py --subject physics --grade H1 --topic 加速度 --seconds 120 --style clean
@@ -66,11 +85,13 @@ python run.py --subject physics --grade H1 --topic 加速度 --seconds 120 --sty
 
 ```bash
 python batch.py --out ../.local/batch --jobs 4 --quality fullhd   # 整份语料库批量出片
-python web/server.py                                             # 前端页面（纯标准库 http.server）
+python web/server.py                                             # Web 端（改分镜重渲、应用内反馈）
 python tests/run_tests.py                                        # 测试
 ```
 
-控制台若为 GBK 编码，先 `export PYTHONIOENCODING=utf-8`，否则中文输出会崩。
+控制台若为 GBK 编码，先 `set PYTHONIOENCODING=utf-8`，否则中文输出会崩。
+
+容器与魔搭创空间部署（Docker、字体替代、密钥注入、重建检查单）见 `deploy/README.md`。
 
 ## 目录
 
@@ -78,24 +99,33 @@ python tests/run_tests.py                                        # 测试
 mvp/
   run.py            A0 总控：一条命令 Brief → 成片
   batch.py          批量入口：扫语料库并发出片 + 汇总表
-  pipeline/         ir（数据结构与常量）、knowledge（检索）、storyboard（分镜）、
-                    review（静态监督闸门）、mux（混流与烧录）
-  render/scene.py   ManimCE 渲染层：排版、八原语、揭示节奏
-  audio/tts.py      SAPI 配音与时长测量
-  web/              前端框体 + 作业执行器（可改分镜后重渲）
-  pipeline/data/kp/ 知识点语料（结构化 JSON，含教材锚点 refs）
-Projrct_Plan/       计划与规格：Schedule（核心）、Spec_*、Ref_*、Eval_*
+  pipeline/         ir（数据结构与常量）、knowledge（确定性检索）、storyboard（分镜）、
+                    review（静态监督）、mux（混流与烧录）、kp_draft（K0 起草通道）、
+                    llm_client（模型棒次与双 provider）、scoring_llm（独立评分辅助）、
+                    flow/（AgentFlow v2 试行桥接，未进产品链路）
+  render/           ManimCE 渲染层：scene.py 过程动画 + motion_contract（动效契约）
+  physics/          定步长 RK4 物理积分模块（integrator/particle/replay/graphsync，共 564 行）
+  audio/tts.py      网关 TTS 配音与时长测量（重试、语速记账）
+  web/              前端框体 + 作业执行器（改分镜重渲、反馈落盘与数据集同步）
+  tests/            全量回归（含每条监督码的"必然命中"反向用例与字体检索级复检）
+  pipeline/data/kp/       已核对知识点（结构化 JSON，带教材/课标出处）
+  pipeline/data/kp_auto/  K0 草稿条目（强制来源标记，未核对出处显式标注）
+deploy/             Dockerfile、start.sh、build_space.py 与部署 README
+Projrct_Plan/       计划与规格：BP（商业计划书）、Spec_*、Eval_*/Audit_*（评审原件）、SubTask 台账
 corpus/             第三方教材/数据集原件（不入库，见 MANIFEST.txt）
-.local/             本机运行时、虚拟环境与渲染产物（不入库）
+.local/             本机运行时、日志与渲染产物（不入库）
 ```
 
-## 当前状态
+## 当前状态（如实）
 
-按 `Projrct_Plan/Project_Schedule.txt` 的 S0→S4 流程推进。S0/S1/S2.1/S2.3/S2.4（前端框体）
-已关闭；S2.2（小体量试跑 + 量表验收）正在对 batch_v7 的 8 支 1080p30 成片（数学 4、物理 3、化学 1）
-做两名互不知情评审人的独立评分；
-S2.4 部署、S2.5 留档、S2.6 交付物料在后头。验收判据来自 `Spec_Scale.txt`：无一票否决项，
-S ≥ 4.5、U/A/C ≥ 3.5、总分 ≥ 4.0。
+- 线上版本（#81）已部署魔搭创空间 `chengxiang_gallery`：画廊 + 在线生成 + 分镜编辑重渲。
+- #82 动画化整改在途：全链路 builder 过程动画化已铺开（电路/斜面/轨迹/粒子盒等），
+  静态监督码扩至 24 类（含 ANIMATION 动效闸与 TEXT_ONLY 记账码）；模型后端已切换为
+  ModelScope API-Inference（TTS 仍走原网关）。**尚未重新部署。**
+- 验收：五轮独立复评已完成，最新一批（batch_v8）批均总分 4.55、可核验维度 8/8、
+  判定"有条件通过"；评审原文与交叉裁定见 `Projrct_Plan/Eval_*` 与 `Audit_*`，
+  未过线的历史轮次同样公开——本项目不替自己发奖状。
+- 回归：全量测试 874 项（`tests/run_tests.py`，收口复核日志见 `.local/`）。
 
 ## 版权声明
 

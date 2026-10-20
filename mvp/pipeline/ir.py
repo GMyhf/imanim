@@ -26,6 +26,39 @@ VISUAL_KINDS = ("title", "formula", "compare", "graph_vt", "figure", "steps", "s
 GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate", "energy_dist",
                  "stat_chart", "mind_map", "force_diagram", "field", "circuit", "optics",
                  "incline", "trajectory", "derivation", "mechanism", "rod_rails")
+# 物理片的"物理图示类"：GRAPHIC_KINDS 去掉文字型过程呈现（derivation 是代入动画的推导版式，
+# 不是物理图示）。NO_FIGURE 对 subject=physics 收紧到这一把尺子（82-SE）。
+PHYS_FIGURE_KINDS = tuple(k for k in GRAPHIC_KINDS if k != "derivation")
+
+# ---- 82-SE：动画化能力账（review 的 ANIMATION/TEXT_ONLY 闸门与本表同源）----
+# MOTION_CAPABLE：#82 批次后渲染器带**过程动画**（beat 驱动内容运动，非整块淡入）的 kind。
+# 真源在 scene.py 的 builder 侧：82-SD3 每收一个 kind 就补进来，
+# tests/test_physics_gates.py 对撞 scene.BUILDERS——两把尺子必须同一把。
+MOTION_CAPABLE = frozenset({
+    "field", "circuit", "incline", "trajectory", "particle_box", "derivation", "rod_rails",
+})
+# ANIMATION_PENDING：SD3 批次在途改造的 kind——builder 侧还没接过程动画，闸门暂不因其拦片
+# （否则存量语料全被打回，是误伤不是监督）。**每验收一个 kind 就从这里删一个**，删完即红线全量生效。
+# 白名单口径（D4 总目标）里不含这些：pending 只是施工顺序账，不是豁免。
+ANIMATION_PENDING = frozenset({
+    "title", "formula", "compare", "graph_vt", "figure", "steps", "summary", "callout",
+    "axis_graph", "microstate", "energy_dist", "stat_chart", "mind_map", "table",
+    "force_diagram", "optics", "mechanism",
+})
+# 纯文字/公式版式（title/formula/steps/summary/callout/compare/table）：允许上屏，
+# review 逐镜记 TEXT_ONLY（blocking=False 记账），selfcheck 的帧密度按豁免阈值单独算。
+TEXT_ONLY_KINDS = frozenset({"title", "formula", "steps", "summary", "callout", "compare", "table"})
+# M1：kind → 必备动效绑定字段。builder 的过程动画全靠这些字段把运动铺到各条 cue 上，
+# 缺了就退化成 cue0 一次性入场（B 级）。props 必须给出**非空**值才放行。
+MOTION_REQUIRED = {
+    "circuit": ("close_at",),
+    "incline": ("beats",),
+    "derivation": ("at",),
+}
+# 白名单豁免（D4 总目标口径）：仅限**纯转场/页眉页脚类无信息元素**。82-SE 落地时**为空**——
+# 任何 kind 都不得整体豁免；props["motion_exempt"] 为真也只免 MOTION_REQUIRED 的字段对撞，
+# 不免 ANIMATION 的 MOTION_CAPABLE 判定（title/formula 也在 SD3 P0 清单里）。
+MOTION_EXEMPT_FIELDS = ("motion_exempt",)
 
 # A3 分镜预算账本挂在 Plan.refs 末尾的标记（refs[0] 仍是教材出处，片尾卡只读第一条）。
 # 常量住在 ir：storyboard 写、review 读，任何一方都不该私有这份字段名。
