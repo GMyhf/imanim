@@ -2,6 +2,8 @@
 
 音频拼接用标准库 wave 手工做（各段都是 24kHz/16bit/mono，格式统一），
 不依赖 ffmpeg 的 filter 图，行为完全可预测。
+字幕落盘前过 _flatten_scripts 清洗（82-P1b）：口播 cue 里的 Unicode 上下标转安全 ASCII
+形态，堵烧录道（ffmpeg subtitles→libass）容器字体缺字形的黑块。
 """
 
 from __future__ import annotations
@@ -225,6 +227,54 @@ def _ts(t: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+# ── 字幕文本清洗（82-P1b，D1 §五 P1+）：白名单 Unicode 上下标 → 安全 ASCII 形态 ──────
+# 本管线没有直接生成的 .ass 文件；「ASS 道」= subs.srt 进烧录滤镜
+# （mux._burn_cmd 的 ffmpeg subtitles= → libass 内部把 srt 转 ASS 事件渲染，
+# FontName=SUB_FONT，容器=Noto Serif CJK SC）。实际消费面核实：
+#   * 屏内嵌字幕（brief.subtitles=True，CLI 默认）由 scene.py 用 rich() 画，走 82-SA 终兜底，
+#     不经这里；
+#   * web/创空间路径（jobrunner）恒 brief.subtitles=False + 恒烧录——subs.srt 的 cue 文本
+#     是线上**唯一**上屏字幕层，逐句口播原文、完全不经 rich_tokens（D1 C2）；
+#   * subs.srt 同时作为外挂字幕文件交付（run.py --no-subtitles 时是仅剩的字幕层）。
+# 容器字体池对 rich_tokens 白名单 69 字符实测缺 64 个字形（D1 C1/cmap_audit），口播稿里
+# 任何 ₂/⁶ 类字符在 libass 里同样落 .notdef 黑块。画面侧 82-SA 终兜底管不到这条道，
+# 字幕侧必须在文本进 ASS 前清洗——write_srt 是 srt/烧录/外挂三者的唯一落盘闸口。
+#
+# 方案选 a（ASCII 转写），不选 b（libass 内联标签），理由：
+#   ① subs.srt 是对外交付物：内联 {\...} 标签在非 libass 的简单播放器/外挂消费端会露出
+#      标签原文；且 ffmpeg srt→ASS 转换对花括号转义的行为依赖线上 ffmpeg/libass 版本，
+#      ASS 根本没有官方 sup/sub 标签（\pbo 类是私有扩展），排版语义路线验证成本不可控。
+#   ② 字幕只是口播辅助层（Spec：文字只在口播），ASCII 后完全可读：下标转常规写法
+#      （H₂SO₄→H2SO4，化学式 ASCII 惯例，scene.chem_formula_hit 还能反解析回下标形态）；
+#      上标串加 ^（10⁶→10^6、Cu²⁺→Cu^2+、m/s²→m/s^2），消歧且与画面侧 ^ 通道同构。
+#   ③ 纯 ASCII 对字体层零依赖，任何字体池都不出黑块——与 82-SA「白名单字符永远不需要
+#      字形」的收口语义一致。
+# 映射表与 scene._SUB_MAP/_SUP_MAP 同源复制（mux 不 import scene：scene 模块级 import manim，
+# 合成层不该为清洗文本拖起渲染依赖）；同步由 test_mux 钉死，两表漂移即红。
+_SUB_MAP = {"₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7",
+            "₈": "8", "₉": "9", "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")",
+            "ₐ": "a", "ₑ": "e", "ₔ": "e", "ₕ": "h", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₗ": "l",
+            "ₘ": "m", "ₙ": "n", "ₚ": "p", "ₛ": "s", "ₜ": "t", "ᵤ": "u", "ᵥ": "v", "ₓ": "x"}
+_SUP_MAP = {"⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7",
+            "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁿ": "n",
+            "ᵃ": "a", "ᵇ": "b", "ᶜ": "c", "ᵈ": "d", "ᵉ": "e", "ᵍ": "g", "ⁱ": "i", "ʲ": "j",
+            "ᵏ": "k", "ˡ": "l", "ᵐ": "m", "ᵒ": "o", "ᵖ": "p", "ʳ": "r", "ˢ": "s", "ᵗ": "t",
+            "ᵘ": "u", "ᵛ": "v", "ʷ": "w", "ˣ": "x", "ʸ": "y", "ᶻ": "z"}
+# 下标/上标码位不重叠（Unicode 分块保证），两条 RUN 各扫各的；连续串只加一个 ^。
+_SUB_RUN = re.compile("[" + "".join(_SUB_MAP) + "]+")
+_SUP_RUN = re.compile("[" + "".join(_SUP_MAP) + "]+")
+
+
+def _flatten_scripts(text: str) -> str:
+    """字幕文本进 ASS 前的清洗：下标串→ASCII 平写，上标串→^+ASCII。非白名单字符不动。"""
+    s = str(text or "")
+    if not s:
+        return s
+    s = _SUB_RUN.sub(lambda m: "".join(_SUB_MAP[c] for c in m.group()), s)
+    s = _SUP_RUN.sub(lambda m: "^" + "".join(_SUP_MAP[c] for c in m.group()), s)
+    return s
+
+
 def write_srt(plan: dict, out_srt: Path, fps: int | None = None) -> int:
     out = []
     n = 0
@@ -243,7 +293,9 @@ def write_srt(plan: dict, out_srt: Path, fps: int | None = None) -> int:
                 a["end"] = max(num(a.get("start")), num(b.get("start")))
         for s in cues:
             n += 1
-            out.append(f"{n}\n{_ts(offset + s['start'])} --> {_ts(offset + s['end'])}\n{s['text']}\n")
+            # 82-P1b：进 ASS 前清洗白名单 Unicode 上下标（容器 libass 缺字形→黑块，
+            # 见 _flatten_scripts 注释块）；只洗落盘文本，不改输入 plan dict。
+            out.append(f"{n}\n{_ts(offset + s['start'])} --> {_ts(offset + s['end'])}\n{_flatten_scripts(s['text'])}\n")
     out_srt.write_text("\n".join(out), encoding="utf-8")
     return n
 

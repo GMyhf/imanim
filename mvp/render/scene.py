@@ -1,11 +1,13 @@
 """A5 渲染：ManimCE 消费 Plan IR 出无声视频。
 
 渲染层零内容判断（Spec_Workflow 第 1 节）：IR 说画什么就画什么，只额外保证不越界。
-不装 LaTeX：全部用 Text/Pango + Unicode（Schedule C7 已实测中文与 Δ 字形正常）。
+公式与推导行走 LaTeX（xelatex + xeCJK，见 texform.py；缺 TeX 时退回 rich）；正文标签与字幕
+仍走 Text/Pango + Unicode（Schedule C7 已实测中文与 Δ 字形正常）。
 """
 
 from __future__ import annotations
 
+import difflib
 import itertools
 import json
 import math
@@ -17,7 +19,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # 时长口径唯一来源是 pipeline.ir；渲染层不再自己读 SHOT_HEAD（边界改硬切后 INTRO/OUTRO 归零，
 # 见上面那段注释），但字幕窗口仍由 IR 算好下发，这里不留一份副本。
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # 82-SD1a：运动层与 scene 同目录
 import font_metrics  # noqa: E402  字体度量标定表（阻断项③），纯标准库
+import mech_anchors as _ma  # noqa: E402  82-SB mechanism 锚点表（纯标准库，与 pipeline/review.py 同一份语义）
+import motion as _mo  # noqa: E402  82-SD1a 运动原语层（mvp/render/motion.py，反向 import 本模块的只有 scene）
+import texform as _texform  # noqa: E402  82-F1 公式文本 → LaTeX 纯函数层（texform.py）
 
 from manim import (
     BOLD,
@@ -35,6 +41,7 @@ from manim import (
     Sector,
     Square,
     Ellipse,
+    Arc,
     ArcBetweenPoints,
     GOLD,
     GREEN_C,
@@ -48,6 +55,7 @@ from manim import (
     Flash,
     Group,
     Indicate,
+    LaggedStart,
     Line,
     NumberPlane,
     Polygon,
@@ -56,10 +64,13 @@ from manim import (
     Scene,
     ShowPassingFlash,
     Text,
+    Transform,
     TransformFromCopy,
+    ValueTracker,
     VMobject,
     VGroup,
     Wiggle,
+    Write,
     config,
     np,
 )
@@ -105,12 +116,27 @@ CALLOUT_PAD = 0.6              # 内宽预算两侧余量（= review.CALLOUT_PAD
 
 # ---- 强调动效帧预算（P2）----
 # 动效只借既有 hold/淡入帧，绝不新增镜头时长；预算不够就压缩 run_time（FX_MAX_SEC 上限）。
-FX_MAX_SEC = 0.5               # 单个强调动画最多借用的秒数
+FX_MAX_SEC = _mo.FX_MAX_SEC    # 单个强调动画最多借用的秒数。82-SD1a 单源收口（82-M0 §6.5）：
+#                                值不变（0.5），事实源改钉在 motion.py；改一处只改 motion.py。
+# ---- 82-SD1a 运动播放段口径 ----
+# 单镜动效总借帧 ≤ 镜帧数 × MOTION_BUDGET_RATIO（D4 §4.2-3 / 82-M0 §6.1）；超预算按契约
+# 降级（先保「揭示/强调」语义最强 beat，压暗类靠后），降级逐条记入 _motion_ledger 可观测，
+# 绝不静默全丢。播放一律 motion.snap_run_time 整帧对齐（QUALITY_FPS 15/30 同尺）。
+MOTION_BUDGET_RATIO = 0.80     # 单镜运动播放段总借帧上限（占镜帧数比例）。M0 原定 0.35，
+#                                实测文字镜只动 0.8s/2.1s cue → 静止帧 51~57% 不过 SD1a/E
+#                                验收线；用户口径是「全流程全视频、每一步都要动」，且揭示拍
+#                                只借 cue 内 hold 帧、不新增时长，35% 帽无时长保护意义，故放宽。
+#                                剩余 20% 仍留给口播停顿与呼吸感（不是每帧都必须有位移）。
+REVEAL_RUN_SEC = 1.0           # M6 逐条揭示/强调单拍时长（15帧@15fps；口播读到哪亮到哪）。
+#                                0.8s 实测静止帧 55~58% 不过 SD1a ≤50% 验收线：2.1s 的 cue 窗口里
+#                                只动 0.8s，剩余 hold 全是静止。1.0s + 回扫 0.8s≈预算 96% 用满。
+SWEEP_RUN_SEC = 0.8            # 镜尾回扫单拍（12帧）：与 REVEAL 合计不超过 35% 借帧预算
+MOTION_WINDOW_MIN_F = 2        # 一个 beat 至少要有 2 帧可播，否则降级（1 帧无过程可言）
 # 这些版式是"本镜主角"（图形类）：出场/揭示时挂 Indicate 点名。
 FX_GRAPHIC_KINDS = ("figure", "graph_vt", "axis_graph", "particle_box", "microstate",
                     "energy_dist", "stat_chart", "mind_map", "table",
                     "force_diagram", "field", "circuit", "optics", "incline", "trajectory",
-                    "derivation", "mechanism")
+                    "rod_rails", "derivation", "mechanism")
 # 角标（首镜 id / 末镜出处）到画框边的距离：让外缘正好落在安全宽边界上。
 # 原来写死 0.4，两条角标分别顶到 x=1866 / x=54，超出本项目自己的 123–1797 安全区（评审 A4）。
 EDGE_BUFF = config.frame_width / 2 - SAFE_WIDTH / 2
@@ -164,35 +190,58 @@ def T(content, **kw):
 
 
 def _find_tex_bin() -> bool:
-    """latex + dvisvgm 都能找到才算可用；Windows 上顺手把 MiKTeX 的 bin 补进 PATH。"""
+    """xelatex + dvisvgm 都能找到才算可用；Windows 上顺手把 MiKTeX 的 bin 补进 PATH。
+
+    82-F1：公式模板固定走 xelatex（要 xeCJK 排中文下标），输出 .xdv 交给 dvisvgm，
+    所以 latex 不再是判据——只有 xelatex 时 dvisvgm 无从下手，缺一个就整体退回 rich()。
+    """
     import shutil
     extra = os.environ.get("MVP_TEX_BIN", r"D:\App\MiKTeX\miktex\bin\x64")
-    if shutil.which("latex") is None and os.path.isdir(extra):
+    if shutil.which("xelatex") is None and os.path.isdir(extra):
         os.environ["PATH"] = extra + os.pathsep + os.environ["PATH"]
-    return shutil.which("latex") is not None and shutil.which("dvisvgm") is not None
+    return shutil.which("xelatex") is not None and shutil.which("dvisvgm") is not None
 
 
 _TEX_OK = None
 _TEX_TEMPLATE = None
 
 
-def _tex_formula(tex, font_size, color):
-    """公式走 LaTeX（Times 系数学字体）；没装 TeX 或编译失败返回 None，由调用方退回 rich()。"""
+def _tex_math(*texs, font_size, color=None):
+    """MathTex 唯一出口（xelatex + xeCJK 模板，逐 token 的多参数版本也走这里）。
+
+    没装 TeX / 缺宏包 / 编译失败一律返回 None，由调用方退回 rich()——绝不让一条公式
+    把整片渲染打断。86 个宏包在 MiKTeX 上首次编译会按需安装，耗时但只发生一次。
+    """
     global _TEX_OK, _TEX_TEMPLATE
     if _TEX_OK is None:
         _TEX_OK = _find_tex_bin()
-    if not _TEX_OK:
+    if not _TEX_OK or not texs:
         return None
     try:
         from manim import MathTex, TexTemplate
         if _TEX_TEMPLATE is None:
-            _TEX_TEMPLATE = TexTemplate()
-            _TEX_TEMPLATE.add_to_preamble(r"\usepackage{amsmath,amssymb}\usepackage{mathptmx}")
-        m = MathTex(str(tex), font_size=font_size, color=color, tex_template=_TEX_TEMPLATE)
-        return m
+            tpl = TexTemplate(tex_compiler="xelatex", output_format=".xdv")
+            # 中文下标必须是 \hbox{\fontsize{0.5em}{...}\selectfont 停}（见 texform._SUB_WRAP）：
+            # xeCJK 下 \text{停} 在下标里按全字号落在基线上，既不小也不沉。
+            tpl.add_to_preamble(
+                r"\usepackage{amsmath,amssymb}"
+                r"\usepackage{graphicx}"
+                r"\usepackage{xeCJK}"
+                r"\IfFontExistsTF{SimSun}{\setCJKmainfont{SimSun}}"
+                r"{\setCJKmainfont{Noto Serif CJK SC}}"
+                r"\usepackage{mathptmx}"
+            )
+            _TEX_TEMPLATE = tpl
+        return MathTex(*[str(t) for t in texs], font_size=font_size, color=color,
+                       tex_template=_TEX_TEMPLATE)
     except Exception as e:  # noqa: BLE001  TeX 缺包/语法错：退回 Unicode 排版，不让整片渲染失败
         print(f"[tex] fallback to rich(): {type(e).__name__}", file=sys.stderr)
         return None
+
+
+def _tex_formula(tex, font_size, color):
+    """公式卡片走 LaTeX（Times 系数学字体）；没装 TeX 或编译失败返回 None，由调用方退回 rich()。"""
+    return _tex_math(tex, font_size=font_size, color=color)
 
 
 # 每次 _place_label 的落点残差（分数, 标签文本），进程内累积；tests/test_layout.py 全库回归用。
@@ -211,8 +260,14 @@ UNRESOLVED: list = []
 # 测试用它反证复核不是空转：语料里没有挪动记录 = 要么真干净、要么机器没接上。
 CLASH_MOVED: list = []
 
+# 82-SB：mechanism 弯箭头端点锚定超差登记 (端点名, 距最近锚点_单位)。渲染装配期由
+# _v_mechanism 落笔前自测，run.py 重放链（replay_unresolved）收集后转成 report 级
+# MECH_ARROW_DRIFT finding——错位可报告化，与 LABEL_CLASH 同口径记账、不拦出片。
+MECH_DRIFT: list = []
+
 # ---- 上下标排版（评审 P1 第 2 条：v_t / s^2 必须排成真下标/上标）----
-# 本机无 LaTeX；实测 Unicode 下标**字母**（ₐₑₜ…）在字体栈里是豆腐块，Unicode 下标数字
+# 标签级文本不走 LaTeX（82-F1 起只有公式/推导行走 xelatex，标签仍走 Pango）；
+# 实测 Unicode 下标**字母**（ₐₑₜ…）在字体栈里是豆腐块，Unicode 下标数字
 # （₀…）会被替换成满号 0（v₀ 看着像 v0），所以只能把字符串切片后分段生成 Text，再按
 # 基线手工拼接。下面三个 _DELTA_* 是「该段墨迹底低于基线多少 × 字号」（H 的墨迹底=基线），
 # 由 mvp/tools_fontmetrics.py（.local/typo2/probe.py 的收编版）直接读 manim Text 的 SVG 轮廓量出
@@ -253,15 +308,21 @@ _UPRIGHT_DIGRAPHS = {"kg", "cm", "mm", "km", "dm", "ml", "mg", "ms", "kj", "ev",
 #   ② 上下标**字母**（ₐₑₜ… ᵃᶜ…，review.py TOFU 黑名单同源）不经转换直接送字体栈。
 #   ③ ASCII 化学式（"H2SO4"）不进任何下标道。
 # 对策（全部挂在 rich() 的统一分词入口，不碰 S4/S2 锁定机器）：
-#   A. 上标段扩展：含非数字字符（⁺⁻ⁿ 或字母）或所在段已被下标/化学式拆过时，整段改走
-#      手工基线 ^ 道；纯数字且段不拆时维持原排版（test_typo 钉死 "s = (1/2) a t²" 单 Text）。
-#   B. 下标段扩展到字母，与上标字母一起映射回 ASCII 再进 _/^ 道。
+#   A. 上标段扩展：Unicode 上标一律改走手工基线 ^ 道（82-SA 撤销 D27「纯数字上标混排不拆段」
+#      豁免——容器字体池缺 64/69 白名单字形（.local/82D1_report.md C1），原样送字体层就是
+#      .notdef 黑块；本机 Windows 系统回退曾掩盖此事。²³ 也统一 ^ 道，观感由 SUP_LIFT 标定）。
+#   B. 下标段扩展到字母，与上标字母一起映射回 ASCII 再进 _/^ 道（82-SA 撤销「前邻判据」：
+#      「第₂周期」「（₂）」这类前邻中文/全角括号的下标同样必须转换）。
+#   B+. 终兜底 _script_fallback（82-SA P1）：rich_tokens 尾部再扫一遍，任何仍含白名单
+#      Unicode 上下标字符的 token（含 _/^ 标记道 payload）一律强制映射进 _/^+ASCII 道——
+#      白名单字符在生产渲染中零残留，不再依赖任何字形覆盖，也不依赖主路径判据不出漏网。
 #   C. ASCII 化学式（数字紧跟元素符号）按元素白名单 + 「≥2 种元素且带计量数字」双门槛识别，
 #      转成 下标数字/上标电荷；"R1""I2""Cu2+""2s" 这类单元素或物理标号一律不转（不误伤）。
 #   D. 化学语境（紧跟转换出的下标/上标）的纯元素符号段走正体——元素符号 IUPAC 正体，
 #      实拍旧帧里 H₂SO₄ 被斜体判定排成变量体也是本案"乱码"观感的一半。
-# 取舍：MathTex/LaTeX 只服务 _v_formula 卡片（缺 TeX 要退回、字体与全片 SimSun 脱钩、
-# 帧预算翻倍），标签级文本一律走既有「分段 Text + 基线偏移」机器，与 v₀/t_{停}² 同一条道。
+# 取舍：MathTex/LaTeX 现在服务 _v_formula 卡片与 _v_derivation 推导行（82-F1，缺 TeX 都要退回、
+# 字体与全片 SimSun 脱钩、帧预算翻倍）；标签级文本仍走既有「分段 Text + 基线偏移」机器，
+# 与 v₀/t_{停}² 同一条道。
 _ELEMENTS = frozenset("""
 H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge
 As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm
@@ -280,7 +341,8 @@ _SUP_MAP = {"⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5",
             "ᵘ": "u", "ᵛ": "v", "ʷ": "w", "ˣ": "x", "ʸ": "y", "ᶻ": "z"}
 _SUB_RUN = re.compile("[" + "".join(_SUB_MAP) + "]+")
 _SUP_RUN = re.compile("[" + "".join(_SUP_MAP) + "]+")
-_SUP_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+# 82-SA 终兜底用：下标∪上标白名单全集（_script_fallback 的扫描尺子）。
+_ALL_SCRIPT_RUN = re.compile("[" + "".join(set(_SUB_MAP) | set(_SUP_MAP)) + "]+")
 _CHEM_RUN = re.compile(r"[0-9A-Za-z+\-]+")
 
 
@@ -377,34 +439,74 @@ def rich_tokens(text):
     kind: "" 普通 / "_" 下标 / "^" 上标；upright=True 表示该普通段处于化学式语境，排正体。
     规则优先级：ASCII _/^ 标记 > Unicode 上下标 > ASCII 化学式；三者都不沾的文本
     原样返回单个 ("", 原文, False)——rich() 据此走单 Text，行为与旧版逐字相同。
+    82-SA 终兜底（_script_fallback）：无论主路径判据怎么走，**返回的 token 流里保证不含
+    任何 Unicode 上下标白名单字符**（.local/82D1_report.md C1：容器字体池缺其中 64 个字形，
+    原样进字体层=.notdef 黑块）。上下标语义不变——仍按 _/^ 道排成基线偏移的小字。
     """
     toks = []
     for p in [q for q in _MARKUP.split(str(text or "")) if q != ""]:
         if p[:1] in ("_", "^") and len(p) > 1:
             toks.append((p[0], p[2:-1] if p[1:2] == "{" else p[1:], False))
             continue
-        toks.extend(_plain_tokens(p, toks[-1][1][-1:] if toks and not toks[-1][0] else ""))
-    return toks
+        toks.extend(_plain_tokens(p))
+    return _script_fallback(toks)
 
 
-def _plain_tokens(p, prev_char):
-    """把一个非 _/^ 标记的普通段切成 token 流（见 rich_tokens 的规则优先级）。"""
+def _script_fallback(toks):
+    """82-SA P1 终兜底：token 流里残留的 Unicode 上下标白名单字符一律清零。
+
+    主路径（_plain_tokens）已无条件转换，这里是最后一道闸：哪怕将来又开「故意不转换」
+    的口子、或 _/^ 标记道 payload 里带出白名单字符（如 "_{₂}"），也强制映射进 _/^+ASCII
+    自绘道——渲染语义保持（下标仍下标小字、上标仍上标小字），生产渲染零字形依赖。
+    """
+    out = []
+    for kind, s, up in toks:
+        if not any(c in _SUB_MAP or c in _SUP_MAP for c in s):
+            out.append((kind, s, up))
+            continue
+        if kind in ("_", "^"):
+            # 标记道 payload：同道换 ASCII（₂→"2" 排下标、²→"2" 排上标，非白名单字符原样留）
+            out.append((kind, "".join(_SUB_MAP.get(c) or _SUP_MAP.get(c) or c for c in s), up))
+            continue
+        i = 0
+        for m in _ALL_SCRIPT_RUN.finditer(s):
+            if m.start() > i:
+                out.append(("", s[i:m.start()], up))
+            run = m.group()
+            k = 0
+            while k < len(run):                # 一个连续串里下标/上标类可能交替（"₂²"）
+                is_sub = run[k] in _SUB_MAP
+                j, buf = k, []
+                while j < len(run) and (run[j] in _SUB_MAP) == is_sub:
+                    buf.append(_SUB_MAP.get(run[j]) or _SUP_MAP.get(run[j]))
+                    j += 1
+                out.append(("_" if is_sub else "^", "".join(buf), False))
+                k = j
+            i = m.end()
+        if i < len(s):
+            out.append(("", s[i:], up))
+    return out
+
+
+def _plain_tokens(p):
+    """把一个非 _/^ 标记的普通段切成 token 流（见 rich_tokens 的规则优先级）。
+
+    82-SA：撤销「下标前邻判据」与「D27 纯数字上标豁免」两条「故意不转换」通道，
+    Unicode 上下标白名单字符在本函数出口即无原样残留；_script_fallback 只是终扫保险。
+    """
     ev = []                                   # (start, end, kind, payload)
     for m in _CHEM_RUN.finditer(p):
         parsed = parse_formula(m.group())
         if parsed is not None:
             ev.append((m.start(), m.end(), "chem", parsed))
     for m in _SUB_RUN.finditer(p):
-        prev = p[m.start() - 1] if m.start() > 0 else prev_char
-        if re.match(r"[A-Za-z0-9)\]]", prev or ""):
-            ev.append((m.start(), m.end(), "sub", m.group()))
-    split_sup = any(e[2] in ("chem", "sub") for e in ev)
+        # 82-SA：撤销「前邻 [A-Za-z0-9)\]] 判据」——下标白名单字符无条件转 _ 道
+        # （「第₂周期」「（₂）」这类前邻中文/全角括号的，容器字体池同样缺字形，原样送=黑块）。
+        ev.append((m.start(), m.end(), "sub", m.group()))
     for m in _SUP_RUN.finditer(p):
-        g = m.group()
-        # 旧口径（test_typo 钉死）：纯数字上标混在长段里、且该段不拆时保持原排版；
-        # 独立成段（D27）/ 含 ⁺⁻ⁿ 字母（满号回落基线=乱码主案）/ 段已被拆 → 走上标道。
-        if g == p or any(c not in _SUP_DIGITS for c in g) or split_sup:
-            ev.append((m.start(), m.end(), "sup", g))
+        # 82-SA：撤销 D27「纯数字上标混排不拆段」豁免——上标白名单字符无条件转 ^ 道，
+        # 屏上与旧 ^ 道完全一致（ASCII 小字号+手工基线抬升，不依赖任何 Unicode 字形）。
+        ev.append((m.start(), m.end(), "sup", m.group()))
     if not ev:
         return [("", p, False)]
     ev.sort()
@@ -461,7 +563,9 @@ def _plain_tokens(p, prev_char):
 def _has_scripts(s):
     """文本是否会被 rich_tokens 拆出上下标段（_v_title 渐变快路径的绕行判据，81-S5）。
 
-    与分词器同一把尺子：纯数字上标混排（"a = v²/t²"）不拆段，标题保留渐变艺术字。
+    82-SA 终兜底后：只要文本含任一 Unicode 上下标白名单字符（或 _/^ 标记），rich_tokens 一律
+    拆段，_has_scripts 即 True，标题退回 rich() 分段拼接（无连续渐变）——这是「白名单字符零
+    残留」的必然结果，观感由 ^/_ 道自绘基线偏移小字承载。纯无上下标的标题仍走渐变艺术字。
     """
     toks = rich_tokens(s)
     return len(toks) != 1 or toks[0][0] != ""
@@ -677,6 +781,289 @@ def rich(text, font_size, color, **kw):
     g = VGroup(*pieces)
     g.shift(LEFT * (x / 2))  # 与单 Text 一致：整体以原点为中心
     return g
+
+
+# ---- 82-SD1b 推导过程动画的四个薄壳动画 ----
+# 推导的每步都是「构建期透明、到 cue 才出现/变形」的 token；Manim 原语在 alpha=0 时
+# 要么写不出墨（Write/FadeIn 按当前 alpha 复制），要么会把嵌套 mobject 从父组摘走
+# （FadeOut 的 Scene.remove 会拆散顶层 body）。下面四个类只补 begin/finish 两个开关
+# 或改走 Transform，不改变场景树——镜尾 remove(body) 仍然一次清干净。
+class _LateWrite(Write):
+    """到 cue 才书写：begin 先把整行点亮，再交给 Write 描轮廓。
+
+    Write/DrawBorderThenFill 的轮廓副本继承当前 alpha；构建期透明的行直接写会全程不可见。
+    """
+
+    def begin(self):
+        self.mobject.set_opacity(1)
+        super().begin()
+
+
+class _LateFadeIn(FadeIn):
+    """到 cue 才淡入：begin 先点亮，FadeIn 的起始副本才是「从 0 到当前色」而不是「0 到 0」。"""
+
+    def begin(self):
+        self.mobject.set_opacity(1)
+        super().begin()
+
+
+class _TokenMorph(Transform):
+    """逐 token 原位形变：旧 token 直接变成新 token 的形/色（不换引用）。
+
+    不用 ReplacementTransform：Scene.replace 会把新 token 从新行组摘走、塞进旧行组，
+    同一 mobject 出现两个父引用；下一步再 replace 时 BFS 只替换第一处，画面上新旧同屏。
+    Transform 不改场景树，行组结构稳定，镜尾整块清理也干净。
+    """
+
+    def create_target(self):
+        target = self.target_mobject.copy()
+        target.set_opacity(1)      # 新行 token 构建期透明，形变目标必须是「落定可见」的
+        return target
+
+
+class _ValueFly(TransformFromCopy):
+    """value_flyin 的透明槽薄壳：目标字母先隐身，值从来源飞入、落定后才点亮。
+
+    动画本体仍是 TransformFromCopy（来源→槽位，来源留在原地=复印件语义），只补
+    begin/finish 两个开关，满足「先腾出槽位、再点亮字母」的推导口径。
+    """
+
+    def begin(self):
+        self.mobject.set_opacity(0)
+        super().begin()
+
+    def finish(self):
+        super().finish()
+        self.mobject.set_opacity(1)
+
+
+class _Dissolve(Transform):
+    """嵌套 token 的退场：形变到「同点缩小 + 全透明」的幽灵，不用 FadeOut。
+
+    FadeOut 是 remover，clean_up 的 Scene.remove 会把嵌套 token 从父组摘掉，Scene 的
+    restructure 随之把顶层 body 拆散——镜尾 remove(body) 就找不到整块，残影跨镜。
+    Transform 只改形态不动场景树；幽灵目标在 begin 时按**当帧**几何生成，_fit 后的
+    缩放/位移也跟得上。
+    """
+
+    def create_target(self):
+        ghost = self.mobject.copy()
+        ghost.set_opacity(0)
+        ghost.scale(0.05, about_point=self.mobject.get_center())
+        return ghost
+
+
+def _live_update(build):
+    """带初值的 always_redraw：装配期先有一份真实几何（_fit 才量得到尺寸），之后每帧重建。
+
+    manim 的 always_redraw 初始是空 Mobject，进 stack 时宽高为 0，会把版面预算算错；
+    另外它的重建坐标是装配坐标系，_fit 一缩放就跳回原尺寸。这里的 build 由调用方读
+    **静态导轨/标签的当前几何**换算坐标与字号，所以 _fit 的缩放/位移每帧都跟得上。
+    """
+    mob = build()
+
+    def _sync(m):
+        fresh = build()
+        m.become(fresh)
+        # Text.become 只搬字形点、不改 .text 串：动态读数把真值挂 _live_state 供测试/排障读取。
+        if hasattr(fresh, "_live_state"):
+            m._live_state = fresh._live_state
+
+    mob.add_updater(_sync)
+    return mob
+
+
+# ---- 82-SD2a1 场图示过程动画小工具 ----
+# 共同纪律：beats 在 builder 构造期生成（早于 _assemble 的 _fit），所以这里一律不缓存
+# 「装配期屏幕坐标」——缩放/位移每帧从**已变换的参考图元**（导线截面、磁铁本体、转轴圆点）
+# 现算；tracker 停住后 updater 直接返回，退场淡出/落定强调不会被抢回不透明度。
+
+
+def _clamp01(x) -> float:
+    x = float(x)
+    return 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
+
+
+def _wave_reveal(mob, u_of, q: float, *, ramp: float = 0.32, scale_from: float = 0.55,
+                 stroke_only: bool = False):
+    """成波显形：tracker 0→1 时按波前位置 q∈[0,1]（到源区距离归一化）逐帧算不透明度+缩放。
+
+    q 由布局模型坐标算出（_fit 前，与屏幕尺度无关）；缩放锚点每帧取 mobject **当前**中心
+    （已被 _fit 变换），不缓存装配期绝对坐标。u 不变即不写，避免与退场 FadeOut 抢状态。
+    ``stroke_only``：同心圆这类「只有描边、无填充」的图元必须只改 stroke——set_opacity 会把
+    fill 也点亮，圆环就变成实心盘（82-SD2a1 冒烟首帧实测）。
+    """
+    st: dict = {"a": -1.0, "k": 1.0}
+
+    def _upd(m):
+        a = _clamp01((_clamp01(u_of()) * (1.0 + ramp) - q) / ramp)
+        if abs(a - st["a"]) < 1e-9:
+            return
+        st["a"] = a
+        k = scale_from + (1.0 - scale_from) * a
+        if abs(k - st["k"]) > 1e-9:
+            m.scale(k / st["k"], about_point=m.get_center())
+            st["k"] = k
+        if stroke_only:
+            m.set_stroke(opacity=a)
+        else:
+            m.set_opacity(a)
+
+    if stroke_only:
+        mob.set_stroke(opacity=0.0)
+    else:
+        mob.set_opacity(0.0)
+    mob.add_updater(_upd)
+    return mob
+
+
+def _opacity_gate(mob, u_of, start: float, end: float, *, base: float = 1.0,
+                  stroke_only: bool = False):
+    """区间显形：tracker 走到 [start,end] 时透明度 0→base（线/箭头/图注共用）。"""
+    st: dict = {"a": -1.0}
+
+    def _upd(m):
+        a = _clamp01((_clamp01(u_of()) - start) / max(end - start, 1e-9))
+        if abs(a - st["a"]) < 1e-9:
+            return
+        st["a"] = a
+        if stroke_only:
+            m.set_stroke(opacity=base * a)
+        else:
+            m.set_opacity(base * a)
+
+    if stroke_only:
+        mob.set_stroke(opacity=0.0)
+    else:
+        mob.set_opacity(0.0)
+    mob.add_updater(_upd)
+    return mob
+
+
+def _partial_polyline(pts, frac: float):
+    """折线按累计弧长取前 frac 段（frac=1 返回全点）——「描线」不复制对象。"""
+    pts = np.asarray(pts, dtype=float)
+    frac = _clamp01(frac)
+    if frac >= 1.0 or len(pts) < 2:
+        return pts
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    total = float(seg.sum())
+    if total <= 1e-12:
+        return pts[:1]
+    target = frac * total
+    out = [pts[0]]
+    acc = 0.0
+    for k, seg_len in enumerate(seg):
+        if acc + seg_len >= target:
+            t = (target - acc) / seg_len if seg_len > 1e-12 else 0.0
+            out.append(pts[k] + (pts[k + 1] - pts[k]) * t)
+            return np.array(out)
+        out.append(pts[k + 1])
+        acc += seg_len
+    return pts
+
+
+def _draw_on(mob, u_of, start: float, end: float, model_pts, ref_of, color, stroke_width: float = 2.5):
+    """按 tracker 进度把折线「描出来」：前缀点列每帧在参考图元当前坐标系里重算。
+
+    ``model_pts`` 是布局模型坐标；``ref_of()`` 返回 (cx, cy, scale)，由静态参考件（磁铁本体）
+    现场给出——_fit 缩放/位移后描线仍贴着参考件，且没有 ShowPassingFlash(m.copy()) 的装配期快照。
+    """
+    st: dict = {"f": -1.0}
+
+    def _upd(m):
+        f = _clamp01((_clamp01(u_of()) - start) / max(end - start, 1e-9))
+        if abs(f - st["f"]) < 1e-9:
+            return
+        st["f"] = f
+        if f <= 1e-9:
+            m.set_stroke(opacity=0.0)
+            return
+        cx, cy, s = ref_of()
+        pp = _partial_polyline(model_pts, f)
+        fresh = VMobject()
+        fresh.set_points_as_corners([[cx + s * float(x), cy + s * float(y), 0.0] for x, y in pp])
+        fresh.set_stroke(color, stroke_width, opacity=1.0)
+        m.become(fresh)
+
+    mob.set_stroke(opacity=0.0)
+    mob.add_updater(_upd)
+    return mob
+
+
+def _rebuild_on_change(mob, key_of, build):
+    """key 变了才重建（become）：tracker 停住后不再每帧重写，退场/强调动画可正常接管。"""
+    st: dict = {"key": None}
+
+    def _upd(m):
+        k = key_of()
+        if st["key"] is not None and k == st["key"]:
+            return
+        st["key"] = k
+        m.become(build())
+
+    mob.add_updater(_upd)
+    return mob
+
+
+# ---- 82-SD2a2 电场/螺线管过程动画小工具 ----
+# 与 SD2a1 同一纪律：beats 在 builder 构造期生成，几何全部来自 field.py 的布局模型；
+# 这里只给「成波/逐条描出/逐匝 Create」提供统一的归一化时间窗口，不另起动画框架。
+
+
+def _seq_slot(i: int, n: int, *, span: float = 0.92) -> tuple:
+    """第 i/n 个元素的归一化 [起,止] 窗口：按顺序铺开，末元素在 span 处收齐。"""
+    n = max(int(n), 1)
+    a = float(span) * (i / n)
+    b = float(span) * ((i + 1) / n)
+    return a, min(max(b, a + 1e-6), 1.0)
+
+
+def _lag_slot(i: int, n: int, lag: float, *, cover: float = 0.82) -> tuple:
+    """LaggedStart(lag_ratio=lag) 里第 i 个元素的 [起,止] 窗口。
+
+    gate 透明度与并行的 Create 按同一把尺对齐：d=1/(1+lag(n−1)) 是单个子动画占总时长的
+    比例，第 i 个在 i·lag·d 起跑——否则「线已画完、门还没开」会看到一截空白。
+    """
+    n = max(int(n), 1)
+    den = 1.0 + float(lag) * (n - 1)
+    d = 1.0 / den
+    a = i * float(lag) * d
+    return a, min(1.0, a + d * float(cover))
+
+
+def _head_on_path(model_pts, u_of, start: float, end: float, ref_of, color,
+                  radius: float = 0.075):
+    """沿模型折线移动的高对比亮斑（描线笔头 / 方向高亮带）；f 落定即隐身。"""
+    head = Dot([0.0, 0.0, 0.0], radius=radius, color=color)
+
+    def _upd(m):
+        f = _clamp01((_clamp01(u_of()) - start) / max(end - start, 1e-9))
+        if f <= 1e-9 or f >= 1.0 - 1e-9:
+            m.set_opacity(0.0)
+            return
+        pp = _partial_polyline(model_pts, f)
+        x, y = pp[-1]
+        cx, cy, s = ref_of()
+        m.move_to([cx + s * float(x), cy + s * float(y), 0.0])
+        m.set_opacity(0.95)
+
+    head.set_opacity(0.0)
+    head.add_updater(_upd)
+    return head
+
+
+def _draw_with_head(mob, u_of, start: float, end: float, model_pts, ref_of, color,
+                    stroke_width: float = 2.5, *, head_color=None, head_radius: float = 0.075):
+    """「描线 + 笔头」：线按前缀点列生长，一个高对比圆点跟着生长端点走。
+
+    帧差验收要的是**逐帧可见的位移**：细线描出本身每帧只改十几个像素，15fps 下会被
+    当成静止帧（82-SD2a2 首版实测）；笔头把「正在画到哪里」变成几十像素的移动亮斑，
+    既压住静止帧占比，也让观众看得见描线的前沿。f 落定后笔头立即隐身，不留残影。
+    """
+    _draw_on(mob, u_of, start, end, model_pts, ref_of, color, stroke_width)
+    return _head_on_path(model_pts, u_of, start, end, ref_of,
+                         head_color or color, head_radius)
 
 
 def _grid_step(lo: float, hi: float, want: int = 6) -> float:
@@ -1067,8 +1454,19 @@ def _text_units(block):
             a = parent.get(id(a))
         return bool(getattr(x, "_placed", False))
 
+    def under_locked(x):
+        """82-SB：锚点锁死的结构式文本不参与挪字复核。mechanism 的原子/基团符号与箭标签
+        由锚点表钉死（_v_mechanism 打 _locked_anchor），挪字=错位根源（82D3：A/B 实测原子被
+        搬走 20~122px 而键线/弯箭头原地不动）；空间冲突改由结构式布局阶段整体避让（_ma.spread_atoms）。"""
+        a = parent.get(id(x))
+        while a is not None and a is not block:
+            if getattr(a, "_locked_anchor", False):
+                return True
+            a = parent.get(id(a))
+        return bool(getattr(x, "_locked_anchor", False))
+
     cands = [x for x in fam if _is_text_mob(x) and outermost(x) and _has_pts_deep(x)
-             and _visible_text(x) and not under_placed(x)]
+             and _visible_text(x) and not under_placed(x) and not under_locked(x)]
     byparent: dict = {}
     for x in cands:
         byparent.setdefault(id(parent.get(id(x))), []).append(x)
@@ -1331,6 +1729,23 @@ def reveal_cue_index(key, cues) -> int | None:
         if key and key in str(s["text"]):
             return i
     return None
+
+
+def fit_cues(cues, seconds: float) -> list:
+    """字幕时间轴超出镜头时长时按比例压回镜头窗口。
+
+    数据里出现「4s 镜配 9.3s 字幕」时，前面几条 cue 的 hold 会吃满整镜，末几条的揭示
+    在最后一帧之后才 add——电路图的 R/V 就是这样整镜不出现的。压回后相对顺序不变，
+    每块内容都能在本镜内出现；正常数据原样返回（只复制被压缩的项，不改 plan 原对象）。
+    """
+    if not cues:
+        return cues
+    last = max(float(c.get("end", 0) or 0) for c in cues)
+    if last <= seconds or last <= 0:
+        return cues
+    k = seconds / last
+    return [{**c, "start": float(c.get("start", 0) or 0) * k,
+             "end": float(c.get("end", 0) or 0) * k} for c in cues]
 
 
 def collect_reveals(body, cues):
@@ -1731,17 +2146,24 @@ def circuit_layout(elems: list) -> dict:
     wires = [((-hw, hh), (-hw, -hh)), ((-hw, -hh), (hw, -hh)), ((hw, -hh), (hw, hh))]
     pos = [None] * len(elems)
     terminals = [None] * len(elems)
-    top_gaps = []                # 顶边上相邻元件（含拐角）之间的空档 (起x, 止x)，给竖直支路挑位
+    top_gaps = []                # 顶边上相邻元件之间的空档 (起x, 止x)，给竖直支路挑位
+    end_lead = 0.35              # 首尾只留短引线：整格等分会把电源/末端元件外侧空出一大段
+    spans = [2 * _circuit_half(elems[i]) for i in main]
+    n_el = len(main)
+    gap = max(0.0, (W - 2 * end_lead - sum(spans)) / (n_el - 1)) if n_el > 1 else 0.0
     prev = -hw
-    for k, i in enumerate(main):
-        x = -hw + (k + 1) * W / (n + 1)
+    cursor = (-hw + end_lead if n_el > 1
+              else -hw + (W - spans[0]) / 2 if n_el == 1 else -hw)
+    for i in main:
         gw = _circuit_half(elems[i])
+        x = cursor + gw
         pos[i] = (x, hh)
         terminals[i] = ((x - gw, hh), (x + gw, hh))
         wires.append(((prev, hh), (x - gw, hh)))
         if (x - gw) - prev >= 0.5:
             top_gaps.append((prev, x - gw))
         prev = x + gw
+        cursor = prev + gap
     wires.append(((prev, hh), (hw, hh)))
     if hw - prev >= 0.5:
         top_gaps.append((prev, hw))
@@ -2266,8 +2688,14 @@ class Explainer(Scene):
         ).arrange(DOWN, buff=0.35)
 
     def _v_formula(self, p, th):
-        tex = _tex_formula(p.get("tex"), 54, th["key"]) if p.get("tex") else None
-        core = tex if tex is not None else rich(p.get("expr", ""), 54, th["key"])
+        # 82-F1：公式一律走 LaTeX。带 tex 的（行内已写命令）保留命令，其余把 expr 转 LaTeX；
+        # TeX 不可用/编译失败才退回 rich()。note 是正文说明文字，仍走 rich。
+        if p.get("tex"):
+            core = _tex_formula(_texform.to_latex(p["tex"], keep_commands=True), 54, th["key"])
+        else:
+            core = _tex_formula(_texform.to_latex(p.get("expr", "")), 54, th["key"])
+        if core is None:
+            core = rich(p.get("expr", ""), 54, th["key"])
         g = VGroup(core)
         if p.get("note"):
             g.add(rich(p["note"], 28, th["dim"]))
@@ -2276,13 +2704,23 @@ class Explainer(Scene):
         return VGroup(_halo_ring(core, th["key"]), g)
 
     def _v_derivation(self, p, th):
-        """逐步等式推导（SubTask #79-B）：同一字母全程同色，代入值飞入目标字母。
+        """逐步等式推导（82-SD1b A 级过程动画）：写第一式 → 每步逐 token 形变/代入 → 落定点名。
 
-        props:
-          steps:   [{"text": "F = BIL", "note": "安培力", "sub": {"I": "BLv/R"}}, ...]
-                   也接受纯字符串；最多 8 步。
+        每一拍都是一次 play（经 _motion_steps / play_motion 挂到口播 cue）：
+          · 第 1 步：Write 逐符号**书写**（不是淡入）；
+          · 第 i 步：difflib 对齐两行 token——未变且未移位的 token 原地不动，变了/移位了
+            的 token 走 _TokenMorph 原位形变；sub 代入值从「已知」条用 motion.value_flyin
+            的语义飞进目标字母（字母先隐身、落定点亮）；旧注记退场、新注记淡入；
+          · 末步：motion.emphasize 点名 result（命中 token）或结果行。
+
+        props（向后兼容）:
+          steps:   [{"text": "F = BIL", "note": "安培力", "sub": {"I": "BLv/R"},
+                     "transform": 0}, ...]；也接受纯字符串；最多 8 步。
           symbols: {"F": "安培力", ...} 字母 → 物理含义。图例只列前 6 个。
-          label / at（揭示键，与 steps 等长；缺省按行序均匀铺）。
+          at:      与 steps 等长的 cue 键（字幕片段或 0~1 行序比例；缺省按行序均匀铺）。
+          transform: 可选。整数 k = 本步声明由第 k 步形变而来（0 基；动画仍以屏上
+                    当前行为起点）；"replace"/"换行" = 整行逐位换位（不做未变识别）。
+          result:  可选。末步结果子串；命中 token 就把它们点名，命中不了点名末行。
         """
         raw = p.get("steps")
         raw_steps = [raw] if isinstance(raw, (str, dict)) else list(raw or [])[:8]
@@ -2297,7 +2735,10 @@ class Explainer(Scene):
         color_of = {s: palette[i % len(palette)] for i, s in enumerate(order)}
 
         # 字母级切分：BIL 拆成 B/I/L（各自色标）；CJK 词与数字保持整段。
-        tok_re = re.compile(r"[A-Za-zΑ-ωΔ](?:_\{?[^}\s]+\}?|\^\{?[^}\s]+\}?)?"
+        # 上/下标只吃「一组」payload（^{...} / _2 / ^n），不再让 ^ 把后面整串吞进一个 token
+        # ——否则 B^2L^2v/R 会变成单 token，token 链就退化成整式替换。
+        _script = r"(?:\{[^}]*\}|[0-9]+(?:\.[0-9]+)?|[A-Za-z]+)"
+        tok_re = re.compile(rf"[A-Za-zΑ-ωΔ](?:[_\^]{_script})?(?:[_\^]{_script})?"
                             r"|\d+(?:\.\d+)?|[\u4e00-\u9fff]+|[^\sA-Za-z0-9]")
         ops = set("=+-−×÷·/()[]{}<>≤≥≠,，。")
 
@@ -2311,59 +2752,273 @@ class Explainer(Scene):
             return th["dim"] if b in ops else th["fg"]
 
         def line_mob(text: str, fs: float = 34):
+            # 82-F1：整行一个 MathTex 逐 token 排版（TeX 自己管间距），token 切分仍用 tok_re；
+            # 子对象数必须与 token 一一对应才能逐 token 上色/形变，否则整行退回 rich 并留痕。
             toks = [t for t in tok_re.findall(str(text)) if t.strip()]
-            mobs = [rich(t, fs, color_for(t)) for t in toks]
-            return VGroup(*mobs).arrange(RIGHT, buff=0.07), toks, mobs
+            math = _tex_math(*[_texform.to_latex(t) for t in toks], font_size=fs)
+            mobs = list(math.submobjects) if math is not None else []
+            if math is not None and len(mobs) != len(toks):
+                print(f"[tex] derivation fallback to rich(): submobjects {len(mobs)} "
+                      f"!= tokens {len(toks)}: {text}", file=sys.stderr)
+                math = None
+            if math is None:
+                mobs = [rich(t, fs, color_for(t)) for t in toks]
+                return VGroup(*mobs).arrange(RIGHT, buff=0.07), toks, mobs
+            for m, t in zip(mobs, toks):
+                m.set_color(color_for(t))
+            return math, toks, mobs
 
-        step_groups = []
-        prev = None
+        steps = []
         for st in raw_steps:
             d = st if isinstance(st, dict) else {"text": str(st)}
-            text = str(d.get("text", "")).strip()
-            if not text:
+            if str(d.get("text", "")).strip():
+                steps.append(d)
+        if not steps:
+            steps = [{"text": str(p.get("label") or "推导")}]
+
+        # 所有步先建成同尺寸的「舞台行」：同一位置、'=' 列对齐，后续步构建期全透明。
+        built = [line_mob(str(d["text"])) for d in steps]
+        max_w = max(g[0].width for g in built)
+        if max_w > SAFE_WIDTH - 1.2:          # 全行等比缩，避免逐步字号跳变
+            k = (SAFE_WIDTH - 1.2) / max_w
+            for line, _t, _m in built:
+                line.scale(k)
+        for line, toks, mobs in built:
+            eq = next((m for t, m in zip(toks, mobs) if base_of(t) == "="), None)
+            line.shift(LEFT * ((eq if eq is not None else line).get_center()[0]))
+        all_lines = VGroup(*[g[0] for g in built])
+        cx = (all_lines.get_left()[0] + all_lines.get_right()[0]) / 2
+        for line, _t, _m in built:
+            line.shift(LEFT * cx)             # 舞台整体居中，'=' 列仍共线
+        stage = VGroup(*[g[0] for g in built])
+        for _line, _toks, mobs in built:
+            for m in mobs:
+                m.set_opacity(0)              # 首步等 _LateWrite，其余步等形变/飞入
+
+        # 注记叠在同一槽位（不是逐步向下堆行）：旧注记退场，新注记淡入。
+        notes = []
+        for d in steps:
+            txt = str(d.get("note") or "").strip()
+            notes.append(rich(txt, 21, th["dim"]).move_to([0, 0, 0]) if txt else None)
+        note_slot = VGroup(*[n for n in notes if n is not None]) if any(notes) else None
+        if note_slot is not None:
+            for n in note_slot:
+                n.set_opacity(0)
+            if note_slot.width > SAFE_WIDTH - 1.0:
+                note_slot.scale_to_fit_width(SAFE_WIDTH - 1.0)
+
+        # 「已知」条：sub 的来源（题面条件先亮出来，讲到哪一步就从哪一条飞进公式）。
+        sub_entries = []
+        rail_chips = []
+        for i, d in enumerate(steps):
+            if i == 0:
+                continue                      # 首步没有上一行，不做代入
+            sub = d.get("sub") if isinstance(d.get("sub"), dict) else {}
+            for sym, val in sub.items():
+                sym, val = str(sym).strip(), str(val).strip()
+                if not sym or not val:
+                    continue
+                ckey = sym if sym in color_of else base_of(sym)
+                color = color_of.get(ckey, th["accent"])
+                src = _tex_math(_texform.to_latex(val), font_size=19, color=color)
+                if src is None:
+                    src = rich(val, 19, color)
+                chip = VGroup(rich(f"已知 {sym} =", 18, th["dim"]), src).arrange(
+                    RIGHT, buff=0.1)
+                rail_chips.append(chip)
+                sub_entries.append((i, sym, val, src))
+        rail = None
+        if rail_chips:
+            rail = VGroup(*rail_chips).arrange(RIGHT, buff=0.45)
+            if rail.width > SAFE_WIDTH - 1.0:
+                rail.scale_to_fit_width(SAFE_WIDTH - 1.0)
+
+        legend = []
+        for sym in order[:6]:
+            if not str(symbols.get(sym) or "").strip():
                 continue
-            line, toks, mobs = line_mob(text)
-            if line.width > SAFE_WIDTH - 1.2:
-                line.scale_to_fit_width(SAFE_WIDTH - 1.2)
-            parts = [line]
-            if d.get("note"):
-                parts.append(rich(str(d["note"]), 21, th["dim"]))
-            g = VGroup(*parts).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-            if prev is not None and isinstance(d.get("sub"), dict):
-                fly = []
-                for sym, val in d["sub"].items():
-                    sym, val = str(sym).strip(), str(val).strip()
-                    if not sym or not val:
-                        continue
-                    target = next((m for t, m in zip(toks, mobs) if base_of(t) == sym), None)
-                    if target is None:
-                        continue      # 目标字母不在本步：不飞，避免指错位置
-                    target.set_opacity(0)
-                    fly.append((val, target, color_of.get(sym, th["accent"])))
-                if fly:
-                    g._derivation_fly = fly
-            prev = g
-            step_groups.append(g)
-
-        if not step_groups:
-            step_groups = [line_mob(p.get("label") or "推导")[0]]
-        body = VGroup(*step_groups).arrange(DOWN, aligned_edge=LEFT, buff=0.34)
-        for g, key in zip(step_groups, reveal_keys(p.get("at"), len(step_groups))):
-            tag_reveal(g, key)
-
-        out = []
-        if p.get("label"):
-            out.append(T(str(p["label"]), font_size=24, color=th["accent"]))
-        out.append(body)
-        legend = [VGroup(rich(sym, 21, color_of[sym]), rich(str(symbols[sym]), 19, th["dim"]))
-                  .arrange(RIGHT, buff=0.12)
-                  for sym in order[:6] if str(symbols.get(sym) or "").strip()]
+            # 符号 token 走 LaTeX，中文含义仍是正文 rich（82-F1）。
+            head = _tex_math(_texform.to_latex(sym), font_size=21, color=color_of[sym])
+            if head is None:
+                head = rich(sym, 21, color_of[sym])
+            legend.append(VGroup(head, rich(str(symbols[sym]), 19, th["dim"]))
+                          .arrange(RIGHT, buff=0.12))
+        leg = None
         if legend:
             leg = VGroup(*legend).arrange(RIGHT, buff=0.55)
             if leg.width > SAFE_WIDTH - 1.0:
                 leg.scale_to_fit_width(SAFE_WIDTH - 1.0)
+
+        out = []
+        if p.get("label"):
+            lab = T(str(p["label"]), font_size=24, color=th["accent"])
+            lab._placed = True
+            out.append(lab)
+        if rail is not None:
+            rail._placed = True
+            out.append(rail)
+        stage._placed = True                  # 几何已定稿：不参与装配层「挪字」复核
+        out.append(stage)
+        if note_slot is not None:
+            note_slot._placed = True
+            out.append(note_slot)
+        if leg is not None:
+            leg._placed = True
             out.append(leg)
-        return VGroup(*out).arrange(DOWN, aligned_edge=LEFT, buff=0.28)
+        block = VGroup(*out).arrange(DOWN, aligned_edge=LEFT, buff=0.22)
+
+        # ---- beat 编排：一 step 一拍，cue 走 _cue_key（与 _reveal_at 同一把尺）----
+        keys = reveal_keys(p.get("at"), len(built))
+        beats = []
+
+        line0, toks0, mobs0 = built[0]
+        first = [_LateWrite(line0)]
+        if notes[0] is not None:
+            first.append(_LateFadeIn(notes[0]))
+        b0 = _mo.MotionBeat(first, run_time=1.2, cue=None,
+                            note=f"推导第1步：书写初始式（cue {keys[0]}）")
+        b0._cue_key = keys[0]
+        beats.append(b0)
+
+        live = list(zip(toks0, mobs0))        # 屏上当前行：[(文本, 可视 token)]
+        last_note = 0 if notes[0] is not None else None
+
+        for i in range(1, len(built)):
+            d = steps[i]
+            _new_line, new_texts, new_mobs = built[i]
+            old_texts = [t for t, _m in live]
+            old_mobs = [m for _t, m in live]
+
+            mode = d.get("transform")
+            if isinstance(mode, str) and mode.strip().lower() in ("replace", "换行", "整行"):
+                k = min(len(old_mobs), len(new_mobs))
+                pairs = list(zip(range(k), range(k)))
+                exits = list(range(k, len(old_mobs)))
+                enters = list(range(k, len(new_mobs)))
+            else:
+                pairs, exits, enters = [], [], []
+                sm = difflib.SequenceMatcher(None, old_texts, new_texts, autojunk=False)
+                for tag, i1, i2, j1, j2 in sm.get_opcodes():
+                    if tag == "equal":
+                        pairs.extend(zip(range(i1, i2), range(j1, j2)))
+                    elif tag == "replace":
+                        k = min(i2 - i1, j2 - j1)
+                        pairs.extend(zip(range(i1, i1 + k), range(j1, j1 + k)))
+                        exits.extend(range(i1 + k, i2))
+                        enters.extend(range(j1 + k, j2))
+                    elif tag == "delete":
+                        exits.extend(range(i1, i2))
+                    else:                       # insert
+                        enters.extend(range(j1, j2))
+
+            anims = []
+            skip_old, skip_new = set(), set()
+            sub_desc = []
+            for (si, sym, val, src) in sub_entries:
+                if si != i:
+                    continue
+                j = next((jj for jj in range(len(new_texts))
+                          if base_of(new_texts[jj]) == base_of(sym)), None)
+                if j is None:
+                    continue                    # 本步文本里没有该字母：不飞，避免指错位置
+                pair = next(((oi, ni) for oi, ni in pairs if ni == j), None)
+                if pair is not None:
+                    oi, _ni = pair
+                    skip_old.add(oi)
+                    anims.append(_Dissolve(old_mobs[oi], path_arc=0.1))
+                elif j in enters:
+                    pass                        # 新字母首次出现：由飞入负责点亮
+                else:
+                    continue
+                skip_new.add(j)
+                # 飞入语义走 motion.value_flyin；落点先透明、落定点亮由 _ValueFly 薄壳补。
+                fly = _mo.value_flyin([(src, new_mobs[j])], emphasis_on_landing=False,
+                                      run_time=0.9)[0]
+                anims.extend(_ValueFly(a.target_mobject, a.mobject, path_arc=-np.pi / 2)
+                             for a in fly.anims)
+                sub_desc.append(f"代入 {sym}={val}")
+
+            n_chain = 0
+            for oi, ni in pairs:
+                if oi in skip_old or ni in skip_new:
+                    continue
+                om, nm = old_mobs[oi], new_mobs[ni]
+                same = old_texts[oi] == new_texts[ni]
+                if same and float(np.linalg.norm(om.get_center() - nm.get_center())) < 1e-3:
+                    continue                    # 未变且未移位：原地不动
+                anims.append(_TokenMorph(om, nm, path_arc=0.0 if same else 0.15))
+                n_chain += 1
+
+            for oi in exits:
+                if oi in skip_old:
+                    continue
+                anims.append(_Dissolve(old_mobs[oi], path_arc=-0.1))
+            for nj in enters:
+                if nj in skip_new:
+                    continue
+                anims.append(_LateFadeIn(new_mobs[nj], shift=DOWN * 0.2))
+
+            same_note = (notes[i] is not None and last_note is not None
+                         and str(steps[i].get("note", "")) == str(steps[last_note].get("note", "")))
+            if notes[i] is not None and not same_note:
+                if last_note is not None:
+                    anims.append(_Dissolve(notes[last_note]))
+                anims.append(_LateFadeIn(notes[i], shift=DOWN * 0.12))
+                last_note = i
+
+            if not anims:
+                tgt = VGroup(*old_mobs) if len(old_mobs) > 1 else old_mobs[0]
+                anims = [Indicate(tgt, scale_factor=1.08, color=th["hi"])]
+
+            one = LaggedStart(*anims, lag_ratio=0.06) if len(anims) > 1 else anims[0]
+            desc = sub_desc or (["逐 token 形变"] if n_chain else ["原位点名"])
+            beat = _mo.MotionBeat([one], run_time=1.0, cue=None,
+                                  note=f"推导第{i + 1}步：{'/'.join(desc)}（cue {keys[i]}）")
+            beat._cue_key = keys[i]
+            beats.append(beat)
+
+            pair_map = {ni: oi for oi, ni in pairs if ni not in skip_new}
+            new_live = []
+            for ni in range(len(new_texts)):
+                if ni in skip_new:
+                    new_live.append((new_texts[ni], new_mobs[ni]))   # 飞入点亮的新 token
+                elif ni in pair_map:
+                    new_live.append((new_texts[ni], old_mobs[pair_map[ni]]))  # 形变后的旧 token
+                else:
+                    new_live.append((new_texts[ni], new_mobs[ni]))   # 新 token 已淡入
+            live = new_live
+
+        # 末步落定点名：result 命中的 token 一起 Indicate；命中不了点名整行。
+        result = str(p.get("result") or "").strip()
+
+        def _norm(s: str) -> str:
+            s = str(s).translate(str.maketrans({"²": "2", "³": "3", "¹": "1", "⁰": "0",
+                                                "⁻": "-"}))
+            return re.sub(r"[\s·×*^_{}]", "", s)
+
+        targets = []
+        if live and result:
+            texts = [_norm(t) for t, _m in live]
+            joined = "".join(texts)
+            pos = joined.find(_norm(result))
+            if pos >= 0:
+                end = pos + len(_norm(result))
+                acc = 0
+                for idx, nt in enumerate(texts):
+                    if nt and acc < end and acc + len(nt) > pos:
+                        targets.append(live[idx][1])
+                    acc += len(nt)
+        if not targets and live:
+            targets = [m for _t, m in live]
+        if targets:
+            grp = VGroup(*targets) if len(targets) > 1 else targets[0]
+            eb = _mo.emphasize(grp, kind="indicate", color=th["hi"])
+            eb._cue_key = keys[-1]
+            eb.note = f"末步落定点名：{result or '结果式'}（cue {keys[-1]}）"
+            beats.append(eb)
+
+        _mo.mount_motion(block, beats)
+        return block
 
     def _v_callout(self, p, th):
         """结论/提示卡：**无框排版**（去框化，SubTask #60-D 用户核心抱怨"看不懂的框框"）。
@@ -2417,7 +3072,14 @@ class Explainer(Scene):
                 mob._reveal_fx = "flash" if i == len(units) - 1 else "indicate"
             elif tone == "warn":
                 mob._reveal_fx = "wiggle"
-        return units[0] if len(units) == 1 else VGroup(*units)
+        # 82-SD1a：分段逐条揭示与语气点名（flash/wiggle）已有，按 M6 契约补的是
+        # **过往条压暗 0.55**——dim-only beat（emphasis=False），强调仍由 _reveal_fx
+        # 家族负责，两层不叠（同帧抢插值红线）。规格挂在返回组上：组不被摘出父链，
+        # 逐条 units 虽被 collect_reveals 摘走，beat 只引用对象本身、不依赖父链。
+        out = units[0] if len(units) == 1 else VGroup(*units)
+        if len(units) >= 2:
+            self._mount_text_reveal(out, units, keys, th, emphasis=False)
+        return out
 
     def _tag_progressive(self, group, n: int, at=None) -> None:
         """给逐行内容打"按口播进度揭示"的标记：讲到哪一步，那一行才出现。
@@ -2433,12 +3095,37 @@ class Explainer(Scene):
         for mob, key in zip(group, use_at):
             tag_reveal(mob, key)
 
+    def _mount_text_reveal(self, group, units, keys, th, *, emphasis: bool = True,
+                           sweep: bool = False) -> None:
+        """82-SD1a M6 文本要点接线：给逐条揭示的行挂 motion 规格（不产 beats）。
+
+        为什么挂"规格"而不是直接挂 beats：builder 产物还要过 `_fit` 等比缩放，
+        Indicate/TransformFromCopy 在构造时捕获几何——提前产 beat 会点在旧坐标上。
+        `_render_shot` 装配定稿后按本规格调 ``motion.reveal(animate_in=False)`` 产 beats：
+        出场仍走引擎 _reveal_at 同帧淡入（零帧成本、与字幕同轴——评审 D9 红线），
+        beat 只带「当前条 Indicate 强调 + 过往条压暗 0.55」两个内容运动事件——
+        服务的理解：观众的视线跟着口播走，讲到哪条哪条亮、讲过的退到背景（D4 M6 契约）。
+        ``sweep=True`` 追加镜尾回扫 beat（flow ≤1 圈，cue=None 由引擎兜底段播）：
+        全镜读完前把已讲条目按顺序再过一遍，复盘动线。
+        行→cue 绑定沿用 tag_reveal 同一把尺（_cue_key 由 _bind_motions 换算）。
+        """
+        if len(units) < 2:
+            return
+        group._reveal_motion = {
+            "units": list(units), "keys": list(keys),
+            "emphasis": emphasis, "color": th["hi"], "run_time": REVEAL_RUN_SEC,
+            "sweep": sweep,
+        }
+
     def _v_steps(self, p, th):
         lines = list(p.get("lines", [])[:6])
         body = VGroup(*[rich(l, 30, th["fg"]) for l in lines]).arrange(
             DOWN, aligned_edge=LEFT, buff=0.22
         )
         self._tag_progressive(body, len(lines), p.get("at"))
+        # 82-SD1a：逐行淡入（B 级）升级为 reveal 三拍——当前条 Indicate、过往条压暗 0.55、
+        # 镜尾回扫；行→cue 沿用 _tag_progressive 同一把尺（讲到哪步哪步亮）。
+        self._mount_text_reveal(body, body, reveal_keys(p.get("at"), len(lines)), th, sweep=True)
         # 标题由 IR 给：这一版式既装例题推导，也装拼图与逼近步骤，写死「推导 / 解题步骤」
         # 对「用面积拼一拼」这类镜就是假话（batch_v4 评审）。
         head = T(str(p.get("heading") or "推导 / 解题步骤"), font_size=26, color=th["accent"])
@@ -2450,6 +3137,8 @@ class Explainer(Scene):
             DOWN, aligned_edge=LEFT, buff=0.24
         )
         self._tag_progressive(body, len(pts), p.get("at"))
+        # 82-SD1a：小结每条结论逐个点亮、讲过的退到背景——回顾有动线不是成品清单（M6 契约）。
+        self._mount_text_reveal(body, body, reveal_keys(p.get("at"), len(pts)), th, sweep=True)
         head = T("小结", font_size=26, color=th["accent"])
         return VGroup(head, body).arrange(DOWN, aligned_edge=LEFT, buff=0.25)
 
@@ -3116,6 +3805,9 @@ class Explainer(Scene):
             keys = reveal_keys(p.get("at"), len(rowgroups) - first)
             for rg, key in zip(rowgroups[first:], keys):
                 tag_reveal(rg, key)
+            # 82-SD1a：表格是「一行一行读」的——行 i 揭示瞬间当前行 Indicate、上一行压暗，
+            # 揭示节奏即阅读节奏（M6 契约；表头行随第一批出场，不参与压暗链）。
+            self._mount_text_reveal(g, rowgroups[first:], keys, th)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
@@ -3329,16 +4021,30 @@ class Explainer(Scene):
         return self._f_field_region(p, th)
 
     def _f_field_region(self, p, th):
-        """垂直纸面方向的均匀场：一屏（或左右各半屏）的 ×（纸面向里）/ ·（纸面向外）。"""
+        """垂直纸面方向的均匀场：一屏（或左右各半屏）的 ×（纸面向里）/ ·（纸面向外）。
+
+        82-SD2a1：×/· 不再整块贴出——从 props.origin（缺省版面中心）按到源距离成波铺开，
+        每个 mark 的透明度+缩放由 tracker 逐帧现算；波前到齐后图注才出现（六律④→⑤）。
+        真实场是充满空间的，所以波「铺满全屏」本身就是场建立的语义。
+        """
         sym = str(p.get("symbols") or "cross")
+        org = p.get("origin")
+        try:
+            ox, oy = float(org[0]), float(org[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            ox = oy = 0.0
+        tr = ValueTracker(0.0)
 
         def panel(kind):
+            cells = [((c - 2) * 0.66, (1.5 - r) * 0.66) for r in range(4) for c in range(5)]
+            dist = [math.hypot(x - ox, y - oy) for x, y in cells]
+            dmax = max(dist) or 1.0
             marks = VGroup()
-            for r in range(4):
-                for c in range(5):
-                    x, y = (c - 2) * 0.66, (1.5 - r) * 0.66
-                    marks.add(T("×", font_size=36, color=th["warn"]).move_to([x, y, 0]) if kind == "cross"
-                              else Dot([x, y, 0], radius=0.09, color=th["accent"]))
+            for (x, y), d in zip(cells, dist):
+                mk = (T("×", font_size=36, color=th["warn"]).move_to([x, y, 0]) if kind == "cross"
+                      else Dot([x, y, 0], radius=0.09, color=th["accent"]))
+                _wave_reveal(mk, tr.get_value, d / dmax)
+                marks.add(mk)
             box = Rectangle(width=marks.width + 0.8, height=marks.height + 0.8,
                             color=th["dim"], stroke_width=2)
             return VGroup(box, marks)
@@ -3349,30 +4055,92 @@ class Explainer(Scene):
             g = panel("cross" if sym == "cross" else "dot")
         cap = {"cross": "垂直纸面向里 ×", "dot": "垂直纸面向外 ·",
                "both": "左：纸面向里 ×　　右：纸面向外 ·"}.get(sym, "")
+        cap_tr = ValueTracker(0.0)
         if cap:
-            g = VGroup(g, rich(cap, 24, th["fg"])).arrange(DOWN, buff=0.25)
+            cap_obj = rich(cap, 24, th["fg"])
+            _opacity_gate(cap_obj, cap_tr.get_value, 0.0, 1.0)
+            g = VGroup(g, cap_obj).arrange(DOWN, buff=0.25)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(tr, 1.0, cue=0,
+                            note="时钟演化：×/· 由源区按到源距离成波铺开——场是从中心一圈圈铺满全屏的")
+        b0.run_time = 1.8
+        beats.append(b0)
+        if cap:
+            b1 = _mo.advance_to(cap_tr, 1.0, cue=1,
+                                note="揭示图注：波前到齐后点名 —— × 表示场垂直纸面向里、· 表示向外")
+            b1.run_time = 0.7
+            beats.append(b1)
+        g._field_tracker = tr
+        _mo.mount_motion(g, beats)
         return g
 
     def _f_field_wire(self, p, th):
         """通电直导线截面：圆心标电流 ×（进纸面）/ ·（出纸面），同心圆是磁感线，
         半径按几何级数排布（B∝1/r，越靠导线越密，wire_field_layout），切向小箭头按
-        安培定则示环绕方向（出=逆时针、进=顺时针，规范§17）。"""
+        安培定则示环绕方向（出=逆时针、进=顺时针，规范§17）。
+
+        82-SD2a1：导线截面+电流符号先可见；磁感线由内向外逐圈显现、切向箭头随圈出现；
+        收尾用一条 tracker 调 stroke_opacity 的移动高亮带沿磁感线绕行一周——观众看到的是
+        「磁场从导线向外建立、再沿圈环绕」的过程，而不是一张贴好的同心圆图。
+        """
         lay = wire_field_layout(str(p.get("current") or "out"))
         into = not lay["ccw"]
         conductor = Circle(radius=0.32, color=th["key"], stroke_width=4).set_fill(th["key"], 0.25)
         cur = T("×" if into else "·", font_size=40,
                 color=th["warn"] if into else th["accent"]).move_to([0, 0, 0])
         g = VGroup(conductor, cur)
-        for r in lay["radii"]:
-            g.add(Circle(radius=r, color=th["dim"], stroke_width=2))
+        tr = ValueTracker(0.0)
+        radii = lay["radii"]
+        n_r = max(len(radii) - 1, 1)
+        for k, r in enumerate(radii):
+            ring = Circle(radius=r, color=th["dim"], stroke_width=2)
+            _wave_reveal(ring, tr.get_value, k / n_r, ramp=0.34, scale_from=0.82, stroke_only=True)
+            g.add(ring)
         for a in lay["arrows"]:
             pos = np.array([a["pos"][0], a["pos"][1], 0.0])
             t = np.array([a["tangent"][0], a["tangent"][1], 0.0])
-            g.add(Arrow(pos - t * 0.28, pos + t * 0.28, color=th["warn"], buff=0, stroke_width=5))
+            arr = Arrow(pos - t * 0.28, pos + t * 0.28, color=th["warn"], buff=0, stroke_width=5)
+            k = min(range(len(radii)), key=lambda j: abs(radii[j] - a["r"]))
+            q = min(1.0, (k + 0.35) / n_r)
+            _wave_reveal(arr, tr.get_value, q, ramp=0.30, scale_from=0.6)
+            g.add(arr)
+        # 方向游走高亮带：位置每帧由已变换的导线截面现算（_fit 缩放后仍贴着截面）。
+        flow = ValueTracker(0.0)
+        r_band = radii[len(radii) // 2]
+        turn = 1.0 if lay["ccw"] else -1.0
+
+        def band_build():
+            v = _clamp01(flow.get_value())
+            c = conductor.get_center()
+            s = max(float(conductor.width), 1e-9) / 0.64
+            a0 = -math.pi / 2.0 + turn * 2.0 * math.pi * v
+            env = 0.0 if (v <= 1e-9 or v >= 1.0 - 1e-9) else min(1.0, v * 6.0, (1.0 - v) * 6.0)
+            arc = Arc(radius=r_band * s, start_angle=a0, angle=0.95, num_components=24,
+                      arc_center=c)
+            arc.set_stroke(th["hi"], 6, opacity=0.95 * env)
+            return arc
+
+        band = _rebuild_on_change(VMobject(), flow.get_value, band_build)
+        g.add(band)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(tr, 1.0, cue=0,
+                            note="时钟演化：磁感线由内向外逐圈显现、切向箭头随圈出现——越靠近导线越密（B∝1/r）")
+        b0.run_time = 2.2
+        beats.append(b0)
+        b1 = _mo.advance_to(flow, 1.0, cue=1,
+                            note="时钟演化：高亮带沿磁感线绕行一周——出纸面电流(out)的磁场逆时针环绕（安培定则手性）")
+        b1.run_time = 1.8
+        beats.append(b1)
+        beats.append(_mo.MotionBeat(
+            [Indicate(cur, scale_factor=1.25, color=th["hi"])], run_time=FX_MAX_SEC, cue=2,
+            note="落定强调：点名电流符号 ×/·——它的进出决定磁感线环绕手性（安培定则）"))
+        g._field_tracker = tr
+        g._field_flow = flow
+        _mo.mount_motion(g, beats)
         return g
 
     MAGNET_HX, MAGNET_HH = 1.2, 0.45
@@ -3386,6 +4154,10 @@ class Explainer(Scene):
         外部线从 N 极面多点发出、绕回 S 极面同高处，内部沿 S→N 平行直线回到起点——每条闭合、
         互不相交、不穿磁铁本体；含轴向直线；每条外部线在顶点处有 N→S 箭头，内部轴线箭头 S→N。
         依据：规范§0 磁场行、§4、§19。
+
+        82-SD2a1：磁铁本体先可见；外部磁感线按种子顺序逐条「描出」（前缀点列每帧按磁铁本体
+        当前几何重算），顶点箭头随线到顶出现；内部 S→N 线随后出现，图注最后点名——外部 N→S、
+        内部 S→N 的闭合回路是被演出来的。
         """
         hx, hh = self.MAGNET_HX, self.MAGNET_HH
         line_c, inner_c = th["accent"], WHITE
@@ -3393,15 +4165,27 @@ class Explainer(Scene):
             Rectangle(width=hx, height=2 * hh, color=th["dim"]).set_fill(th["dim"], 0.85).move_to(LEFT * hx / 2),
             Rectangle(width=hx, height=2 * hh, color=th["warn"]).set_fill(th["warn"], 0.85).move_to(RIGHT * hx / 2),
         )
+        tr_out = ValueTracker(0.0)
+        tr_in = ValueTracker(0.0)
+        tr_cap = ValueTracker(0.0)
+
+        def ref():
+            """磁铁本体已被 _fit 变换：描线每帧从这里读中心与尺度（不存装配期坐标）。"""
+            c = bar.get_center()
+            return float(c[0]), float(c[1]), max(float(bar.width), 1e-9) / (2.0 * hx)
+
         inner = VGroup()
         outer = VGroup()
         arrows = VGroup()
+        models = []
         for s in self.MAGNET_SEEDS:
             pts = magnet_field_line(s * hh, hx, hh)
             apex_i = len(pts) // 2
             for sg in (1, -1):
+                model = [(float(x), float(sg * y)) for x, y in pts]
+                models.append(model)
                 ln = VMobject(color=line_c, stroke_width=2.5)
-                ln.set_points_as_corners([[x, sg * y, 0] for x, y in pts])
+                ln.set_points_as_corners([[x, y, 0] for x, y in model])
                 outer.add(ln)
                 ay = sg * pts[apex_i][1]
                 arrows.add(Arrow([0.22, ay, 0], [-0.22, ay, 0], color=th["warn"], buff=0, stroke_width=4,
@@ -3410,20 +4194,57 @@ class Explainer(Scene):
                                stroke_width=1.5, stroke_opacity=0.75))
         # 轴向直线：N 面沿轴向右出去、从左侧沿轴进入 S 面（无穷远闭合），各带一个 N→S 外部方向箭头。
         ax_len = 1.3
-        outer.add(Line([hx, 0, 0], [hx + ax_len, 0, 0], color=line_c, stroke_width=2.5),
-                  Line([-hx - ax_len, 0, 0], [-hx, 0, 0], color=line_c, stroke_width=2.5))
+        for q0, q1 in (([hx, 0, 0], [hx + ax_len, 0, 0]), ([-hx - ax_len, 0, 0], [-hx, 0, 0])):
+            outer.add(Line(q0, q1, color=line_c, stroke_width=2.5))
+            models.append([(float(q0[0]), float(q0[1])), (float(q1[0]), float(q1[1]))])
         for x in (hx + ax_len * 0.55, -hx - ax_len * 0.45):
             arrows.add(Arrow([x - 0.22, 0, 0], [x + 0.22, 0, 0], color=th["warn"], buff=0, stroke_width=4,
                              max_tip_length_to_length_ratio=0.6))
         # 内部：轴线中段画 S→N 箭头（S/N 字母让到两侧，不压线）。
         inner.add(Arrow([-0.55, 0, 0], [0.55, 0, 0], color=inner_c, buff=0, stroke_width=4,
                         max_tip_length_to_length_ratio=0.3))
+        # 外部线：按种子顺序逐条描出；箭头在线爬到顶点（弧长中段）时随线显现。
+        n_out = len(outer)
+
+        def slot(i, n):
+            return 0.94 * i / n, min(1.0, 0.94 * (i + 1) / n + 0.06)
+
+        for i, ln in enumerate(outer):
+            f0, f1 = slot(i, n_out)
+            _draw_on(ln, tr_out.get_value, f0, f1, models[i], ref, line_c, 2.5)
+            if i < len(arrows):
+                _opacity_gate(arrows[i], tr_out.get_value,
+                              f0 + 0.44 * (f1 - f0), f0 + 0.62 * (f1 - f0))
+        # 内部 S→N：外部线讲完后再出现；轴线箭头最后长出。
+        n_in = len(inner)
+        for i, m in enumerate(inner):
+            q0 = 0.62 * i / max(n_in - 1, 1)
+            _opacity_gate(m, tr_in.get_value, q0, min(1.0, q0 + 0.38),
+                          base=1.0 if i == n_in - 1 else 0.75,
+                          stroke_only=i != n_in - 1)
         poles = VGroup(T("S", font_size=28, color=WHITE).move_to([-hx + 0.3, 0, 0]),
                        T("N", font_size=28, color=WHITE).move_to([hx - 0.3, 0, 0]))
         g = VGroup(outer, bar, inner, poles, arrows)
-        g = VGroup(g, rich("外部 N→S，内部 S→N", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        cap_obj = rich("外部 N→S，内部 S→N", 22, th["fg"])
+        _opacity_gate(cap_obj, tr_cap.get_value, 0.0, 1.0)
+        g = VGroup(g, cap_obj).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(tr_out, 1.0, cue=0,
+                            note="时钟演化：外部磁感线从 N 极面按种子顺序逐条描出、绕回 S 极——外部 N→S")
+        b0.run_time = 2.4
+        beats.append(b0)
+        b1 = _mo.advance_to(tr_in, 1.0, cue=1,
+                            note="时钟演化：内部磁感线随后出现，由 S 极回到 N 极——磁感线闭合，内部 S→N")
+        b1.run_time = 1.3
+        beats.append(b1)
+        b2 = _mo.advance_to(tr_cap, 1.0, cue=2,
+                            note="揭示图注：外部 N→S、内部 S→N——磁感线在磁铁内外闭合成回路、永不中断")
+        b2.run_time = 0.7
+        beats.append(b2)
+        g._field_tracker = tr_out
+        _mo.mount_motion(g, beats)
         return g
 
     def _f_arrow(self, a, th, half=0.22, sw=4):
@@ -3436,28 +4257,110 @@ class Explainer(Scene):
 
     def _f_field_efield_point(self, p, th):
         """点电荷电场线（规范§20）：spokes 条辐射线，正电荷箭头朝外、负电荷朝内；
-        线只从 r0 画到 r1，不到电荷中心（不断裂、不相交，交点只在电荷处与电荷重合）。"""
+        线只从 r0 画到 r1，不到电荷中心（不断裂、不相交，交点只在电荷处与电荷重合）。
+
+        82-SD2a2：电荷圆盘先由中心长出（正负号常显作为场源骨架），随后 spokes 按极角顺序
+        从 r0 向 r1 逐条「描出」、箭头随线落位；第二拍用一条沿径向走的高亮带把「正电荷向外 / 负电荷
+        向内」再演一趟（只走一次）；图注最后淡入。全部 beats 只借既有 hold 帧。
+        """
         lay = efield_point_layout(str(p.get("charge") or "pos"), int(p.get("spokes", 8)))
         pos_c = th["warn"] if lay["sgn"] > 0 else th["accent"]
         charge = Circle(radius=0.24, color=pos_c, stroke_width=4).set_fill(pos_c, 0.9)
         glyph = T("+" if lay["sgn"] > 0 else "−", font_size=34, color=WHITE).move_to([0, 0, 0])
+        tr_ch = ValueTracker(0.0)
+        tr_lines = ValueTracker(0.0)
+        tr_flash = ValueTracker(0.0)
+        tr_cap = ValueTracker(0.0)
+        # 正负号常显（场源骨架）；圆盘用 _wave_reveal 由小长大，不走 play 动画——
+        # 动画会挂起对象 updater，gate 的透明度在动画结束时可能停在 0（首轮冒烟电荷消失）。
+        _wave_reveal(charge, tr_ch.get_value, 0.0, ramp=0.30, scale_from=0.05)
+
+        def ref():
+            """电荷已被 _fit 变换：描线每帧从电荷当前中心/直径换算模型坐标。"""
+            c = charge.get_center()
+            return float(c[0]), float(c[1]), max(float(charge.width), 1e-9) / 0.48
+
         lines = VGroup()
         arrows = VGroup()
-        for ln in lay["lines"]:
+        n = max(len(lay["lines"]), 1)
+        for k, ln in enumerate(lay["lines"]):
             x0, y0 = ln["p0"]
             x1, y1 = ln["p1"]
-            lines.add(Line([x0, y0, 0], [x1, y1, 0], color=th["dim"], stroke_width=2.5))
-            arrows.add(self._f_arrow(ln["arrow"], th))
-        g = VGroup(lines, charge, glyph, arrows)
+            mob = VMobject(color=th["dim"], stroke_width=2.5)
+            mob.set_points_as_corners([[x0, y0, 0], [x1, y1, 0]])
+            f0, f1 = _seq_slot(k, n, span=0.92)
+            head = _draw_with_head(mob, tr_lines.get_value, f0, f1,
+                                   [(x0, y0), (x1, y1)], ref, th["dim"], 2.5,
+                                   head_color=th["hi"], head_radius=0.07)
+            arr = self._f_arrow(ln["arrow"], th)
+            _opacity_gate(arr, tr_lines.get_value, f0 + 0.55 * (f1 - f0), f1)
+            lines.add(mob)
+            lines.add(head)
+            arrows.add(arr)
+        # 方向高亮带：沿每条 spokes 的径向位置同步推进；正电荷由内向外、负电荷由外向内。
+        # 位置每帧由已变换的电荷现算（与 _draw_on 同一 ref），_fit 后仍贴着线。
+        flash = VGroup()
+        for _ in lay["lines"]:
+            fl = Line([0, 0, 0], [0.1, 0, 0], color=th["hi"], stroke_width=7)
+            fl.set_stroke(opacity=0.0)
+            flash.add(fl)
+
+        def _flash_upd(_m):
+            u = _clamp01(tr_flash.get_value())
+            env = 0.0 if (u <= 1e-9 or u >= 1.0 - 1e-9) else min(1.0, u * 8.0, (1.0 - u) * 8.0)
+            v = u if lay["sgn"] > 0 else 1.0 - u
+            cx, cy, s = ref()
+            for ln, fl in zip(lay["lines"], flash):
+                x0, y0 = ln["p0"]
+                x1, y1 = ln["p1"]
+                va, vb = v, min(1.0, v + 0.12)
+                fl.put_start_and_end_on(
+                    [cx + s * (x0 + (x1 - x0) * va), cy + s * (y0 + (y1 - y0) * va), 0],
+                    [cx + s * (x0 + (x1 - x0) * vb), cy + s * (y0 + (y1 - y0) * vb), 0])
+                fl.set_stroke(th["hi"], 7, opacity=0.9 * env)
+
+        flash.add_updater(_flash_upd)
         cap = "正电荷：电场线向外" if lay["sgn"] > 0 else "负电荷：电场线向内"
-        g = VGroup(g, rich(cap, 22, th["fg"])).arrange(DOWN, buff=0.2)
+        cap_obj = rich(cap, 22, th["fg"])
+        _opacity_gate(cap_obj, tr_cap.get_value, 0.0, 1.0)
+        g = VGroup(lines, charge, glyph, arrows, flash)
+        g = VGroup(g, cap_obj).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(
+            tr_ch, 1.0, cue=0,
+            note="时钟演化：电荷圆盘先从中心长出（正负号常显作为场源骨架）——场源先立住，后面的场线才有出处")
+        b0.run_time = 1.2
+        beats.append(b0)
+        b1 = _mo.advance_to(
+            tr_lines, 1.0, cue=0,
+            note="时钟演化：电场线按极角顺序从 r0 向 r1 逐条描出，箭头随线落位——正电荷向外、负电荷向内")
+        b1.run_time = 2.0
+        beats.append(b1)
+        b2 = _mo.advance_to(
+            tr_flash, 1.0, cue=1,
+            note="方向强调：一条高亮带沿所有 spokes 径向走一趟——把「正电荷向外、负电荷向内」再演一次，只走一次")
+        b2.run_time = 2.7
+        beats.append(b2)
+        b3 = _mo.advance_to(
+            tr_cap, 1.0, cue=2,
+            extra=[Indicate(VGroup(lines, charge, glyph, arrows), scale_factor=1.06, color=th["hi"])],
+            note="揭示图注 + 落定点名：电场线由正电荷发出、向负电荷会入，方向由电荷正负决定")
+        b3.run_time = 1.8
+        beats.append(b3)
+        g._field_tracker = tr_lines
+        _mo.mount_motion(g, beats)
         return g
 
     def _f_field_efield_pair(self, p, th):
         """等量异号点电荷电场线（efield_pair_line 解析场流线，镜像构造保证从 +q 出发、
-        终止 −q、上下对称嵌套不相交；中线箭头 +x=正→负，规范§20）。含轴线与两外侧半线。"""
+        终止 −q、上下对称嵌套不相交；中线箭头 +x=正→负，规范§20）。含轴线与两外侧半线。
+
+        82-SD2a2：两个电荷先长出；流线从 +q 一侧向 −q 成对描出（左右镜面同步、按 phi
+        由内到外 lag），箭头在流线顶点随线落位；轴线与两外侧半线最后描出，再沿轴线走一趟
+        正→负的高亮带；图注最后淡入。
+        """
         d, r0 = EFIELD_D, EFIELD_R0
         pos_c, neg_c = th["warn"], th["accent"]
         charges = VGroup(
@@ -3466,117 +4369,388 @@ class Explainer(Scene):
             T("+", font_size=30, color=WHITE).move_to([-d, 0, 0]),
             T("−", font_size=30, color=WHITE).move_to([d, 0, 0]),
         )
+        tr_ch = ValueTracker(0.0)
+        tr_lines = ValueTracker(0.0)
+        tr_axis = ValueTracker(0.0)
+        tr_cap = ValueTracker(0.0)
+        # 正负号常显（两电荷的骨架/极性先立住）；圆盘用 _wave_reveal 长大（动画会挂起 updater）。
+        for m in charges[:2]:
+            _wave_reveal(m, tr_ch.get_value, 0.0, ramp=0.30, scale_from=0.05)
+
+        def ref():
+            """模型原点 ↔ 两电荷中点：用 +q 圆的当前中心/直径换算（_fit 后仍贴着电荷）。"""
+            c = charges[0].get_center()
+            s = max(float(charges[0].width), 1e-9) / 0.40
+            return float(c[0] + d * s), float(c[1]), s
+
         lines = VGroup()
         arrows = VGroup()
-        for phi in EFIELD_PAIR_SEEDS:
+        n = max(len(EFIELD_PAIR_SEEDS), 1)
+        for j, phi in enumerate(EFIELD_PAIR_SEEDS):
             pts = efield_pair_line(phi, d, r0)
             apex_i = len(pts) // 2
+            f0, f1 = _seq_slot(j, n, span=0.80)
             for sg in (1, -1):
+                model = [(float(x), float(sg * y)) for x, y in pts]
                 ln = VMobject(color=th["dim"], stroke_width=2.5)
-                ln.set_points_as_corners([[x, sg * y, 0] for x, y in pts])
+                ln.set_points_as_corners([[x, y, 0] for x, y in model])
+                head = _draw_with_head(ln, tr_lines.get_value, f0, f1, model, ref,
+                                       th["dim"], 2.5, head_color=th["hi"], head_radius=0.07)
                 lines.add(ln)
-                ay = sg * pts[apex_i][1]
-                arrows.add(self._f_arrow({"pos": (0.0, ay), "d": (1.0, 0.0)}, th))
-        # 轴线：+q→−q 直线（箭头 +x）；两外侧半线（离开 +q 向 −∞ / 从 +∞ 会入 −q，箭头都 −x）。
+                lines.add(head)
+                arr = self._f_arrow({"pos": (0.0, sg * pts[apex_i][1]), "d": (1.0, 0.0)}, th)
+                _opacity_gate(arr, tr_lines.get_value, f0 + 0.50 * (f1 - f0), f1)
+                arrows.add(arr)
+        # 轴线 + 两外侧半线最后描出：轴线从 +q 指向 −q（+x），外侧半线的箭头都 −x。
         ax_len = 0.9
-        lines.add(Line([-d + r0, 0, 0], [d - r0, 0, 0], color=th["dim"], stroke_width=2.5),
-                  Line([-d - r0, 0, 0], [-d - ax_len, 0, 0], color=th["dim"], stroke_width=2.5),
-                  Line([d + ax_len, 0, 0], [d + r0, 0, 0], color=th["dim"], stroke_width=2.5))
-        arrows.add(self._f_arrow({"pos": (0.0, 0.0), "d": (1.0, 0.0)}, th))
-        for xm in ((-d - 0.5 * (r0 + ax_len)), (d + 0.5 * (r0 + ax_len))):
-            arrows.add(self._f_arrow({"pos": (xm, 0.0), "d": (-1.0, 0.0)}, th))
-        g = VGroup(lines, charges, arrows)
-        g = VGroup(g, rich("电场线从 + 出发、终止于 −，不相交、不断裂", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        axis_specs = [
+            ([(-d + r0, 0.0), (d - r0, 0.0)],
+             {"pos": (0.0, 0.0), "d": (1.0, 0.0)}, 0.00, 0.62),
+            ([(-d - r0, 0.0), (-d - ax_len, 0.0)],
+             {"pos": (-d - 0.5 * (r0 + ax_len), 0.0), "d": (-1.0, 0.0)}, 0.66, 0.80),
+            ([(d + ax_len, 0.0), (d + r0, 0.0)],
+             {"pos": (d + 0.5 * (r0 + ax_len), 0.0), "d": (-1.0, 0.0)}, 0.84, 1.00),
+        ]
+        for model, arrow_spec, f0, f1 in axis_specs:
+            ln = VMobject(color=th["dim"], stroke_width=2.5)
+            ln.set_points_as_corners([[x, y, 0] for x, y in model])
+            head = _draw_with_head(ln, tr_axis.get_value, f0, f1, model, ref,
+                                   th["dim"], 2.5, head_color=th["hi"], head_radius=0.07)
+            lines.add(ln)
+            lines.add(head)
+            arr = self._f_arrow(arrow_spec, th)
+            _opacity_gate(arr, tr_axis.get_value, f0 + 0.45 * (f1 - f0), f1)
+            arrows.add(arr)
+        # 轴线高亮带（只走一趟）：加粗亮斑从 +q 走到 −q；位置每帧按电荷现算。
+        tr_flow = ValueTracker(0.0)
+        flow_head = Dot([0.0, 0.0, 0.0], radius=0.105, color=th["hi"])
+
+        def _flow_upd(m):
+            u = _clamp01(tr_flow.get_value())
+            env = 0.0 if (u <= 1e-9 or u >= 1.0 - 1e-9) else min(1.0, u * 8.0, (1.0 - u) * 8.0)
+            cx, cy, s = ref()
+            m.move_to([cx + s * (-d + r0 + (2.0 * d - 2.0 * r0) * u), cy, 0.0])
+            m.set_opacity(0.95 * env)
+
+        flow_head.set_opacity(0.0)
+        flow_head.add_updater(_flow_upd)
+        cap_obj = rich("电场线从 + 出发、终止于 −，不相交、不断裂", 22, th["fg"])
+        _opacity_gate(cap_obj, tr_cap.get_value, 0.0, 1.0)
+        g = VGroup(lines, charges, arrows, flow_head)
+        g = VGroup(g, cap_obj).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(
+            tr_ch, 1.0, cue=0,
+            note="时钟演化：两个电荷圆盘先长出（正负号常显）——正电荷在左、负电荷在右，场线才有两端可落")
+        b0.run_time = 1.2
+        beats.append(b0)
+        b1 = _mo.advance_to(
+            tr_lines, 1.0, cue=0,
+            note="时钟演化：上下镜像成对、按 phi 由内到外逐条描出——流线从 +q 出发、终止于 −q，顶点箭头随之落位")
+        b1.run_time = 1.9
+        beats.append(b1)
+        b2 = _mo.advance_to(
+            tr_axis, 1.0, cue=1,
+            note="时钟演化：轴线与两外侧半线最后描出——轴线 +x 由正指向负，外侧半线箭头 −x")
+        b2.run_time = 1.2
+        beats.append(b2)
+        b3 = _mo.advance_to(
+            tr_flow, 1.0, cue=1,
+            note="方向强调：高亮带沿轴线从 +q 走到 −q 一趟——场线方向正→负，只走一次")
+        b3.run_time = 1.5
+        beats.append(b3)
+        b4 = _mo.advance_to(
+            tr_cap, 1.0, cue=2,
+            extra=[Indicate(VGroup(lines, charges, arrows), scale_factor=1.05, color=th["hi"])],
+            note="揭示图注 + 落定点名：电场线从 + 出发、终止于 −，不相交、不断裂——闭合的是磁感线，电场线有始有终")
+        b4.run_time = 1.8
+        beats.append(b4)
+        g._field_tracker = tr_lines
+        _mo.mount_motion(g, beats)
         return g
 
     def _f_field_efield_plate(self, p, th):
         """平行板电容器：板间匀强场=平行等距带箭头直线，边缘 fringe 略弯外凸（规范§20
-        「匀强电场画平行等距箭头」；efield_plate_layout 正弦隆起，顶点越过板缘）。左 + 右 −。"""
+        「匀强电场画平行等距箭头」；efield_plate_layout 正弦隆起，顶点越过板缘）。左 + 右 −。
+
+        82-SD2a2：两块极板先自上而下 Create 语义逐帧描出（极性符号常显），板间匀强场线
+        从左板向右板逐条描出、箭头随线落位，fringe 线最后描出；末拍一条竖直高亮带从正板
+        扫到负板（只扫一次），把「匀强场方向 +x」再演一遍，图注随扫描淡入。
+        """
         lay = efield_plate_layout()
-        g = lay["gap"] / 2
+        g_half = lay["gap"] / 2
         h = lay["h"]
-        plates = VGroup(
-            Line([-g, -h / 2, 0], [-g, h / 2, 0], color=th["warn"], stroke_width=9),
-            Line([g, -h / 2, 0], [g, h / 2, 0], color=th["accent"], stroke_width=9),
-            T("+", font_size=30, color=th["warn"]).move_to([-g - 0.3, h / 2 + 0.2, 0]),
-            T("−", font_size=30, color=th["accent"]).move_to([g + 0.3, h / 2 + 0.2, 0]),
+        tr_pl = ValueTracker(0.0)
+        tr_uni = ValueTracker(0.0)
+        tr_fr = ValueTracker(0.0)
+        tr_flash = ValueTracker(0.0)
+        plate_l = Line([-g_half, h / 2, 0], [-g_half, -h / 2, 0],
+                       color=th["warn"], stroke_width=9)
+        plate_r = Line([g_half, h / 2, 0], [g_half, -h / 2, 0],
+                       color=th["accent"], stroke_width=9)
+        lab_p = T("+", font_size=30, color=th["warn"]).move_to([-g_half - 0.3, h / 2 + 0.2, 0])
+        lab_m = T("−", font_size=30, color=th["accent"]).move_to([g_half + 0.3, h / 2 + 0.2, 0])
+        # 极性符号常显（先立极性与左右，板体随后逐帧描出）——也是装配层标签复核的锚点。
+        plates = VGroup(plate_l, plate_r, lab_p, lab_m)
+        # 不参与动画的静态尺：左板原位。不能用 plate_l 本身——它正被 _draw_on 逐帧改点，
+        # 用它会越画越短，ref 跟着缩（首轮冒烟板间线整体缩进板内）。
+        plate_anchor = Line([-g_half, h / 2, 0], [-g_half, -h / 2, 0], stroke_opacity=0)
+        plates.add(plate_anchor)
+
+        def ref():
+            """模型坐标 → 已变换的板面坐标：以静态锚点中心/高度为尺（_fit 后仍贴着极板）。"""
+            c = plate_anchor.get_center()
+            s = max(float(plate_anchor.height), 1e-9) / h
+            return float(c[0] + g_half * s), float(c[1]), s
+
+        # 极板用 Create 语义（按弧长前缀逐帧描出、亮笔头随行）：自上而下，先左后右小幅错峰。
+        plates.add(
+            _draw_with_head(plate_l, tr_pl.get_value, 0.0, 0.78,
+                            [(-g_half, h / 2), (-g_half, -h / 2)], ref,
+                            th["warn"], 9, head_color=th["hi"], head_radius=0.1),
+            _draw_with_head(plate_r, tr_pl.get_value, 0.25, 1.0,
+                            [(g_half, h / 2), (g_half, -h / 2)], ref,
+                            th["accent"], 9, head_color=th["hi"], head_radius=0.1),
         )
         lines = VGroup()
         arrows = VGroup()
-        for u in lay["uniform"]:
-            lines.add(Line([u["p"][0], u["p"][1], 0], [u["q"][0], u["q"][1], 0],
-                           color=th["dim"], stroke_width=2.5))
-            arrows.add(self._f_arrow(u["arrow"], th, half=0.2))
-        for fr in lay["fringe"]:
+        n_u = max(len(lay["uniform"]), 1)
+        for i, u in enumerate(lay["uniform"]):
+            model = [tuple(u["p"]), tuple(u["q"])]
             ln = VMobject(color=th["dim"], stroke_width=2.5)
-            ln.set_points_as_corners([[x, y, 0] for x, y in fr["pts"]])
+            ln.set_points_as_corners([[x, y, 0] for x, y in model])
+            f0, f1 = _seq_slot(i, n_u, span=0.90)
+            head = _draw_with_head(ln, tr_uni.get_value, f0, f1, model, ref,
+                                   th["dim"], 2.5, head_color=th["hi"], head_radius=0.07)
             lines.add(ln)
-            arrows.add(self._f_arrow(fr["arrow"], th, half=0.2))
-        g = VGroup(lines, plates, arrows)
-        g = VGroup(g, rich("板间平行等距=匀强场；边缘略弯（fringe）", 22, th["fg"])).arrange(DOWN, buff=0.2)
+            lines.add(head)
+            arr = self._f_arrow(u["arrow"], th, half=0.2)
+            _opacity_gate(arr, tr_uni.get_value, f0 + 0.50 * (f1 - f0), f1)
+            arrows.add(arr)
+        n_f = max(len(lay["fringe"]), 1)
+        for i, fr in enumerate(lay["fringe"]):
+            model = [tuple(pt) for pt in fr["pts"]]
+            ln = VMobject(color=th["dim"], stroke_width=2.5)
+            ln.set_points_as_corners([[x, y, 0] for x, y in model])
+            f0, f1 = _seq_slot(i, n_f, span=0.88)
+            head = _draw_with_head(ln, tr_fr.get_value, f0, f1, model, ref,
+                                   th["dim"], 2.5, head_color=th["hi"], head_radius=0.07)
+            lines.add(ln)
+            lines.add(head)
+            arr = self._f_arrow(fr["arrow"], th, half=0.2)
+            _opacity_gate(arr, tr_fr.get_value, f0 + 0.42 * (f1 - f0), f1)
+            arrows.add(arr)
+        # 板间向右的扫描带：竖直高亮线先从正板走到负板（单趟），位置每帧按板面现算。
+        band = Line([0, 0, 0], [0, 1, 0], color=th["hi"], stroke_width=9)
+        band.set_stroke(opacity=0.0)
+
+        def _band_upd(m):
+            u = _clamp01(tr_flash.get_value())
+            env = 0.0 if (u <= 1e-9 or u >= 1.0 - 1e-9) else min(1.0, u * 8.0, (1.0 - u) * 8.0)
+            cx, cy, s = ref()
+            x = -g_half + (2.0 * g_half) * u
+            m.put_start_and_end_on(
+                [cx + s * x, cy + s * (-h / 2 + 0.12), 0],
+                [cx + s * x, cy + s * (h / 2 - 0.12), 0])
+            m.set_stroke(th["hi"], 9, opacity=0.85 * env)
+
+        band.add_updater(_band_upd)
+        cap_obj = rich("板间平行等距=匀强场；边缘略弯（fringe）", 22, th["fg"])
+        _opacity_gate(cap_obj, tr_flash.get_value, 0.10, 0.70)
+        g = VGroup(lines, plates, arrows, band)
+        g = VGroup(g, cap_obj).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(
+            tr_pl, 1.0, cue=0,
+            note="时钟演化：两块极板自上而下 Create 语义逐帧描出（亮笔头随行），正负符号先立住——先有板，才有板间场")
+        b0.run_time = 1.2
+        beats.append(b0)
+        b1 = _mo.advance_to(
+            tr_uni, 1.0, cue=0,
+            note="时钟演化：板间匀强场线从左板向右板逐条描出、箭头随线落位——平行等距即匀强")
+        b1.run_time = 1.85
+        beats.append(b1)
+        b2 = _mo.advance_to(
+            tr_fr, 1.0, cue=1,
+            note="时钟演化：边缘 fringe 线最后描出，两端贴板、顶点越过板缘——边缘场不再平行")
+        b2.run_time = 1.9
+        beats.append(b2)
+        b3 = _mo.advance_to(
+            tr_flash, 1.0, cue=2,
+            note="方向强调 + 揭示图注：一条高亮带从正板扫到负板一趟——板间场方向 +x；fringe 略弯")
+        b3.run_time = 1.85
+        beats.append(b3)
+        g._field_tracker = tr_uni
+        _mo.mount_motion(g, beats)
         return g
 
     def _f_field_solenoid(self, p, th):
         """通电螺线管（规范§18）：绕线杆+顶底半圆成线圈，前侧电流箭头与绕向一致；
         外部磁感线复用 magnet_field_line（极面磁荷解析场流线，闭合、N→S），内部 3 条
-        平行等距 S→N（近匀强），两端标 N/S。安培定则：电流前侧向上 ⇒ N 在 −x 端。"""
+        平行等距 S→N（近匀强），两端标 N/S。安培定则：电流前侧向上 ⇒ N 在 −x 端。
+
+        82-SD2a2：三段式过程——(1) 线圈逐匝 Create（杆→上弧→下弧按绕向顺序），前侧电流
+        箭头随匝出现；(2) 内部 3 条 S→N 平行线渐显；(3) 外部闭合磁感线按种子顺序逐条描出，
+        最后点名 N/S 与图注。全部 beats 只借既有 hold 帧。
+        """
         lay = solenoid_layout(int(p.get("turns", SOLENOID_TURNS)),
                               str(p.get("wind") or "up_front"))
         hx, hh, ns = lay["hx"], lay["hh"], lay["ns"]
         bars = VGroup()
         arcs = VGroup()
         cur_arrows = VGroup()
+        coil_seq = []
+        coil_models = []
+        coil_widths = []
         for k, b in enumerate(lay["bars"]):
             x = b["x"]
             dy = b["dir"][1]
-            bars.add(Line([x, -hh, 0], [x, hh, 0], color=th["key"], stroke_width=4))
+            bar = Line([x, -hh, 0], [x, hh, 0], color=th["key"], stroke_width=4)
+            bars.add(bar)
+            coil_seq.append(bar)
+            coil_models.append([(float(x), -hh), (float(x), hh)])
+            coil_widths.append(4.0)
             cur_arrows.add(self._f_arrow({"pos": (x, 0.0), "d": (0.0, dy)}, th, half=0.2, sw=4))
             if k + 1 < len(lay["bars"]):
                 x2 = lay["bars"][k + 1]["x"]
-                arcs.add(ArcBetweenPoints([x, hh, 0], [x2, hh, 0], angle=0.5,
-                                          color=th["key"], stroke_width=3))
-                arcs.add(ArcBetweenPoints([x, -hh, 0], [x2, -hh, 0], angle=-0.5,
-                                          color=th["key"], stroke_width=3))
+                top = ArcBetweenPoints([x, hh, 0], [x2, hh, 0], angle=0.5,
+                                       color=th["key"], stroke_width=3)
+                bot = ArcBetweenPoints([x, -hh, 0], [x2, -hh, 0], angle=-0.5,
+                                       color=th["key"], stroke_width=3)
+                arcs.add(top, bot)
+                # Create 等价：按弧长采样成折线，逐帧只画前缀——笔头才能贴着弧走。
+                for arc in (top, bot):
+                    coil_models.append([tuple(arc.point_from_proportion(t)[:2])
+                                        for t in np.linspace(0.0, 1.0, 18)])
+                    coil_widths.append(3.0)
+                coil_seq.extend([top, bot])
+        tr_coil = ValueTracker(0.0)
+        n_coil = max(len(coil_seq), 1)
+
+        def ref():
+            """模型坐标 → 已变换的线圈坐标：用第一支电流箭头（只调透明度、几何永不变）
+            作静态尺，不能用正被 _draw_on 逐帧 become 的绕线杆——杆会越画越短，尺就缩了。"""
+            c = cur_arrows[0].get_center()
+            s = max(float(cur_arrows[0].height), 1e-9) / 0.4
+            return float(c[0] - lay["bars"][0]["x"] * s), float(c[1]), s
+
+        for i, m in enumerate(coil_seq):
+            f0, f1 = _seq_slot(i, n_coil, span=0.94)
+            head = _draw_with_head(m, tr_coil.get_value, f0, f1, coil_models[i], ref,
+                                   th["key"], coil_widths[i],
+                                   head_color=th["hi"], head_radius=0.065)
+            if i % 3 == 0:
+                # 杆与弧的笔头都放进对应的线圈组，随组一起 _fit / 退场。
+                (bars if i < len(bars) else arcs).add(head)
+            else:
+                arcs.add(head)
+        for i, arr in enumerate(cur_arrows):
+            # 杆 i 在 coil_seq 里的位置：每匝 = 杆 + 上弧 + 下弧（最后一根只有杆）。
+            pos = min(3 * i, n_coil - 1)
+            f0, f1 = _seq_slot(pos, n_coil, span=0.94)
+            _opacity_gate(arr, tr_coil.get_value, f0, f1)
+
         outer = VGroup()
         inner = VGroup()
         arrows = VGroup()
+        outer_models = []
         for s in lay["seeds"]:
             pts = magnet_field_line(s, hx, hh)
             if ns < 0:
                 pts = [(-px, py) for px, py in pts]
             apex_i = len(pts) // 2
             for sg in (1, -1):
+                model = [(float(x), float(sg * y)) for x, y in pts]
                 ln = VMobject(color=th["accent"], stroke_width=2.5)
-                ln.set_points_as_corners([[x, sg * y, 0] for x, y in pts])
+                ln.set_points_as_corners([[x, y, 0] for x, y in model])
                 outer.add(ln)
+                outer_models.append(model)
                 ay = sg * pts[apex_i][1]
                 # 中线顶点处外线方向 = N→S = −ns·x̂
                 arrows.add(self._f_arrow({"pos": (0.0, ay), "d": (float(-ns), 0.0)}, th))
         ax_len = 1.1
-        outer.add(Line([ns * hx, 0, 0], [ns * (hx + ax_len), 0, 0], color=th["accent"], stroke_width=2.5),
-                  Line([-ns * (hx + ax_len), 0, 0], [-ns * hx, 0, 0], color=th["accent"], stroke_width=2.5))
+        for model in ([(ns * hx, 0.0), (ns * (hx + ax_len), 0.0)],
+                      [(-ns * (hx + ax_len), 0.0), (-ns * hx, 0.0)]):
+            ln = VMobject(color=th["accent"], stroke_width=2.5)
+            ln.set_points_as_corners([[x, y, 0] for x, y in model])
+            outer.add(ln)
+            outer_models.append(model)
         for xm in (ns * (hx + 0.55 * ax_len), -ns * (hx + 0.45 * ax_len)):
             arrows.add(self._f_arrow({"pos": (xm, 0.0), "d": (float(ns), 0.0)}, th))
-        for it in lay["inner"]:      # 内部 S→N：平行等距 3 条（近匀强），箭头在各自线上
-            inner.add(Line([-hx, it["y"], 0], [hx, it["y"], 0], color=th["dim"],
-                           stroke_width=2.0, stroke_opacity=0.9))
-            arrows.add(self._f_arrow({"pos": (0.0, it["y"]), "d": it["dir"]}, th))
+        tr_out = ValueTracker(0.0)
+        n_out = max(len(outer), 1)
+        for i, ln in enumerate(outer):
+            f0, f1 = _seq_slot(i, n_out, span=0.90)
+            _draw_on(ln, tr_out.get_value, f0, f1, outer_models[i], ref, th["accent"], 2.5)
+        for i, arr in enumerate(arrows):
+            f0, f1 = _seq_slot(i, n_out, span=0.90)
+            _opacity_gate(arr, tr_out.get_value, f0 + 0.45 * (f1 - f0), f1)
+        # 内部 S→N：平行等距 3 条（近匀强），第二段渐显；箭头与线同窗。
+        tr_in = ValueTracker(0.0)
+        n_in = max(len(lay["inner"]), 1)
+        for i, it in enumerate(lay["inner"]):
+            ln = Line([-hx, it["y"], 0], [hx, it["y"], 0], color=th["dim"],
+                      stroke_width=2.0, stroke_opacity=0.9)
+            inner.add(ln)
+            f0, f1 = _seq_slot(i, n_in, span=0.72)
+            _opacity_gate(ln, tr_in.get_value, f0, f1, base=0.9, stroke_only=True)
+            inner.add(_head_on_path([(-ns * hx, it["y"]), (ns * hx, it["y"])],
+                                    tr_in.get_value, f0, f1, ref, th["hi"], 0.075))
+            arr = self._f_arrow({"pos": (0.0, it["y"]), "d": it["dir"]}, th)
+            arrows.add(arr)
+            _opacity_gate(arr, tr_in.get_value, f0 + 0.25 * (f1 - f0), f1)
         poles = VGroup(T("N", font_size=26, color=th["warn"]).move_to([ns * (hx + 0.35), 0.5, 0]),
                        T("S", font_size=26, color=th["dim"]).move_to([-ns * (hx + 0.35), 0.5, 0]))
+        # N/S 常显：两端极性是装配骨架（也供标签复核）；线圈/内线/外线仍按三段演出。
+        cap_obj = rich("右手握螺线管：四指顺电流、拇指指 N 极；外 N→S、内 S→N", 22, th["fg"])
+        _opacity_gate(cap_obj, tr_out.get_value, 0.74, 0.98)
         g = VGroup(arcs, bars, outer, inner, poles, arrows, cur_arrows)
-        g = VGroup(g, rich("右手握螺线管：四指顺电流、拇指指 N 极；外 N→S、内 S→N", 22, th["fg"])).arrange(DOWN, buff=0.2)
+        g = VGroup(g, cap_obj).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        b0 = _mo.advance_to(
+            tr_coil, 1.0, cue=0,
+            note="时钟演化：线圈逐匝描出——杆、上弧、下弧按绕向顺序；前侧电流箭头随匝出现，方向=绕向")
+        b0.run_time = 2.9
+        beats.append(b0)
+        b1 = _mo.advance_to(
+            tr_in, 1.0, cue=1,
+            note="时钟演化：内部 3 条平行等距磁场线渐显，方向 S→N——螺线管内部近匀强")
+        b1.run_time = 2.6
+        beats.append(b1)
+        b2 = _mo.advance_to(
+            tr_out, 1.0, cue=2,
+            note="时钟演化 + 揭示：外部闭合磁感线按种子顺序逐条描出（N→S），最后点名 N/S 与右手定则")
+        b2.run_time = 2.0
+        beats.append(b2)
+        g._field_tracker = tr_coil
+        _mo.mount_motion(g, beats)
         return g
 
     def _f_field_compass(self, p, th):
         """小磁针（规范§19）：菱形指针，N 端填红、S 端填蓝，指向角 angle（度，+x=0 逆时针）；
-        静止时 N 极指向即该点磁场方向。"""
-        lay = compass_layout(float(p.get("angle", 0.0)))
+        静止时 N 极指向即该点磁场方向。
+
+        82-SD2a1：指针从 from_angle（缺省 90°）连续转到 to_angle（缺省取 angle），N/S 标签随之
+        转到位；转到位后 ≤0.5s 落定强调。from_angle==to_angle 时做一次 ≤8° 的阻尼摆动再回
+        to_angle——演的是「磁针受扰后稳定到磁场方向」的过程，不是一张静止指针图。
+        """
+        def _deg(key, default):
+            try:
+                v = float(p.get(key, default))
+            except (TypeError, ValueError):
+                return float(default)
+            return v if math.isfinite(v) else float(default)
+
+        to_deg = _deg("to_angle", _deg("angle", 0.0))
+        from_deg = _deg("from_angle", 90.0)
+        equal = abs(to_deg - from_deg) < 1e-9
+        lay = compass_layout(from_deg)
         A, B, C, D = lay["poly"]
         outline = Polygon([A[0], A[1], 0], [B[0], B[1], 0], [C[0], C[1], 0], [D[0], D[1], 0],
                           color=th["fg"], stroke_width=3)
@@ -3586,14 +4760,83 @@ class Explainer(Scene):
                      color=th["accent"], stroke_width=2).set_fill(th["accent"], 1.0)
         tip = lay["tip"]
         tail = lay["tail"]
-        labs = VGroup(
-            T("N", font_size=22, color=th["warn"]).move_to([tip[0] * 1.35 + 0.12, tip[1] * 1.35 + 0.12, 0]),
-            T("S", font_size=22, color=th["accent"]).move_to([tail[0] * 1.35 - 0.12, tail[1] * 1.35 - 0.12, 0]),
-        )
-        g = VGroup(nh, sh, outline, Dot([0, 0, 0], radius=0.045, color=th["fg"]), labs)
+        Nlab = T("N", font_size=22, color=th["warn"]).move_to(
+            [tip[0] * 1.35 + 0.12, tip[1] * 1.35 + 0.12, 0])
+        Slab = T("S", font_size=22, color=th["accent"]).move_to(
+            [tail[0] * 1.35 - 0.12, tail[1] * 1.35 - 0.12, 0])
+        labs = VGroup(Nlab, Slab)
+        hub = Dot([0, 0, 0], radius=0.045, color=th["fg"])
+        needle = VGroup(nh, sh, outline)
+        tr = ValueTracker(from_deg)
+        osc = ValueTracker(0.0)
+
+        def disp_deg():
+            if equal:
+                v = _clamp01(osc.get_value())
+                return to_deg + 8.0 * math.sin(4.0 * math.pi * v) * (1.0 - v) ** 2
+            t = (float(tr.get_value()) - from_deg) / (to_deg - from_deg)
+            e = 1.0 - (1.0 - _clamp01(t)) ** 3      # 缓出：起转快、到位慢，像被磁场扭过去
+            return from_deg + (to_deg - from_deg) * e
+
+        def build_at(deg):
+            """按当前（已被 _fit 变换）转轴圆点的中心与尺度重建菱形——不缓存装配期坐标。"""
+            c = hub.get_center()
+            s = max(float(hub.width), 1e-9) / 0.09     # 转轴圆点直径 2×0.045
+
+            def P(pts, color, fill=None, sw=3):
+                poly = Polygon(*[[c[0] + s * float(x), c[1] + s * float(y), 0.0] for x, y in pts],
+                               color=color, stroke_width=sw)
+                if fill is not None:
+                    poly.set_fill(fill, 1.0)
+                return poly
+
+            L = compass_layout(deg)
+            return L, P(L["poly"], th["fg"], None, 3), \
+                P(L["n_half"], th["warn"], th["warn"], 2), \
+                P(L["s_half"], th["accent"], th["accent"], 2)
+
+        st = {"deg": None}
+
+        def _needle_upd(_grp):
+            deg = disp_deg()
+            if st["deg"] is not None and abs(deg - st["deg"]) < 1e-9:
+                return
+            st["deg"] = deg
+            L, po, pn, ps = build_at(deg)
+            outline.become(po)
+            nh.become(pn)
+            sh.become(ps)
+            c = hub.get_center()
+            s = max(float(hub.width), 1e-9) / 0.09
+            tp, tl = L["tip"], L["tail"]
+            Nlab.move_to([c[0] + s * (tp[0] * 1.35 + 0.12),
+                          c[1] + s * (tp[1] * 1.35 + 0.12), 0])
+            Slab.move_to([c[0] + s * (tl[0] * 1.35 - 0.12),
+                          c[1] + s * (tl[1] * 1.35 - 0.12), 0])
+
+        needle.add_updater(_needle_upd)
+        g = VGroup(needle, hub, labs)
         g = VGroup(g, rich("N 端（红）指向=该点磁场方向", 22, th["fg"])).arrange(DOWN, buff=0.2)
         if p.get("label"):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+        beats = []
+        if equal:
+            b0 = _mo.advance_to(osc, 1.0, cue=0,
+                                note="时钟演化：磁针在 to_angle 附近做 ≤8° 阻尼摆动后稳定——受扰后回到该点磁场方向")
+            b0.run_time = 1.4
+        else:
+            b0 = _mo.advance_to(tr, to_deg, cue=0,
+                                note="时钟演化：磁针从 from_angle 连续转到 to_angle——N 端（红）被磁场扭到该点磁场方向")
+            b0.run_time = 1.8
+        beats.append(b0)
+        beats.append(_mo.emphasize(needle, kind="indicate", cue=1))
+        g._compass_tracker = tr
+        g._compass_osc = osc
+        g._compass_from = from_deg
+        g._compass_target = to_deg
+        g._compass_hub = hub
+        g._compass_n = nh
+        _mo.mount_motion(g, beats)
         return g
 
     def _v_circuit(self, p, th):
@@ -3620,10 +4863,18 @@ class Explainer(Scene):
             gw = CIRCUIT_HALF[ty] if ty in CIRCUIT_HALF else CIRCUIT_R
             sg = VGroup()
             if ty == "battery":
-                sg.add(Line([x - gw, y - 0.28, 0], [x - gw, y + 0.28, 0], color=col, stroke_width=5))
-                sg.add(Line([x + gw, y - 0.16, 0], [x + gw, y + 0.16, 0], color=col, stroke_width=5))
-                sg.add(rich("+", 22, col).next_to([x - gw, y + 0.28, 0], UP, buff=0.04))
-                sg.add(rich("−", 22, col).next_to([x + gw, y + 0.16, 0], UP, buff=0.04))
+                # 两极板贴近中线（间距 0.28），端子到极板用引线补足：端子仍在 x±gw，
+                # 极板若画在端子上会变成「两根竖线隔一大段空白」的假电池符号。
+                px = 0.14
+                sg.add(Line([x - gw, y, 0], [x - px, y, 0], color=col, stroke_width=3))
+                sg.add(Line([x - px, y - 0.28, 0], [x - px, y + 0.28, 0], color=col, stroke_width=5))
+                sg.add(Line([x + px, y - 0.16, 0], [x + px, y + 0.16, 0], color=col, stroke_width=5))
+                sg.add(Line([x + px, y, 0], [x + gw, y, 0], color=col, stroke_width=3))
+                sg.add(rich("+", 22, col).next_to([x - px, y + 0.28, 0], UP, buff=0.04))
+                # 负极用短横线而不是「−」字形：22pt 的减号只有 1.5px 高，贴在短板顶端
+                # 会被读成 T 形（79C1_smoke/f_7.6 实测），短线与电池符号同粗才像电极标记。
+                sg.add(Line([x + px - 0.12, y + 0.16 + 0.14, 0],
+                            [x + px + 0.12, y + 0.16 + 0.14, 0], color=col, stroke_width=3))
             elif ty == "resistor":
                 sg.add(Rectangle(width=2 * gw, height=0.5, color=col, stroke_width=3).move_to([x, y, 0]))
             elif ty == "switch":
@@ -4064,6 +5315,317 @@ class Explainer(Scene):
             g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
         return g
 
+    def _v_rod_rails(self, p, th):
+        """单杆+导轨（82-SC）：真实装置图，杆按物理运动连续位移，Φ/E/I/F 同步读数。
+
+        对照 82-D2「只能看到文字卡」的缺陷：这里画的是装置本身——双导轨、粗跨杆、接触点、
+        ×/· 匀强场、左侧回路元件（电阻 R / 电容器 C）、电流方向；杆位由**同一个时钟**
+        驱动（motion.advance_to），速度/安培力箭头长度 ∝ 物理量，右侧读数每帧从同一时刻
+        求值——位移、箭头、读数三者同值源，不是分别对表。
+
+        物理（三种模式都只做课本模型内）：
+          capacitor：恒力 F ⇒ a = F/(m+B²L²C) 恒定，v=v0+at，I=CBL·a 恒定、Q=CBLv 累积；
+          resistor：无外力自由减速 v=v0·e^(−t/τ)，τ=mR/(B²L²)，I=BLv/R 随 v 衰减；
+          plain：按给定 v0/a 的匀变速，仅示动生电动势与（可选）回路电流。
+        屏幕位移 = s(t)/s(T) 的等比映射；读数用真实时间 t 与真值，不拿屏幕像素冒充物理量。
+
+        props: mode/capacitor|resistor|plain, B, L(切割长度), m, R, C, F(恒外力), v0, a,
+               T(模拟窗口秒), x0(起点占轨长比例), travel(行程占轨长比例), rail(轨长 m),
+               field="in"|"out", applied_force, beats(时钟拍数 2~6), at, label
+        """
+        mode = str(p.get("mode") or "plain").strip().lower()
+        if mode not in ("plain", "resistor", "capacitor"):
+            mode = "plain"
+
+        def _pos(v, d):
+            try:
+                x = float(v)
+            except (TypeError, ValueError):
+                return d
+            return x if math.isfinite(x) and x > 0 else d
+
+        def _nonneg(v, d):
+            try:
+                x = float(v)
+            except (TypeError, ValueError):
+                return d
+            return x if math.isfinite(x) and x >= 0 else d
+
+        B = _pos(p.get("B"), 0.5)
+        Lp = _pos(p.get("L"), 0.6)
+        m = _pos(p.get("m"), 0.2)
+        R = _pos(p.get("R"), 2.0)
+        C = _pos(p.get("C"), 0.5)
+        F_ext = _nonneg(p.get("F"), 1.0 if mode == "capacitor" else 0.0)
+        applied = bool(p.get("applied_force", mode == "capacitor")) and F_ext > 0
+        v0 = _nonneg(p.get("v0"), 0.0 if mode == "capacitor" else 4.0)
+        tau = max(m * R / (B * B * Lp * Lp), 1e-6) if mode == "resistor" else 1.0
+        if mode == "resistor":
+            a = 0.0
+        else:
+            a = _nonneg(p.get("a"), F_ext / max(m + B * B * Lp * Lp * C, 1e-6)
+                        if mode == "capacitor" else 0.8)
+        if v0 <= 0 and a <= 0:
+            a = 0.8
+        TW = _pos(p.get("T"), 5.0)
+        x0 = min(max(_nonneg(p.get("x0"), 0.10), 0.0), 0.30)
+        travel = min(max(_pos(p.get("travel"), 0.78), 0.2), 0.9 - x0)
+        rail_m = _pos(p.get("rail"), 2.0)
+        field_in = str(p.get("field") or "in").strip().lower() != "out"
+
+        def sim_s(t):
+            if mode == "resistor":
+                return v0 * tau * (1.0 - math.exp(-t / tau))
+            return v0 * t + 0.5 * a * t * t
+
+        def sim_v(t):
+            if mode == "resistor":
+                return v0 * math.exp(-t / tau)
+            return v0 + a * t
+
+        sT = max(sim_s(TW), 1e-9)
+        v_peak = max(sim_v(0.0), sim_v(TW), 1e-9)
+
+        def cur_i(v):
+            if mode == "capacitor":
+                return C * B * Lp * a
+            return B * Lp * v / R if R > 0 else 0.0
+
+        def amp_f(v):
+            return B * cur_i(v) * Lp
+
+        f_peak = max(amp_f(sim_v(0.0)), amp_f(sim_v(TW)), 1e-9)
+        f_ref = max(f_peak, F_ext if applied else 0.0, 1e-9)
+
+        tracker = ValueTracker(0.0)
+
+        def frac(t):
+            return x0 + travel * min(max(sim_s(t) / sT, 0.0), 1.0)
+
+        # 静态骨架：导轨同时是动态层的坐标真源（_fit 缩放/位移后从它反算，见 _live_update）。
+        X0, X1, YH = -3.75, 0.95, 0.95
+        rail_top = Line([X0, YH, 0], [X1, YH, 0], color=th["dim"], stroke_width=4)
+        rail_bot = Line([X0, -YH, 0], [X1, -YH, 0], color=th["dim"], stroke_width=4)
+
+        def scale():
+            return float(rail_top.get_length()) / (X1 - X0)
+
+        def rod_x(t):
+            return rail_top.get_start()[0] + frac(t) * (X1 - X0) * scale()
+
+        g = VGroup()
+
+        def area_build():
+            yt = rail_top.get_center()[1]
+            yb = rail_bot.get_center()[1]
+            xl = rail_top.get_start()[0]
+            w = max(rod_x(tracker.get_value()) - xl, 0.02)
+            rect = Rectangle(width=w, height=max(yt - yb, 0.02), stroke_width=0)
+            rect.set_fill(th["accent"], 0.08)
+            rect.move_to([xl + w / 2, (yt + yb) / 2, 0])
+            return rect
+
+        g.add(_live_update(area_build))
+
+        # 匀强场：× 向里 / · 向外（画在回路区域，杆与导轨压在上面）
+        for r in range(3):
+            yy = (1 - r) * 0.55
+            for c in range(7):
+                xx = X0 + 0.55 + c * (X1 - X0 - 1.0) / 6
+                if field_in:
+                    mk = T("×", font_size=30, color=th["warn"]).set_opacity(0.5).move_to([xx, yy, 0])
+                else:
+                    mk = Dot([xx, yy, 0], radius=0.07, color=th["warn"]).set_opacity(0.55)
+                g.add(mk)
+
+        g.add(rail_top, rail_bot)
+        if mode == "capacitor":
+            g.add(Line([X0, -YH, 0], [X0, -0.16, 0], color=th["dim"], stroke_width=4),
+                  Line([X0, 0.16, 0], [X0, YH, 0], color=th["dim"], stroke_width=4),
+                  Line([X0 - 0.36, 0.16, 0], [X0 + 0.36, 0.16, 0], color=th["key"], stroke_width=5),
+                  Line([X0 - 0.36, -0.16, 0], [X0 + 0.36, -0.16, 0], color=th["key"], stroke_width=5))
+            for sym, yy in (("+", 0.5 if field_in else -0.5), ("−", -0.5 if field_in else 0.5)):
+                pm = rich(sym, 22, th["warn"]).move_to([X0 - 0.62, yy, 0])
+                pm._placed = True
+                g.add(pm)
+        elif mode == "resistor":
+            g.add(Line([X0, -YH, 0], [X0, -0.45, 0], color=th["dim"], stroke_width=4),
+                  Line([X0, 0.45, 0], [X0, YH, 0], color=th["dim"], stroke_width=4),
+                  Rectangle(width=0.4, height=0.9, color=th["key"], stroke_width=3).move_to([X0, 0, 0]))
+        else:
+            g.add(Line([X0, -YH, 0], [X0, YH, 0], color=th["dim"], stroke_width=4))
+        if mode != "plain":
+            elab = rich("C" if mode == "capacitor" else "R", 24, th["key"]).move_to([X0 - 0.62, 0, 0])
+            elab._placed = True
+            g.add(elab)
+
+        # 电流方向：B 向里 ⇒ 杆内正电荷受力向上，电流沿上轨向左；B 向外反之。
+        # 箭头挂在「左端元件 → 杆」这段回路的中点并随杆移动（t=0 时回路极窄，先隐藏），
+        # 透明度跟随真实电流 I(t)/I_peak——电阻版减速时电流箭头随之变淡。
+        top_sign = -1.0 if field_in else 1.0
+        i_peak = max(cur_i(sim_v(0.0)), cur_i(sim_v(TW)), 1e-9)
+
+        def current_build():
+            s_ = scale()
+            xl = rail_top.get_start()[0]
+            yt = rail_top.get_center()[1]
+            yb = rail_bot.get_center()[1]
+            t = tracker.get_value()
+            gap = rod_x(t) - xl
+            xa = xl + gap / 2
+            h = 0.18 * s_
+            op = min(max(cur_i(sim_v(t)) / i_peak, 0.0), 1.0)
+            grp = VGroup(
+                Arrow([xa - h * top_sign, yt, 0], [xa + h * top_sign, yt, 0],
+                      color=th["warn"], buff=0, stroke_width=4,
+                      max_tip_length_to_length_ratio=0.5),
+                Arrow([xa + h * top_sign, yb, 0], [xa - h * top_sign, yb, 0],
+                      color=th["warn"], buff=0, stroke_width=4,
+                      max_tip_length_to_length_ratio=0.5),
+                rich("I", 20, th["warn"]).move_to([xa, yt + 0.26 * s_, 0]))
+            grp.set_opacity(0 if gap < 0.55 * s_ or op < 0.04 else op)
+            grp._live_state = round(op, 3)
+            return grp
+
+        g.add(_live_update(current_build))
+
+        # 读数面板：静态标签/单位随 _fit 缩放；数值由同一个时钟逐帧重写，右对齐到固定列。
+        # PX 与杆端 v 箭头尖（≤1.44）留出空隙：放 1.65 时杆到右端会与「实时读数」表头挤字。
+        PX, TOP_Y, ROW_GAP = 1.95, 1.48, 0.44
+        header = rich("实时读数", 21, th["key"])
+        header.move_to([PX + header.width / 2, TOP_Y, 0])
+        header._placed = True
+        g.add(header)
+
+        def px(dx):
+            return header.get_left()[0] + dx * scale()
+
+        def py(dy):
+            return header.get_left()[1] - dy * scale()
+
+        if mode == "capacitor":
+            rows = [("v", "m·s⁻¹", lambda t: sim_v(t), 1),
+                    ("E = BLv", "V", lambda t: B * Lp * sim_v(t), 1),
+                    ("Φ = BLx", "Wb", lambda t: B * Lp * rail_m * frac(t), 2),
+                    ("I = CBL·a", "A", lambda t: cur_i(sim_v(t)), 1),
+                    ("Q = CU", "C", lambda t: C * B * Lp * sim_v(t), 1)]
+        else:
+            rows = [("v", "m·s⁻¹", lambda t: sim_v(t), 1),
+                    ("E = BLv", "V", lambda t: B * Lp * sim_v(t), 1),
+                    ("Φ = BLx", "Wb", lambda t: B * Lp * rail_m * frac(t), 2),
+                    ("I = E/R", "A", lambda t: cur_i(sim_v(t)), 1),
+                    ("F安 = BIL", "N", lambda t: amp_f(sim_v(t)), 1)]
+
+        def num_field(getter, i, dec):
+            def build():
+                s_ = scale()
+                cap = 99.9 if dec == 1 else 9.99
+                val = min(max(float(getter(tracker.get_value())), 0.0), cap)
+                txt = f"{val:.{dec}f}"
+                pad = max(4 - len(txt), 0)
+                chars = ("0" * pad) + txt[-4:]
+                grp = VGroup(*[T(c, font_size=21 * s_, color=th["hi"]) for c in chars])
+                grp.arrange(RIGHT, buff=0.012 * s_)
+                grp.move_to([px(2.95) - grp.width / 2, py(0.52 + i * ROW_GAP), 0])
+                for gg in grp[:pad]:
+                    gg.set_opacity(0)
+                grp._live_state = round(val, dec)
+                return grp
+
+            mob = _live_update(build)
+            mob._placed = True
+            return mob
+
+        for i, (lab, unit, getter, dec) in enumerate(rows):
+            yy = TOP_Y - 0.52 - i * ROW_GAP
+            lm = rich(lab, 21, th["dim"])
+            lm.move_to([PX + lm.width / 2, yy, 0])
+            lm._placed = True
+            um = rich(unit, 18, th["dim"])
+            um.move_to([PX + 3.12 + um.width / 2, yy, 0])
+            um._placed = True
+            g.add(lm, um, num_field(getter, i, dec))
+
+        note = rich(str(p.get("label") or ("磁场垂直纸面向里（×）" if field_in else "磁场垂直纸面向外（·）")),
+                    18, th["dim"])
+        if note.width > 3.9:
+            note.scale_to_fit_width(3.9)
+        note.move_to([PX + note.width / 2, TOP_Y - 0.52 - len(rows) * ROW_GAP - 0.08, 0])
+        note._placed = True
+        g.add(note)
+
+        def rod_build():
+            s_ = scale()
+            t = tracker.get_value()
+            x = rod_x(t)
+            yt = rail_top.get_center()[1]
+            yb = rail_bot.get_center()[1]
+            return VGroup(Line([x, yb, 0], [x, yt, 0], color=th["key"], stroke_width=7),
+                          Dot([x, yt, 0], radius=0.07 * s_, color=th["hi"]),
+                          Dot([x, yb, 0], radius=0.07 * s_, color=th["hi"]))
+
+        rod = _live_update(rod_build)
+        g.add(rod)
+
+        def mk_arrow(base, x_sign, y_off, mag_fn, peak, color):
+            def build():
+                s_ = scale()
+                t = tracker.get_value()
+                x = rod_x(t)
+                y = base() + y_off * s_
+                ln = max(1.05 * s_ * min(max(mag_fn(t) / peak, 0.0), 1.0), 0.05)
+                ar = Arrow([x, y, 0], [x + x_sign * ln, y, 0],
+                           color=color, buff=0, stroke_width=5,
+                           max_tip_length_to_length_ratio=0.32)
+                if mag_fn(t) <= 1e-9:
+                    ar.set_opacity(0)
+                return ar
+
+            return _live_update(build)
+
+        v_arrow = mk_arrow(lambda: rail_top.get_center()[1], 1, 0.40,
+                           sim_v, v_peak, th["hi"])
+        f_arrow = mk_arrow(lambda: rail_bot.get_center()[1], -1, -0.40,
+                           lambda t: amp_f(sim_v(t)), f_peak, th["accent"])
+        g.add(v_arrow, f_arrow)
+        vlab = rich("v", 22, th["hi"])
+        # 标签挂在箭头下方：杆到右端时箭头尖端已贴近右侧读数面板，放 RIGHT 会与表头挤成一行。
+        vlab.add_updater(lambda mm: mm.next_to(v_arrow.get_end(), DOWN, buff=0.05))
+        vlab._placed = True
+        flab = rich("F安", 20, th["accent"])
+        flab.add_updater(lambda mm: mm.next_to(f_arrow.get_end(), LEFT, buff=0.06))
+        flab._placed = True
+        g.add(vlab, flab)
+        if applied:
+            fapp = mk_arrow(lambda: rail_top.get_center()[1], 1, 0.92,
+                            lambda t: F_ext, f_ref, th["warn"])
+            g.add(fapp)
+            falab = rich("F", 22, th["warn"])
+            falab.add_updater(lambda mm: mm.next_to(fapp.get_end(), RIGHT, buff=0.06))
+            falab._placed = True
+            g.add(falab)
+
+        try:
+            n_beats = int(p.get("beats"))
+        except (TypeError, ValueError):
+            n_beats = 4
+        n_beats = min(max(n_beats, 2), 6)
+        keys = reveal_keys(p.get("at"), n_beats)
+        beat_len = max(TW / n_beats, 1.0 / config.frame_rate)
+        beats = []
+        for k in range(n_beats):
+            t_end = TW * (k + 1) / n_beats
+            beat = _mo.advance_to(tracker, t_end,
+                                  note=f"单杆时钟演化 → t={t_end:.2f}s（cue {keys[k]}）")
+            # advance_to 在构造期读不到运行期当前值（四拍同时构造，cur 都是 0），
+            # 显式按「一拍走 T/拍数」给 run_time，预算分配才与物理 1:1 同速。
+            beat.run_time = beat_len
+            beat._cue_key = keys[k]
+            beats.append(beat)
+        g._rod_tracker = tracker
+        _mo.mount_motion(g, beats)
+        return g
+
     def _v_trajectory(self, p, th):
         """运动轨迹（频闪照片式）：虚线轨迹 + 等时间间隔位置点 + 切向速度箭头，点逐个揭示。
 
@@ -4134,33 +5696,34 @@ class Explainer(Scene):
         return g
 
     def _v_mechanism(self, p, th):
-        """有机化学推电子箭头机理图（81-S3）：物种 + 键 + 弯月箭头，逐箭揭示。
+        """有机化学推电子箭头机理图（81-S3；82-SB 锚点表统一坐标真源）：物种 + 键 + 孤对 + 弯月箭头，逐箭揭示。
 
-        画法口径（mech_arrow_geom 的文档钉死几何部分，这里是编排部分）：
-          · 弯箭头 = 电子的移动：尾在电子源（孤对点/键中点），头在电子汇（原子/新键位）；
-            直箭头（物种整体位移、平衡移动）留给后续批次——本 kind 先只做弯箭头机理排版；
+        画法口径（mech_arrow_geom 钉死几何、mech_anchors 钉死锚点语义，这里是编排部分）：
+          · 坐标真源=锚点表：先落物种字形（实测半宽半高），建原子/键/孤对锚点表 _ma.build_table，
+            键线与弯箭头全部从表上取坐标——键线不再中心到中心（按两端字形缘截短，不穿字形、
+            不触发挪字）；弯箭头尾在电子源（孤对点/键）、头在电子汇（原子缘/新键位）；
+          · arrows/bonds 端点支持锚点引用：{"atom":i,"side"?,"gap"?} / {"bond":j,"frac"?,"offset"?} /
+            {"lp":k}；裸 [x,y] 保留为兜底：落进原子字形盒归其中心，距锚点 < _ma.MECH_SNAP_RADIUS
+            自动吸附；吸附不上原样保留并把端点距锚长度进 MECH_DRIFT（run.py 重放链转成
+            MECH_ARROW_DRIFT finding，错位可报告化）；
+          · 物种与箭标签打 _locked_anchor：81-S4 挪字机器对这些文本豁免（82D3 主因：挪字把原子
+            从键线/弯箭头上搬走 20~122px）；物种间空间冲突改由布局阶段 _ma.spread_atoms 整体
+            推开、越界兜底仍由 _fit 等比缩放负责——挪的是一整张图，不是把字从键上撕下来；
           · type="cov"（默认，电子对流向/异裂）全头双刺；type="hom"（单电子/均裂）鱼钩单刺；
           · 骨架不做完整骨架式渲染器：物种=文本节点（走 rich()，S5 电荷上标归一化自动生效，
             Cu²⁺/SO₄²⁻ 级排版 + TOFU 兜底），键=短线（order 1~3；kind="break" 断=warn 虚线、
             kind="form" 成=accent 虚线），孤对/电子源=成对小圆点 lps；
           · 分批揭示：一支箭头 = 一个揭示单元（曲线+箭刺+随箭出现的物种/键/孤对点，
-            由 attach=箭下标绑定），at 数组长度 = 箭头数（reveal_keys 口径，长度不符回均匀铺批）；
+            由 attach=箭下标绑定），at 数组长度 = 有效箭数（reveal_keys 口径，长度不符回均匀铺批）；
             不带 attach 的物种从 cue0 就在屏上（机理图的"地图"），caption 图注同旧口径追加。
-        props: species:[{text, pos:[x,y], tone?, attach?}]
-               bonds:[{from:[x,y], to:[x,y], order?:1|2|3, kind?:"break"|"form", attach?}]
+        props: species:[{text, pos:[x,y]（缺省自动排位）, tone?, attach?, size?}]
+               bonds:[{from|to: [x,y] | {"atom":i}, order?:1|2|3, kind?:"break"|"form", attach?}]
                lps:[{pos:[x,y], attach?}]
-               arrows:[{from:[x,y], to:[x,y], bulge?, type?:"cov"|"hom", label?, tone?}]
-               at:[0~1 比例或字幕片段] × 箭头数, label?: 图注。
-        脏 props 兜底：pos 缺失的物种按行均布自动排位；退化箭头（起终点重合）跳过不画。
+               arrows:[{from|to: {"atom":i,"side"?,"gap"?} | {"bond":j,"frac"?,"offset"?} | {"lp":k} | [x,y],
+                        bulge?, type?:"cov"|"hom", label?, tone?}]
+               at:[0~1 比例或字幕片段] × 有效箭数, label?: 图注。
+        脏 props 兜底：pos 缺失的物种按行均布自动排位；端点解不出/退化的箭头跳过不画但占 attach 下标。
         """
-        def _pt(v, default=None):
-            if isinstance(v, (list, tuple)) and len(v) >= 2:
-                try:
-                    return (float(v[0]), float(v[1]))
-                except (TypeError, ValueError):
-                    return default
-            return default
-
         def _tone(t, fallback):
             return th.get(str(t or "").strip().lower(), th[fallback])
 
@@ -4170,10 +5733,35 @@ class Explainer(Scene):
         lps = [l for l in (p.get("lps") or []) if isinstance(l, dict)]
         arrows = [a for a in (p.get("arrows") or []) if isinstance(a, dict)]
 
-        # 静态层：键线（先画，垫在文本底下）
+        # 布局阶段①：物种字形先落位（实测字形半宽半高进锚点表），重叠原子整体推开；
+        # 这些文本此后不再被任何挪字机器碰（_locked_anchor 豁免，82-SB）。
+        placed = _ma.species_pos(species)
+        sp_mobs, atoms = [], []
+        for s, q in zip(species, placed):
+            txt = str(s.get("text") or "")
+            if not txt.strip() or q is None:
+                continue
+            mob = rich(txt, int(s.get("size") or 30), _tone(s.get("tone"), "fg"))
+            mob.move_to([q[0], q[1], 0.0])
+            mob._locked_anchor = True
+            sp_mobs.append((mob, s.get("attach")))
+            atoms.append({"text": txt, "pos": q, "half_w": mob.width / 2.0, "half_h": mob.height / 2.0})
+        if len(atoms) >= 2:
+            new_pos = _ma.spread_atoms(atoms)
+            for (mob, _at), q in zip(sp_mobs, new_pos):
+                mob.move_to([q[0], q[1], 0.0])
+            for a, q in zip(atoms, new_pos):
+                a["pos"] = q
+
+        # 坐标真源：锚点表（原子=实测字形盒；键端点裸坐标落进原子盒自动归到该原子中心）
+        table = _ma.build_table(atoms, bonds, lps)
+
+        # 静态层：键线（从表上取**按字形缘截短后**的画线端点；先收集、仍垫在文本后面）
         bond_mobs = []
-        for b in bonds:
-            q0, q1 = _pt(b.get("from")), _pt(b.get("to"))
+        for b, e in zip(bonds, table["bonds"]):
+            if not e["valid"]:
+                continue
+            q0, q1 = e["draw"]
             if q0 is None or q1 is None:
                 continue
             kind = str(b.get("kind") or "").strip().lower()
@@ -4195,37 +5783,31 @@ class Explainer(Scene):
                                 color=color, stroke_width=4) for o in offs])
             bond_mobs.append((unit, b.get("attach")))
         lp_mobs = []
-        for l in lps:
-            q = _pt(l.get("pos"))
+        for l, e in zip(lps, table["lps"]):
+            q = e["pos"]
             if q is None:
                 continue
             pair = VGroup(Dot(np.array([q[0] - 0.085, q[1], 0.0]), radius=0.05, color=th["accent"]),
                           Dot(np.array([q[0] + 0.085, q[1], 0.0]), radius=0.05, color=th["accent"]))
             lp_mobs.append((pair, l.get("attach")))
-        sp_mobs = []
-        auto_row = [s for s in species if _pt(s.get("pos")) is None]
-        for s in species:
-            txt = str(s.get("text") or "")
-            if not txt.strip():
-                continue
-            q = _pt(s.get("pos"))
-            if q is None:
-                j = len(sp_mobs)   # 缺 pos 的物种：按已收集序均布在一横排（保底不叠死）
-                q = ((j - (len(auto_row) - 1) / 2.0) * 2.6, 1.6)
-            mob = rich(txt, int(s.get("size") or 30), _tone(s.get("tone"), "fg"))
-            mob.move_to([q[0], q[1], 0.0])
-            sp_mobs.append((mob, s.get("attach")))
 
         # 揭示层：一支箭头一个单元，attach==i 的物种/键/孤对点随第 i 支箭同批淡入
         # （i 按**声明**的 arrows 下标计，退化箭跳过不占单元但占下标，attach 语义不漂移）
         units = []
         unit_by_decl = {}
+        arcs_report = []
         for i, a in enumerate(arrows):
-            q0, q1 = _pt(a.get("from")), _pt(a.get("to"))
+            q0, q1, h0, h1 = _ma.resolve_arrow(a, table)
+            for key, xy, how in (("from", q0, h0), ("to", q1, h1)):
+                if xy is None:
+                    continue
+                d = _ma.anchor_distance(xy, table)
+                if d > _ma.MECH_ANCHOR_THRESH:   # 端点锚定断言：超差=弧要指空，记账给重放链
+                    MECH_DRIFT.append((f"arrows[{i}].{key}[{how}]", round(d, 3)))
             geom = mech_arrow_geom(q0, q1, a.get("bulge"),
                                   full_head=str(a.get("type") or "cov").strip().lower() != "hom") \
                 if (q0 is not None and q1 is not None) else None
-            if geom is None:      # 退化/脏箭头（缺坐标或起终点重合）：跳过不画，零长箭不上屏
+            if geom is None:      # 退化/脏箭头（端点解不出或起终点重合）：跳过不画，零长箭不上屏
                 continue
             color = _tone(a.get("tone"), "accent")
             curve = CubicBezier(*[np.array([x, y, 0.0]) for x, y in geom["ctrl"]],
@@ -4236,7 +5818,10 @@ class Explainer(Scene):
                            color=color, stroke_width=4))
             lab = str(a.get("label") or "")
             if lab:
-                u.add(rich(lab, 22, color).move_to([geom["apex"][0], geom["apex"][1] + 0.32, 0.0]))
+                lm = rich(lab, 22, color).move_to([geom["apex"][0], geom["apex"][1] + 0.32, 0.0])
+                lm._locked_anchor = True     # 箭标签钉在弧顶，同样不进挪字机器（82-SB）
+                u.add(lm)
+            arcs_report.append({"arrow": i, "from": q0, "to": q1, "how": [h0, h1]})
             unit_by_decl[i] = u
             units.append(u)
         keys = reveal_keys(p.get("at"), len(units))
@@ -4253,8 +5838,18 @@ class Explainer(Scene):
             else:
                 g.add(mob)
         g.add(*units)
+        # 锚点表随块下发：冒烟量测/重放断言与渲染共用同一份真源，不再各处重算坐标
+        g._mech_table = {"atoms": [{"text": a["text"], "pos": a["pos"],
+                                    "half_w": a["half_w"], "half_h": a["half_h"]} for a in atoms],
+                         "bonds": [{"valid": e["valid"], "a": e["a"], "b": e["b"],
+                                    "mid": e["mid"], "draw": e["draw"]}
+                                   for e in table["bonds"]],
+                         "lps": [{"pos": e["pos"]} for e in table["lps"]],
+                         "arcs": arcs_report}
         if p.get("label"):
-            g = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+            outer = VGroup(g, rich(str(p["label"]), 24, th["key"])).arrange(DOWN, buff=0.25)
+            outer._mech_table = g._mech_table
+            g = outer
         return g
 
     BUILDERS = {
@@ -4271,6 +5866,7 @@ class Explainer(Scene):
         "optics": "_v_optics",
         "incline": "_v_incline",
         "trajectory": "_v_trajectory",
+        "rod_rails": "_v_rod_rails",
         "mechanism": "_v_mechanism",
         "title": "_v_title",
         "formula": "_v_formula",
@@ -4352,7 +5948,8 @@ class Explainer(Scene):
             m = getattr(self, self.BUILDERS[v["kind"]])(v["props"], th)
             m._kind = v["kind"]    # 渲染动效点名用（P2）：_render_shot 按版式类型挂 Indicate/ShowPassingFlash
             # 81-S4：锁定图元里的裸放置标签不许动画法，只在装配层做"只挪字"的全量复核；
-            # 走 _place_label 的图线标签（_placed）与刻度数字（_tick_*）已在各自机器里钉死，复核跳过。
+            # 走 _place_label 的图线标签（_placed）、刻度数字（_tick_*）与 82-SB mechanism 锚锁定文本
+            # （_locked_anchor——挪原子=错位根源）已在各自机器里钉死/豁免，复核跳过。
             PLACEMENTS.extend(_resolve_label_clashes(m))
             blocks.append(m)
         # 第四轮 F-5（评审 A D3、B 复检1）：不带内部揭示标记的正文块此前随整镜在 t=0
@@ -4360,8 +5957,10 @@ class Explainer(Scene):
         # 就按行分批，剩下这些"整块"按镜内进度依次进场，口径与 _tag_progressive 一致
         # （行序比例映射到既有字幕下标，不引入新时长）。已自带逐行揭示的块不接管：
         # 两层揭示会互相屏蔽，反而把逐行降级成逐块。
+        # 82-SD1a（M0 §6.2）：已挂 motion beats 的块同样不接管——整块淡入与过程动画互斥。
         plain = [i for i, m in enumerate(blocks)
-                 if not any(getattr(x, "_reveal_at", None) is not None for x in m.get_family())]
+                 if not any(getattr(x, "_reveal_at", None) is not None for x in m.get_family())
+                 and not getattr(m, "_motion_steps", None)]
         if len(plain) >= 2:
             for pos, i in enumerate(plain):
                 tag_reveal(blocks[i], pos / len(plain))
@@ -4397,16 +5996,8 @@ class Explainer(Scene):
         for m in mobs or ():
             kind = getattr(m, "_kind", "")
             tag = getattr(m, "_reveal_fx", None) or self._first_fx_in(m)
-            # #79-B：推导步的代入动效——代入值从上方飞入目标字母并落定。
-            # 目标字母在装配时设为透明，这里先让飞入副本落位，再把本体点亮。
-            fly = getattr(m, "_derivation_fly", None)
-            if fly:
-                for val, target, color in fly:
-                    src = rich(val, 22, color)
-                    src.next_to(target, UP, buff=0.7).shift(LEFT * 0.8)
-                    fx.append(TransformFromCopy(src, target))
-                    fx.append(target.animate.set_opacity(1))
-                continue
+            # 82-SD1b：推导飞入已完全收进 _motion_steps beats（_ValueFly），
+            # 这里不再对 _derivation_fly 补播第二套动画（同一 mobject 同一 cue 只许一套）。
             if tag == "wiggle":
                 fx.append(Wiggle(m, scale_value=1.05, n_wiggles=3))
             elif tag == "flash":
@@ -4431,6 +6022,10 @@ class Explainer(Scene):
         for blk in (stack.submobjects if isinstance(stack, VGroup) else []):
             if not blk.family_members_with_points():
                 continue
+            # 82-SD1b：已挂 motion beats 的块自带逐拍编排，不再补整块 Indicate——
+            # 否则 cue0 先被借走 ≤0.5s，短 cue 会把「书写第一式」那一拍挤到丢帧。
+            if getattr(blk, "_motion_steps", None):
+                continue
             if getattr(blk, "_kind", "") == "formula":
                 fx.append(ShowPassingFlash(blk.copy().set_color(self._th["hi"]),
                                            time_width=min(0.35, secs)))
@@ -4446,15 +6041,76 @@ class Explainer(Scene):
                 fx.append(Indicate(blk, scale_factor=1.2, color=self._th["hi"]))
         return fx
 
+    def _bind_motions(self, body, cues):
+        """82-SD1a 运动播放段第一步：把 builder 挂来的 beats/spec 换算成 cue→beats 分发表。
+
+        两种挂载（motion.py mount_motion/take_motion 协议）：
+          · ``_motion_steps``：builder 直挂的现成 beats（后续棒用，本棒 M6 不走这条）；
+          · ``_reveal_motion``：本棒文本要点 kind 挂的"揭示规格"——beats 必须等 _fit
+            定稿几何后再由 motion.reveal(animate_in=False) 产出（构造期几何未定，见
+            _mount_text_reveal），产完就地销毁 spec，一镜一次。
+        cue 绑定（讲到哪动到哪，Plan_82 §3）：beat.cue 是显式字幕下标；``_cue_key`` 沿用
+        _reveal_at 同一把尺（reveal_cue_index：0~1 行序比例或字幕片段），对不上口播的
+        beats 进 loose 表由镜尾兜底段按序播（82-M0 §6.4 引擎兜底口径）——绝不静默丢。
+        返回 ({cue: [beats]}, loose beats)。
+        """
+        by_cue: dict[int, list] = {}
+        loose: list = []
+        aux: dict[int, object] = {}   # 运动拍引入的辅助图元（高亮带），镜尾统一清理
+        for m in body.get_family():
+            spec = getattr(m, "_reveal_motion", None)
+            mounted = _mo.take_motion(m)
+            if spec is None and not mounted:
+                continue
+            if spec is not None:
+                beats = _mo.reveal(spec["units"], run_time=spec["run_time"],
+                                   emphasis=spec["emphasis"], emphasis_color=spec["color"],
+                                   cue_from=None, animate_in=False, read_along=True)
+                for b, k in zip(beats, spec["keys"]):
+                    b._cue_key = k
+                    # 「口播多久、色带就走多久」：单拍时长跟随该 cue 的朗读窗口（留 0.25s
+                    # 给字幕淡入淡出），而不是固定 1s 让后半句干等。play_motion 仍按真实
+                    # 窗口再裁一次，短 cue 自动压缩。
+                    idx_k = reveal_cue_index(k, cues) if cues else None
+                    if idx_k is not None:
+                        cue_sec = cues[idx_k]["end"] - cues[idx_k]["start"]
+                        b.run_time = max(0.6, min(cue_sec - 0.25, 2.0))
+                if spec.get("sweep"):
+                    beats = beats + _mo.draw(VGroup(*spec["units"]), mode="flow",
+                                             run_time=SWEEP_RUN_SEC, time_width=0.45,
+                                             color=spec["color"], cue=None,
+                                             note="镜尾回扫：已讲条目按顺序再过一遍（复盘动线）")
+                del m._reveal_motion
+                mounted = mounted + beats
+            for b in mounted:
+                idx = None
+                if b.cue is not None:
+                    idx = min(max(int(b.cue), 0), max(len(cues) - 1, 0))
+                else:
+                    key = getattr(b, "_cue_key", None)
+                    if key is not None and cues:
+                        if isinstance(key, (int, float)) and not isinstance(key, bool):
+                            key = float(key)   # 与 tag_reveal 同尺：JSON int → float 行序比例
+                        idx = reveal_cue_index(key, cues)
+                if idx is None:
+                    loose.append(b)
+                else:
+                    by_cue.setdefault(idx, []).append(b)
+                for x in getattr(b, "_aux", ()) or ():
+                    aux[id(x)] = x
+        return by_cue, loose, list(aux.values())
+
     def _render_shot(self, shot, plan, is_first=False, is_last=False):
         th = THEMES.get(plan["brief"]["style"], THEMES["clean"])
         body, stack, _corners = self._assemble(shot, plan, th, is_first, is_last)
 
         # Brief.subtitles=False 时画面不带内嵌字幕（留给外挂 srt / 烧录那一层去做）。
         # 揭示节奏仍按口播字幕时间轴走（否则 steps/compare 整镜全显），subtitles=False 时只是不把字幕画上屏。
-        cues = shot.get("subtitles", [])
+        cues = fit_cues(shot.get("subtitles", []), float(shot["seconds"]))
         show_caps = plan.get("brief", {}).get("subtitles", True)
         reveals, revealed_all = collect_reveals(body, cues)
+        # 82-SD1a：builder 经 mount_motion/_reveal_motion 挂来的运动 beats 按 cue 落位。
+        motions, loose_beats, motion_aux = self._bind_motions(body, cues)
 
         # 帧精确记账：manim 会把每个 play() 的 run_time 向上取整到整帧（实测每次 +0.01s，
         # 49 条字幕 × 3 段 + 镜头首尾 ≈ 160 段 → 成片比 Plan 长 0.6s，字幕与配音错开）。
@@ -4462,11 +6118,29 @@ class Explainer(Scene):
         # 使每镜实际帧数 == round(seconds × fps)，音画轴与 IR 轴保持重合。
         fps = config.frame_rate
         total_frames = int(round(shot["seconds"] * fps))
+
+        def _mrt(n: int) -> float:
+            # 82-SD1a 帧精度：manim 用 np.arange(0, run_time, 1/fps) 采样，run_time 恰为
+            # 23/15、31/15 这类值时浮点误差会多进 1 帧（实测 3 镜 42s 片长 42.53s）。
+            # 动画类 play 一律把 run_time 压到整帧数下方 1e-3 帧；wait 走 freeze 分支的
+            # int(duration/dt) 截断，不受影响，故 hold() 保持 n/fps 不动。
+            return max(int(n) - 0.001, 0.0) / fps
         outro_f = min(int(round(OUTRO * fps)), total_frames - 1)
         consumed = 0
         # 强调动效帧预算：最多借 FX_MAX_SEC 的既有 hold/停留帧（并至少留 2 帧给 play），
         # 镜头窗口不够就压缩 run_time——动效从不新增镜头时长。
         fx_cap = max(int(round(FX_MAX_SEC * fps)), 2)
+
+        # ---- 82-SD1a 运动播放段记账（借帧纪律与上面同源：只借 hold 帧、整帧对齐） ----
+        shot_no = getattr(self, "_shot_seq", -1) + 1
+        self._shot_seq = shot_no
+        ledger = getattr(self, "_motion_ledger", None)
+        if ledger is None:
+            ledger = self._motion_ledger = []
+        # 单镜动效总借帧 ≤ total_frames×MOTION_BUDGET_RATIO（D4 §4.2-3 / 82-M0 §6.1）；
+        # 超预算按契约降级并逐条记账，绝不静默全丢。
+        motion_budget = int(round(total_frames * MOTION_BUDGET_RATIO))
+        motion_spent = 0
 
         def frames_at(sec: float) -> int:
             return min(max(int(round(sec * fps)), 0), total_frames - outro_f)
@@ -4490,8 +6164,87 @@ class Explainer(Scene):
             self.play(fade(mobj), *[fade(e) for e in extra], run_time=n / fps)
             consumed += n
 
+        def record(status: str, beat, frames: int, cue) -> None:
+            ledger.append({"shot": shot_no, "cue": cue,
+                           "note": getattr(beat, "note", "") or "",
+                           "status": status, "frames": int(frames)})
+
+        def rescue_targets(beat) -> None:
+            """降级兜底：被丢 beat 若是「让内容出现」的引入动画（FadeIn 族），
+            直接 add 目标——内容可见性优先于动画，绝不允许某行整镜不出现（评审 D9 同族）。"""
+            for a in getattr(beat, "anims", ()):
+                if type(a).__name__ in ("FadeIn",) and getattr(a, "mobject", None) is not None:
+                    self.add(a.mobject)
+
+        def play_motion(beats, window: int, cue=None) -> int:
+            """运动播放段核心：一拍一 play、run_time 走 motion.snap_run_time 整帧对齐
+            （QUALITY_FPS 15/30 同一把尺），只借 window 帧内的既有 hold。
+            降级契约（任务书 §1）：窗口/预算放不下时——
+              · 语义最强 beat 优先（含「揭示」的当前条强调拍 > 纯压暗拍，稳定排序）；
+              · 能塞下的先按整帧压缩播（scaled），塞不下的丢（dropped）并 rescue 内容；
+              · 每一拍的去留都写 _motion_ledger，镜尾对 stderr 记账告警——不静默全丢。
+            返回剩余窗口帧数。"""
+            nonlocal consumed, motion_spent
+            # 同 cue 多拍分配：时钟演化（物理过程连续性）优先，其次揭示拍，最后压暗拍。
+            # 每拍至少给后面的拍留 MOTION_WINDOW_MIN_F 帧——否则先播的揭示/强调拍吃满窗口，
+            # 同一 cue 里的时钟拍会整拍丢掉，杆停在原地、读数与口播脱节（SC 冒烟实测）。
+            ordered = sorted(beats, key=lambda b: 0 if "时钟演化" in (b.note or "")
+                             else 1 if "揭示" in (b.note or "") else 2)
+            left = window
+            for b in ordered:
+                if not b.anims:
+                    record("empty", b, 0, cue)
+            active = [b for b in ordered if b.anims]
+            for pos, b in enumerate(active):
+                need = max(MOTION_WINDOW_MIN_F, int(round(_mo.snap_run_time(b.run_time) * fps)))
+                room = min(left, motion_budget - motion_spent)
+                if room < MOTION_WINDOW_MIN_F:
+                    record("dropped", b, 0, cue)
+                    rescue_targets(b)
+                    continue
+                rest = len(active) - pos - 1
+                cap = max(room - MOTION_WINDOW_MIN_F * rest, MOTION_WINDOW_MIN_F)
+                rt_f = min(need, cap)
+                self.play(*b.anims, run_time=_mrt(rt_f))
+                consumed += rt_f
+                motion_spent += rt_f
+                left -= rt_f
+                record("played" if rt_f >= need else "scaled", b, rt_f, cue)
+            return max(left, 0)
+
+        # ---- 开场：INTRO 硬切升级——上一镜暂存的旧内容在这里 yield_to 新内容 ----
+        # 「它不是消失了，它是变成了下一个」（六律⑥）；窗口不够则硬切移除并记账（回退路径）。
         intro_f = frames_at(INTRO)
-        anim(body, True, intro_f)
+        pend = getattr(self, "_yield_pending", None)
+        self._yield_pending = None
+        yielded = False
+        if pend is not None and intro_f == 0:
+            old_stack, old_revealed = pend
+            w0 = frames_at(cues[0]["start"]) if cues else 0
+            f = min(w0, fx_cap, max(motion_budget - motion_spent, 0))
+            if f >= MOTION_WINDOW_MIN_F and (
+                    old_stack.family_members_with_points() or old_revealed):
+                body.remove(stack)                     # 新 stack 由 transform 引入
+                self.add(body)
+                beat = _mo.yield_to(old_stack, stack, run_time=_mrt(f))[0]
+                self.play(*beat.anims,
+                          *[FadeOut(m, shift=DOWN * 0.6) for m in old_revealed],
+                          run_time=_mrt(f))
+                consumed += f
+                motion_spent += f
+                body.add(stack)
+                record("yield", beat, f, None)
+                yielded = True
+            else:
+                self.remove(old_stack, *old_revealed)
+                record("yield_hard", _mo.MotionBeat([], note="开场窗口不足：旧内容硬切移除（回退记账）"),
+                       0, None)
+        elif pend is not None:
+            # 遗留软边界（INTRO>0）路径不会消费 yield_pending：旧内容必须显式移除，
+            # 否则它会永远留在画面上（默认 INTRO=0 走不到，防御分支）。
+            self.remove(pend[0], *pend[1])
+        if not yielded:
+            anim(body, True, intro_f)
         want_fi = int(round(0.15 * fps))
         want_fo = int(round(0.12 * fps))
         for i, s in enumerate(cues):
@@ -4509,7 +6262,11 @@ class Explainer(Scene):
                     # 动效借这段 hold 窗口的帧播，后面的 hold 相应缩短——总帧数不变。
                     self.play(*fx, run_time=fx_n / fps)
                     consumed += fx_n
-                hold(max(remain - fx_n, 1))
+                # 运动播放段（无字幕路径同样生效）：预算够时留 1 帧收尾 hold，
+                # 但 fx_n 已吃满窗口时不能再借（否则每 cue 多 1 帧、成片比 Plan 长）。
+                reserve = 1 if remain - fx_n >= 1 else 0
+                left = play_motion(motions.get(i, ()), max(remain - fx_n - reserve, 0), cue=i)
+                hold(left + reserve)
                 continue
             # 字幕也走 rich()：同一句里正文的 y 是斜体、字幕的 y 是正体，读起来像两个东西（五.3 排版规范对全片生效）。
             cap = rich(s["text"], 30, th["fg"]).move_to([0, -4.0 + SUBTITLE_BAND / 2, 0])
@@ -4527,10 +6284,63 @@ class Explainer(Scene):
             if fx_n >= 2:
                 self.play(*fx, run_time=fx_n / fps)
                 consumed += fx_n
-            hold(mid - fx_n)
+            # 运动播放段：本 cue 的 beats 在揭示淡入与通用 fx 之后、按剩余 hold 窗口播放；
+            # 讲到哪条哪条亮（cue 绑定在 _bind_motions 完成），窗口不足整帧压缩或降级记账。
+            mid2 = play_motion(motions.get(i, ()), mid - fx_n, cue=i)
+            hold(mid2)
             anim(cap, False, fo)
 
-        hold(total_frames - outro_f - consumed)
-        # 揭示出来的子元素已经从 body 里摘出去了，收尾必须一起淡出，
-        # 否则它们会留在画面上叠进下一镜（实测：上一镜的 5 行步骤整段糊在下一镜的图上）。
-        anim(body, False, outro_f, revealed_all)
+        # ---- 镜尾：无 cue/对不上口播的 beats 兜底段（82-M0 §6.4），再升级边界硬切 ----
+        tail = total_frames - outro_f - consumed
+        exit_f = 0
+        if outro_f == 0 and tail >= 4:
+            # 退场预留：≤FX_MAX_SEC 且至少留 2 帧收尾 hold
+            exit_f = min(fx_cap, max(motion_budget - motion_spent, 0), tail - 2)
+            if exit_f < MOTION_WINDOW_MIN_F:
+                exit_f = 0
+        if loose_beats:
+            play_motion(loose_beats, max(tail - exit_f - 1, 0), cue=None)
+            tail = total_frames - outro_f - consumed
+            exit_f = min(exit_f, max(tail - 2, 0))
+        if outro_f > 0:
+            # 遗留软边界配置：保持整帧淡出行为（默认 OUTRO=0 不走这支）。
+            hold(tail)
+            anim(body, False, outro_f, revealed_all)
+        elif exit_f >= MOTION_WINDOW_MIN_F:
+            # 边界硬切升级（任务书 §1）：内容 stack+已揭示行播 exit_stage 方向性退场——
+            # 「旧内容把位置让给下一镜」可见（带方向 FadeOut，不留残影）；
+            # 页眉/角标属 ELEMENT_EXEMPT 固定件，仍随帧边界硬切。
+            beat = _mo.exit_stage([stack, *revealed_all, *motion_aux], direction=DOWN,
+                                  run_time=_mrt(exit_f))[0]
+            self.play(*beat.anims, run_time=_mrt(exit_f))
+            consumed += exit_f
+            motion_spent += exit_f
+            record("exit", beat, exit_f, None)
+            hold(max(tail - exit_f, 0))
+            # exit_stage 的 FadeOut(stack) 收尾时会对 stack 调 scene.remove()，manim 会
+            # 把含 stack 的 body 就地拆成 [页眉, 学科标签, 角标]——此后 remove(body) 是空操作，
+            # 页眉会带进下一镜（82-SD2a1 冒烟实测镜首出现两行页眉叠字）。按家族逐个移除，
+            # 拆散与否都能把本镜固定件硬切干净。
+            self.remove(*body.get_family())
+        elif tail < MOTION_WINDOW_MIN_F + 2 and (
+                stack.family_members_with_points() or revealed_all):
+            # 尾部放不下退场：旧内容暂存给下一镜开场 yield_to（画面不空切、帧数不越界）。
+            hold(max(tail, 0))
+            for x in list(body.submobjects):
+                if x is not stack:
+                    self.remove(x)
+            self._yield_pending = (stack, list(revealed_all))
+            record("pending_yield", _mo.MotionBeat([], note="镜尾帧预算不足：旧内容暂存待下一镜换位"),
+                   0, None)
+        else:
+            hold(tail)
+            self.remove(body, *revealed_all)
+        if motion_aux:
+            self.remove(*motion_aux)   # 高亮带不跨镜：pending_yield/软边界也一并清掉
+
+        # 降级可观测（任务书 §1「不许静默全丢」）：只要有 dropped/pending 就落一行 stderr。
+        degraded = [e for e in ledger if e["shot"] == shot_no
+                    and e["status"] in ("dropped", "yield_hard", "pending_yield")]
+        if degraded:
+            print(f"[motion] 镜{shot_no}: {len(degraded)} 拍降级（窗口/预算不足，"
+                  "已记账并保内容可见；时长不变）", file=sys.stderr)

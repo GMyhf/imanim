@@ -30,7 +30,7 @@ iron-rules（违反=返工）:
 pitfalls（实测口径）:
 - kp JSON 字段以 knowledge.py 现码为准（sequence，不是 shots）；文件读写一律 utf-8。
 - Windows GBK 控制台：print 非 ASCII 前 sys.stdout.reconfigure(errors='replace')。
-- 网关长响应易撞 524：桥已分段（max_tokens<=4000、逐镜、机械拼接）；若绕过桥直调 chat，
+- 网关长响应：桥已分段（缺省 max_tokens=8000、逐镜/分组、机械拼接）；若绕过桥直调 chat，
   必须自己保持同样分段。
 - gemini 通道（K2/P）故障（HTTP 500 empty_response）时：跳过该棒，把 handoff.json 的
   route_next 手工改成下一棒并在交回报告注明「核验推迟」——核心 rule 规定 7~8 轮深化后统一核验，

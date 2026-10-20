@@ -97,6 +97,8 @@ class GenerationError(RuntimeError):
 # PLACEMENTS/UNRESOLVED/CLASH_MOVED 统计，再经 review._unresolved_findings 转成 report 级
 # LABEL_CLASH finding 并入 review.json 既有 finding 流（violations）。语义：记账、不阻断——
 # blocking=False，review.blocking() 过滤掉，绝不拦出片；重放本身失败只记一笔状态。
+# 82-SB 同一条重放链顺路收集 scene.MECH_DRIFT（机理弯箭头端点锚定超差）→
+# review._mech_drift_findings → MECH_ARROW_DRIFT（report 级，同口径记账）。
 # 子进程用 sys.executable（与渲染同机的解释器；本仓测试/服务均跑在装了 manim 的 t314 环境），
 # 失败降级为 label_clash.status=replay_failed，不影响出片。
 
@@ -112,7 +114,7 @@ _LABEL_REPLAY_SNIPPET = (
 
 def replay_unresolved(plan: dict) -> list[dict]:
     """装配层重放：逐镜走 Explainer._assemble（与成片同一份几何），收集
-    {shot, unresolved:[残差,文本], placements, dirty_placements, moved}。
+    {shot, unresolved:[残差,文本], placements, dirty_placements, moved, mech_drift:[端点,距锚单位]}。
     懒导入 render.scene（manim 只在重放这一刻进进程）；异常原样抛出，由调用方吞掉。"""
     sys.path.insert(0, str(ROOT / "render"))
     import scene as S
@@ -124,12 +126,14 @@ def replay_unresolved(plan: dict) -> list[dict]:
         S.PLACEMENTS.clear()
         S.UNRESOLVED.clear()
         S.CLASH_MOVED.clear()
+        S.MECH_DRIFT.clear()
         ex._assemble(shot, plan, th, is_first=(i == 0), is_last=(i == len(shots) - 1))
         out.append({"shot": shot.get("index", i),
                     "unresolved": [[float(r), str(t)] for r, t in S.UNRESOLVED],
                     "placements": len(S.PLACEMENTS),
                     "dirty_placements": sum(1 for score, _ in S.PLACEMENTS if score),
-                    "moved": len(S.CLASH_MOVED)})
+                    "moved": len(S.CLASH_MOVED),
+                    "mech_drift": [[str(t), float(d)] for t, d in S.MECH_DRIFT]})
     return out
 
 
@@ -137,7 +141,7 @@ def harvest_label_clash(out_dir: Path, plan_path: Path) -> dict:
     """渲染后收集必挂冲突并并入 review.json；返回记账 dict（进 sidecar log['label_clash']）。
     任何一步失败（解释器无 manim、装配抛错、超时）都降级为 replay_failed，不动出片主流程。"""
     sidecar = out_dir / "label_clash.json"
-    tag: dict = {"status": "ok", "unresolved": 0, "findings": 0}
+    tag: dict = {"status": "ok", "unresolved": 0, "mech_drift": 0, "findings": 0}
     try:
         r = subprocess.run([sys.executable, "-c", _LABEL_REPLAY_SNIPPET,
                             str(plan_path), str(sidecar), str(ROOT)],
@@ -151,9 +155,14 @@ def harvest_label_clash(out_dir: Path, plan_path: Path) -> dict:
         for e in entries:
             findings.extend(review._unresolved_findings(e.get("unresolved") or [],
                                                         shot=e.get("shot", -1)))
+            # 82-SB：机理弯箭头端点锚定超差（scene.MECH_DRIFT 同一次重放收集）→
+            # report 级 MECH_ARROW_DRIFT，与 LABEL_CLASH 同流记账、不阻断。
+            findings.extend(review._mech_drift_findings(e.get("mech_drift") or [],
+                                                        shot=e.get("shot", -1)))
         tag = {"status": "ok",
                "shots": [{k: v for k, v in e.items()} for e in entries],
                "unresolved": sum(len(e.get("unresolved") or []) for e in entries),
+               "mech_drift": sum(len(e.get("mech_drift") or []) for e in entries),
                "findings": len(findings)}
         if findings:
             rj = out_dir / "review.json"

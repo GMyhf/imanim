@@ -128,6 +128,24 @@ def search(subject: str, query: str, max_hits: int = 5) -> list[Hit]:
     return hits
 
 
+def page_has(hit: Hit, needles: list) -> bool:
+    """命中页的**全文**是否真的在讲 needles 中的知识点（验来源用，不看截断摘要）。
+
+    search() 按词/双字组打分，可能把只沾了「水解」二字的页排进命中；这种页不能当
+    「SN1 水解机理」的出处。起草前先滤掉，模型就不会被要求照抄无关页。
+    """
+    wants = [w for w in (_norm(n) for n in needles) if w]
+    if not wants:
+        return True
+    txt = CORPUS_DIR / hit.subject / f"{hit.book}.txt"
+    try:
+        pages = _pages(txt, txt.stat().st_mtime_ns)
+    except OSError:
+        return False
+    body = next((c for p, c in pages if p == hit.page), "")
+    return _mentions(body, wants)
+
+
 def _page_numbers(subject: str, book: str) -> set[int]:
     txt = CORPUS_DIR / subject / f"{book}.txt"
     try:
@@ -136,11 +154,59 @@ def _page_numbers(subject: str, book: str) -> set[int]:
         return set()
 
 
-def validate_refs(subject: str, refs: list) -> list[str]:
-    """复核草稿 refs 是否真的来自语料命中。返回问题清单（空=通过）。"""
+def _norm(s) -> str:
+    return re.sub(r"\s+", "", str(s or "")).casefold()
+
+
+# 判“这一页在讲这个知识点”时不算证据的通用二字词：标题措辞不同很正常，但只对上
+# 「反应」「性质」「模型」这种词说明不了任何事。
+_GENERIC_GRAMS = {
+    "反应", "性质", "原理", "模型", "定义", "计算", "方向", "作用", "变化", "规律",
+    "方法", "问题", "公式", "关系", "影响", "概念", "应用", "实验", "函数", "系统",
+    "可以", "一个", "这个", "以及", "进行", "通过", "表示", "得到", "其中", "如果",
+}
+
+
+def _grams(s: str) -> set[str]:
+    t = _norm(s)
+    return {t[i:i + 2] for i in range(len(t) - 1)} - _GENERIC_GRAMS
+
+
+def _mentions(body: str, needles: list) -> bool:
+    """正文是否在讲 needles 中的知识点：整串命中，或共享的二字词落在两个不连续片段上。
+
+    只看共享词个数不够：「定积分」页与「用面积法理解定积分」共享「定积」「积分」两个
+    滑窗，但那是同一个词的尾部，正文并没有讲面积法。要求两段以上，才对应「乙烯 + 加成」
+    这种标题措辞不同、正文分头讲到的合法出处。
+    """
+    body_n = _norm(body)
+    body_g = _grams(body_n)
+    for n in needles:
+        nn = _norm(n)
+        if nn and nn in body_n:
+            return True
+        hits = [i for i in range(len(nn) - 1) if nn[i:i + 2] in body_g]
+        runs = 0
+        prev = -2
+        for i in hits:
+            if i > prev + 1:
+                runs += 1
+            prev = i
+        if runs >= 2:
+            return True
+    return False
+
+
+def validate_refs(subject: str, refs: list, needles: list | None = None) -> list[str]:
+    """复核草稿 refs 是否真的来自语料命中。返回问题清单（空=通过）。
+
+    传 needles（知识点名/别名）时再做一层内容核对：被引页正文要真的在讲这条知识点
+    （口径见 _mentions）。只查书名和页码挡不住「引了讲盐类水解的页去给 SN1 当出处」。
+    """
     problems = []
     if not refs:
         return problems
+    wants = [w for w in (_norm(n) for n in (needles or [])) if w]
     known = {str(m.get("title") or slug): slug for slug, m in books(subject)}
     for r in refs:
         if not isinstance(r, dict):
@@ -155,6 +221,14 @@ def validate_refs(subject: str, refs: list) -> list[str]:
         if not m:
             problems.append(f"refs 定位语「{locator or '(空)'}」不是「第 N 页」形态")
             continue
-        if int(m.group(1)) not in _page_numbers(subject, slug):
-            problems.append(f"《{source}》没有第 {m.group(1)} 页——locator 必须是命中页")
+        page = int(m.group(1))
+        if page not in _page_numbers(subject, slug):
+            problems.append(f"《{source}》没有第 {page} 页——locator 必须是命中页")
+            continue
+        if wants:
+            txt = CORPUS_DIR / subject / f"{slug}.txt"
+            body = next((c for p, c in _pages(txt, txt.stat().st_mtime_ns) if p == page), "")
+            if not _mentions(body, wants):
+                problems.append(f"《{source}》第 {page} 页正文没有讲这条知识点（整名/别名未命中，"
+                                f"有效词只落在同一段）——出处必须指向真正讲它的页")
     return problems

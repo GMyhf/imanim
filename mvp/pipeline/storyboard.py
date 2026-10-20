@@ -92,6 +92,154 @@ def _fit_callouts(blocks: list[dict]) -> None:
                     v["props"]["text"] = _reflow_callout(t)
 
 
+# ── 82-SD1b：推导兜底（确定性路径）────────────────────────────────────────
+# 生产 plan 的 derivation.sub 使用率 = 0：A3 遇到口播里的「代入/化简得/联立」仍爱用
+# formula/steps 一屏贴完。这里在分镜装配前做一次最小改写：只认口播触发词，只从本镜
+# 现有 formula.expr / steps.lines / narration 里抽等式，最多 3 步；抽不到第二式就
+# 老实留单步书写（Write），绝不编造物理结论。LLM 已给 derivation 的镜不动。
+_DERIV_TRIGGER_RE = re.compile(r"代入|化简得|化简|联立|因此可得|解得|由[^。！？；]{0,20}?得")
+_EQ_RE = re.compile(
+    r"[A-Za-zΑ-ωΔ][A-Za-zΑ-ωΔ0-9_^{}²³·×÷+\-*/()\s]{0,28}"
+    r"[=＝]"
+    r"[A-Za-zΑ-ωΔ0-9_^{}²³·×÷+\-*/()\s]{1,40}")
+
+
+def _equations(text: str) -> list[str]:
+    """从一句话里抽等式串（只认「字母开头、含 =、两边非空」的连续符号段）。"""
+    out: list[str] = []
+    for m in _EQ_RE.finditer(str(text or "")):
+        eq = re.sub(r"\s+", " ", m.group(0)).strip().replace("＝", "=")
+        if "=" not in eq:
+            continue
+        lhs, rhs = (x.strip() for x in eq.split("=", 1))
+        if lhs and rhs and eq not in out:
+            out.append(eq)
+    return out
+
+
+def _expand_product(eq: str) -> str | None:
+    """把 F=BIL 展开成 F = B·I·L（只对纯字母乘积），给「代入」一步留出可指的字母槽。"""
+    if "=" not in eq:
+        return None
+    lhs, rhs = (x.strip() for x in eq.split("=", 1))
+    compact = rhs.replace(" ", "")
+    if len(compact) >= 2 and re.fullmatch(r"[A-Za-zΑ-ωΔ]{2,6}", compact):
+        return f"{lhs} = " + "·".join(compact)
+    return None
+
+
+def _derivation_fallback(blocks: list[dict]) -> None:
+    """口播在推导、版面却只有 formula/steps 时，最小化改出一版 derivation（原地替换）。"""
+    for b in blocks:
+        narr = str(b.get("narration") or "")
+        trig = _DERIV_TRIGGER_RE.search(narr)
+        if not trig:
+            continue
+        visuals = b.get("visuals") or []
+        if any(isinstance(v, dict) and v.get("kind") == "derivation" for v in visuals):
+            continue                       # A3 已经给了推导：一律不碰
+        target = next((v for v in visuals if isinstance(v, dict)
+                       and v.get("kind") == "formula"), None)
+        if target is not None:
+            # 多张 formula 同屏时改成推导会多出图例/已知条/注记，版面必超高；交给 A3 正常产出。
+            if sum(1 for v in visuals if isinstance(v, dict) and v.get("kind") == "formula") > 1:
+                continue
+        else:
+            target = next((v for v in visuals if isinstance(v, dict)
+                           and v.get("kind") == "steps"), None)
+        if target is None:
+            continue                       # 没有可承接的公式/步骤块：不无中生有
+        texts: list[str] = []
+        for v in visuals:
+            if not isinstance(v, dict):
+                continue
+            props = v.get("props") or {}
+            if v.get("kind") == "formula":
+                texts.append(str(props.get("expr") or ""))
+            elif v.get("kind") == "steps":
+                texts.extend(str(x) for x in (props.get("lines") or []))
+        texts.append(narr)
+        eqs: list[str] = []
+        seen: set[str] = set()
+        for t in texts:
+            for eq in _equations(t):
+                key = re.sub(r"\s+", "", eq)      # F = BIL 与 F=BIL 是同一式，别记两遍
+                if key not in seen:
+                    seen.add(key)
+                    eqs.append(eq)
+        if not eqs:
+            continue                       # 口播只有文字结论：抽不出等式就不假装推导
+        eqs = eqs[:3]
+
+        # 代入：找一个「单字母 X=值」的已知式，X 出现在首式里 → 展开首式并挂 sub。
+        # 展开不出可指代 X 的槽位就不挂 sub（否则动画会指错位置，review 的 KIND 会打回）。
+        sub = None
+        src_eq = None
+        chain = [eqs[0]]
+        if "代入" in narr:
+            head_lhs = eqs[0].split("=", 1)[0].strip()
+            for eq in eqs[1:]:
+                lhs, rhs = (x.strip() for x in eq.split("=", 1))
+                if len(lhs) == 1 and lhs.isalpha() and lhs != head_lhs and lhs in eqs[0]:
+                    expanded = _expand_product(eqs[0])
+                    if expanded and re.search(rf"(?<![A-Za-z]){re.escape(lhs)}(?![A-Za-z])", expanded):
+                        sub = (lhs, rhs)
+                        src_eq = eq
+                        chain.append(expanded)
+                    break
+        for eq in eqs[1:]:
+            if eq == src_eq or eq in chain:
+                continue
+            chain.append(eq)
+        chain = chain[:3]
+
+        # at 必须逐字来自口播、且各步不同：按口播里出现的先后顺序把触发短语分给第 2、3 步，
+        # 没那么多触发词才退回行序比例（scene 会按比例映射）。
+        triggers: list[str] = []
+        for m in _DERIV_TRIGGER_RE.finditer(narr):
+            if m.group(0) not in triggers:
+                triggers.append(m.group(0))
+
+        def _at(i: int) -> str | float:
+            if i == 0:
+                return 0.0
+            if i - 1 < len(triggers):
+                return triggers[i - 1]
+            return round(i / len(chain), 3)
+
+        steps = []
+        for i, eq in enumerate(chain):
+            st: dict = {"text": eq, "at": _at(i)}
+            if i == 0:
+                st["note"] = "已知" if "已知" in narr else ""
+            elif sub is not None and i == 1:
+                st["sub"] = {sub[0]: sub[1]}
+                st["note"] = f"把 {sub[0]}={sub[1]} 代入"
+            else:
+                st["transform"] = max(0, i - 1)
+                st["note"] = "化简得" if "化简" in narr else ""
+            steps.append(st)
+
+        letters: dict[str, str] = {}
+        for eq in chain:
+            for ch in re.findall(r"[A-Za-zΑ-ωΔ]", eq):
+                letters.setdefault(ch, "")     # 只给同字母同色；不编物理含义（图例留空）
+        label = "推导"
+        if target.get("kind") == "steps":
+            label = str((target.get("props") or {}).get("heading") or "推导").strip() or "推导"
+        props = {
+            "steps": steps,
+            "symbols": letters,
+            "label": label,
+            "at": [st["at"] for st in steps],
+        }
+        last_rhs = chain[-1].split("=", 1)[-1].strip()
+        if last_rhs:
+            props["result"] = last_rhs
+        target["kind"] = "derivation"
+        target["props"] = props
+
+
 def _reveal_keys(node) -> set[str]:
     """一镜版式里所有 at 揭示键（含 graph_vt 的 cases[].at；at 可为字符串或列表）。"""
     out: set[str] = set()
@@ -229,6 +377,9 @@ def build(brief: Brief, kp: dict) -> Plan:
     refs = _all_refs(kp)
     # 内部调整第一步：屏上字太宽先按句读拆行（LEGIBLE 的根因大多是排版而非内容）
     _fit_callouts(blocks)
+    # 82-SD1b：口播在推导、画面却只有 formula/steps 的镜，就地兜底成 derivation
+    # （确定性、无 LLM；只用本镜已有等式，最多 3 步；已有 derivation 的镜不碰）
+    _derivation_fallback(blocks)
 
     prior = None
     prior_chars = 0

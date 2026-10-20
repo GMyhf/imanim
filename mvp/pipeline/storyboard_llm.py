@@ -61,9 +61,14 @@ def _user_message(brief: Brief, kp: dict, feedback: list[str] | None, prev: str 
     chars = int(brief.target_seconds * NATURAL_CPS)
     msg = (f"学科：{brief.subject}  学段：{kp_draft.GRADE_ZH.get(brief.grade, brief.grade)}  风格：{brief.style}\n"
            f"目标时长：{brief.target_seconds} 秒（镜头数 {MIN_SHOTS}~{cap} 个；"
-           f"口播总字数建议不超过约 {chars} 字，含所有镜头）\n"
-           f"先修点名镜：{'由系统在片头另加，你不要写' if brief.prior_knowledge and kp.get('prior') else '本片不要'}\n\n"
-           f"【知识点条目 JSON（唯一事实来源）】\n{json.dumps(kp, ensure_ascii=False, indent=1)}")
+           f"口播总字数建议不超过约 {chars} 字，含所有镜头）\n")
+    # 学段超纲红线与 review.check 同一份词表（review.scope_prompt），生成前就压住；
+    # 生成后即使漏了还有 A4 的 GRADE_SCOPE 兜底打回。
+    scope = review.scope_prompt(brief.grade, brief.subject)
+    if scope:
+        msg += scope + "\n"
+    msg += (f"先修点名镜：{'由系统在片头另加，你不要写' if brief.prior_knowledge and kp.get('prior') else '本片不要'}\n\n"
+            f"【知识点条目 JSON（唯一事实来源）】\n{json.dumps(kp, ensure_ascii=False, indent=1)}")
     if feedback:
         msg += ("\n\n【上一版输出】\n" + (prev or "") + "\n\n" + head + "\n" + "\n".join(feedback))
     return msg

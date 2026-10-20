@@ -132,7 +132,7 @@ class Stage:
     save_output: Optional[Callable] = None      # (ctx, obj, text) -> [相对路径]
     needs_isolated_context: bool = False
     deterministic: bool = False                 # True=bridge 直接执行（A4/R），不走网关
-    max_tokens: int = 4000                      # 缺省 4000：抗 524（Spec 第 11 节第 2 条）
+    max_tokens: int = 8000                      # 缺省 8000：流式已消 524 风险；4000 在 DeepSeek/Qwen 上会把 K1/M2 长 JSON 截断
     segments: Optional[Callable[[RunCtx], list]] = None   # 524/截断时的分段 user 列表
     parallel_segments: bool = False       # True=分段路径按段（按镜）ThreadPool 并行（81-F1，M1）；拼接仍按段号序
     stitch: str = "json"                        # 分段拼接策略：json=逐段抽 JSON 机械合并；text=原文拼接
@@ -452,7 +452,7 @@ def _kp_block(ctx: RunCtx) -> str:
 
 
 def segments_k1(ctx: RunCtx) -> list:
-    """K1 分段策略（机械修复，操作员，2026-10）：整条 KP JSON 常超单发 max_tokens=4000 被截断，
+    """K1 分段策略（机械修复，操作员，2026-10）：整条 KP JSON 常超单发上限被截断，
     照 T2（periodic_trial）实战形态分两段：段一只出除 sequence 外的顶层字段（sequence 出空数组），
     段二只出 {"sequence":[...]}；_stitch_json 对同名列表机械串接。"""
     b = ctx.brief
@@ -589,7 +589,7 @@ def build_m1(ctx: RunCtx) -> str:
 
 def segments_v0(ctx: RunCtx) -> list:
     """机械修复（操作员，2026-10）：V0 未注册分段策略，整片 visual_script（8~10 镜）单发
-    max_tokens=4000 常截断且无法恢复（bridge 截断兜底要求 st.segments）。照 segments_m2 形态
+    仍可能截断且无法恢复（bridge 截断兜底要求 st.segments）。照 segments_m2 形态
     按 KP sequence 镜数分组（每组 ≤4 镜），_stitch_json 对 shots 列表机械串接。"""
     kp = ctx.load_kp() or {}
     n = len(kp.get("sequence") or []) or 8
@@ -708,7 +708,7 @@ def segments_m2(ctx: RunCtx) -> list:
 
 
 def segments_m1(ctx: RunCtx) -> list:
-    """机械修复（操作员，2026-10）：M1 未注册分段策略，10 镜 ModelSpec 单发 max_tokens=4000
+    """机械修复（操作员，2026-10）：M1 未注册分段策略，10 镜 ModelSpec 单发
     常截断无法恢复。按 visual_script 镜数分组，_stitch_json 对 specs 列表机械串接。
     粒度调 1（逐镜分段）：单段 4 镜的 ModelSpec 输出在网关 120s 窗口内必 524
     （substitution_trial 实测两轮 ×3 attempt 全 524），逐镜分段是任务书既定纪律。"""

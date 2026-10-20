@@ -54,22 +54,25 @@ def rewrite(narrations: list[str], brief: ir.Brief) -> list[str] | None:
         return None
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(narrations))
     user = (f"学科：{brief.subject}；学段：{brief.grade}\n"
-            f"共 {len(narrations)} 段，逐段改写（顺序、条数不能变）：\n{numbered}")
-    try:
-        raw = llm_client.chat("VOICEOVER", llm_prompts.VOICEOVER_SYSTEM, user,
-                              max_tokens=8000, json_mode=True)
-    except llm_client.LLMError:
-        return None
-    try:
-        obj = llm_client.extract_json(raw)
-    except llm_client.LLMError:
-        return None
-    lines = obj.get("lines") if isinstance(obj, dict) else (obj if isinstance(obj, list) else None)
-    if not isinstance(lines, list) or len(lines) != len(narrations):
-        return None
-    if not all(isinstance(x, str) and x.strip() for x in lines):
-        return None
-    return [x.strip() for x in lines]
+            f"共 {len(narrations)} 段，逐段改写（顺序、条数不能变；lines 必须恰好 "
+            f"{len(narrations)} 个字符串，一段一个）：\n{numbered}")
+    for attempt in range(2):
+        try:
+            raw = llm_client.chat("VOICEOVER", llm_prompts.VOICEOVER_SYSTEM, user,
+                                  max_tokens=8000, json_mode=True)
+        except llm_client.LLMError:
+            return None
+        try:
+            obj = llm_client.extract_json(raw)
+        except llm_client.LLMError:
+            return None
+        lines = obj.get("lines") if isinstance(obj, dict) else (obj if isinstance(obj, list) else None)
+        if (isinstance(lines, list) and len(lines) == len(narrations)
+                and all(isinstance(x, str) and x.strip() for x in lines)):
+            return [x.strip() for x in lines]
+        if attempt == 0:     # 条数漂移时补一句显式纠正再试一次，仍不合规就交给离线兜底
+            user += f"\n\n注意：必须恰好返回 {len(narrations)} 项，且每项非空。"
+    return None
 
 
 def apply(plan: ir.Plan) -> dict:

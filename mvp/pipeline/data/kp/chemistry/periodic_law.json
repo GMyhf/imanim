@@ -13,43 +13,43 @@
   "refs": [
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.7 电子结构与周期表（印刷 p.49 / PDF p.191）：1869 年 Meyer 与 Mendeleev 独立发现、周期律命名；类硅预言 72、Winkler 1886 年发现锗 72.59；Ar 与 Ca 反常；Moseley 与原子序数；同主族价层电子组态相似。PDF 页序 = 印刷页码 + 142。"
+      "locator": "第2章 2.7 电子结构与周期表：发现史、类硅与锗、Ar/Ca 反常、原子序数（印刷 p.49 / PDF p.191）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.7（印刷 p.50 / PDF p.192）：周期数 = 价层主量子数；第三周期 3s、3p 填入 8 个电子；图 2.19 有效核电荷变化。"
+      "locator": "第2章 2.7：周期数=价层主量子数；第三周期 3s、3p 填 8 电子（印刷 p.50 / PDF p.192）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.8 原子半径（印刷 p.51 / PDF p.193）：半径定义；Cu 256 pm → 128 pm；Cl2 198 pm → 99 pm；图 2.21 锯齿；一般同周期减小、同族增大。"
+      "locator": "第2章 2.8 原子半径：定义与锯齿趋势（印刷 p.51 / PDF p.193）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.8（印刷 p.52 / PDF p.194）：半径趋势成因（主量子数壳层、有效核电荷、屏蔽不佳）与斜对角趋势。"
+      "locator": "第2章 2.8：半径趋势成因与斜对角趋势（印刷 p.52 / PDF p.194）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.10 电离能（印刷 p.54 / PDF p.196）：I1、I2 定义；Cu I1 746 kJ/mol、I2 1958 kJ/mol；图 2.24 第一电离能数据；通常同族减小、一般同周期增大。"
+      "locator": "第2章 2.10 电离能：I1、I2 定义与总趋势（印刷 p.54 / PDF p.196）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.10（印刷 p.55 / PDF p.197）：除少数例外同周期上升；O 低于 N 因同轨道电子成对斥力；第二电离能总是高于第一电离能。"
+      "locator": "第2章 2.10：同周期上升的少数例外；O 低于 N 的成对斥力（印刷 p.55 / PDF p.197）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第2章 2.10（印刷 p.56 / PDF p.198）：第一电离能最高靠近 He、最低靠近 Cs；金属集中在左下。"
+      "locator": "第2章 2.10：第一电离能极值位置与金属分布（印刷 p.56 / PDF p.198）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第3章 3.12 电负性（印刷 p.91 / PDF p.233）：Pauling 1932 年；Mulliken χ = (I + Ea)/2；N、O、Br、Cl、F 电负性最高。"
+      "locator": "第3章 3.12 电负性：Pauling 与 Mulliken 标度（印刷 p.91 / PDF p.233）"
     },
     {
       "source": "Atkins、Jones、Laverman《Chemical Principles》第6版（W. H. Freeman）",
-      "locator": "第3章 3.12（印刷 p.92 / PDF p.234）：C 2.55、O 3.44、Mg 1.31；差约 2 视为离子键，小于约 1.5 共价描述合理。"
+      "locator": "第3章 3.12：C 2.55、O 3.44、Mg 1.31；键型判别阈值（印刷 p.92 / PDF p.234）"
     },
     {
       "source": "Chambers、Holliday《Modern Inorganic Chemistry: An Intermediate Text》（Butterworths）",
-      "locator": "第2章 Periodic trends 小节（印刷 p.34 / PDF p.39）：表 2.6 第 2、3 周期原子序数（第三周期 11–18）；许多原子获得电子时放出能量。PDF 页序 = 印刷页码 + 5。"
+      "locator": "第2章 Periodic trends 表 2.6：第三周期 11-18（印刷 p.34 / PDF p.39）"
     }
   ],
   "prior": [
@@ -69,9 +69,9 @@
     "按原子序数排列，元素落入均匀重复的图案",
     "同主族元素价层电子组态相似，所以性质相似",
     "原子半径一般同周期自左向右减小，同族自上而下增大",
-    "第一电离能一般同周期自左向右增大，除少数例外",
+    "整体上升，除少数例外：铝低于镁，硫低于磷",
     "第二电离能总是高于第一电离能",
-    "电负性是原子在分子中拉引成键电子的能力"
+    "电负性量度原子处于分子中时对成键电子的拉引能力"
   ],
   "figure_refs": [],
   "sequence": [
@@ -91,7 +91,7 @@
         {
           "kind": "callout",
           "props": {
-            "text": "1869 年 Meyer 与 Mendeleev 独立发现：按原子质量递增排列 → 元素分成性质相似的家庭 → 周期律",
+            "text": "按原子质量递增排列 · 元素分成性质相似的家庭 · 这就是周期律",
             "tone": "key"
           }
         }
@@ -400,7 +400,7 @@
             "points": [
               "现代周期表按原子序数排列",
               "实质：价层电子排布的周期性重复",
-              "半径一般同周期减小、同族增大",
+              "原子半径一般同周期减小、同族增大",
               "第一电离能一般同周期增大，I2 总是大于 I1",
               "电负性倾向于右上角高；差约 2 视为离子键"
             ]

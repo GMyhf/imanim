@@ -3,10 +3,12 @@
 set -euo pipefail
 cd /app
 
-# 在线生成默认开放（用户 2026-10-18 决定）。密钥 QX_LLM_API_KEY 必须经创空间环境变量注入，
-# 不进镜像；没配密钥时生成会如实报错。想临时关闭：环境变量 MVP_GENERATE_DISABLED=1。
+# 在线生成默认开放（用户 2026-10-18 决定）。两套密钥必须经创空间环境变量注入、不进镜像：
+# 推理后端 QX_LLM_API_KEY（缺省 ModelScope，可用 QX_LLM_PROVIDER 切回 gateway），
+# 配音网关 QX_TTS_API_KEY（ModelScope 无 TTS 路由）。没配密钥时生成会如实报错。
+# 想临时关闭：环境变量 MVP_GENERATE_DISABLED=1。
 # 库外知识点由 K0 起草，需 QX_LLM_K0=1；出片后的「改进」需 A3 重写分镜，需 QX_LLM_A3=1；
-# 配音稿（朗读稿）按整镜上下文由网关改写，需 QX_LLM_VOICEOVER=1（关闭/失败回退 tts 正则兜底）。
+# 配音稿（朗读稿）按整镜上下文由推理后端改写，需 QX_LLM_VOICEOVER=1（关闭/失败回退 tts 正则兜底）。
 # 三个都默认开：没配密钥时生成/改进会如实报错、朗读稿回退正则，画廊不受影响。
 export QX_LLM_K0="${QX_LLM_K0:-1}"
 export QX_LLM_A3="${QX_LLM_A3:-1}"

@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import font_metrics as _fm  # noqa: E402  纯标准库：不破坏本文件「不 import scene/manim」的纪律
+import mech_anchors as _ma  # noqa: E402  82-SB mechanism 锚点表——与渲染侧同一份锚点语义/容差，纯标准库
 
 from .ir import (ACCEPTABLE_RATE, BUDGET_REF_KIND, FAST_CPS, GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
                  MIN_SHOT_SECONDS, NATURAL_CPS, RATE_FACTOR, SHOT_HEAD, SHOT_TAIL, SPEED_LADDER,
@@ -47,13 +48,17 @@ FIGURE_SHAPES = {"ellipse", "right_triangle", "chord"}
 
 # 物理图示的方向词与元件类型（与 render/scene.py 的 _FORCE_DIRS / circuit 符号同源）。
 _FORCE_DIRS = {"up", "down", "left", "right", "upleft", "upright", "downleft", "downright"}
-_FIELD_MODES = {"region", "wire", "magnet"}
+# 与 render/scene.py 的 _v_field 同源（82D2 续棒补齐 5 种场图；漏同步会让合法图示被 KIND 打回）。
+_FIELD_MODES = {"region", "wire", "magnet", "efield_point", "efield_pair",
+                "efield_plate", "solenoid", "compass"}
 # 81-S1 扩了三元件（capacitor/inductor/rheostat，scene.CIRCUIT_HALF 同源）；闸门枚举不认的类型一律打回。
 _CIRCUIT_TYPES = {"battery", "resistor", "switch", "bulb", "ammeter", "voltmeter",
                   "capacitor", "inductor", "rheostat"}
 _OPTICS_MODES = {"mirror", "refract", "lens", "image"}
 _INCLINE_DIRS = {"normal", "into", "along_up", "along_down"}
 _TRAJECTORY_MODES = {"projectile", "circle", "cycloid"}
+# 82-SC 单杆导轨三模式：scene._v_rod_rails 同源（未知 mode 静默落回 plain，闸门抓拼写）。
+_ROD_MODES = {"plain", "resistor", "capacitor"}
 # 81-S2 新字段合法域（scene._v_force_diagram 的 surface 与 scene._v_mechanism 的 bonds[].kind 同源）：
 # 支承面三式（未知串渲染层静默落回旧路径，闸门抓错字）；断键/成键两式。
 _SURFACE_KINDS = {"ground", "wall_left", "wall_right"}
@@ -64,7 +69,8 @@ _MECH_BOND_KINDS = {"break", "form"}
 # 空 violations 从此只在"这些码确实跑过"的意义下才算通过。
 # 这份清单由 test_review.py 与源码对撞（扫 add(...) 里真实出现的码），加检查忘登记会被测出来。
 CODES = (
-    "AXIS_LABEL", "COUNT", "DUR_SHARE", "DUR_SHORT", "GLYPH", "KIND", "LEGIBLE",
+    "AXIS_LABEL", "COUNT", "DUR_SHARE", "DUR_SHORT", "GLYPH", "GRADE_SCOPE", "KIND", "LEGIBLE",
+    "MECH_ARROW_DRIFT", "MECH_COORD",
     "MISSING_QUALIFIER", "NO_FIGURE", "NO_REF", "OVERLOAD", "PACING", "QUALIFIER_LOSS",
     "SAFE_AREA", "SUB_OVERLAP", "SUB_RANGE", "SUB_WIDTH", "TARGET", "TERM",
 )
@@ -216,33 +222,51 @@ def _meter_findings(ty: str, e: dict) -> list[str]:
     return msgs
 
 
-def _mech_findings(props: dict) -> list[str]:
-    """mechanism（81-S3）协议闸门：arrows≥1；at 若给则长度=声明箭数；
-    species/bonds/lps 的 attach 必须是声明 arrows 的整数下标；kind=break/form 的键必须挂 attach。
-    渲染层全部有脏值兜底（attach 越界落静态层、at 长度不符回均匀铺批、退化箭跳过但占下标），
-    闸门比渲染层严——这些形状全是「LLM 以为画了、实拍不对」的静默缺陷，与 C1b mag/across 同一口径。"""
-    msgs = []
+def _mech_findings(props: dict) -> list[tuple[str, bool]]:
+    """mechanism 协议闸门（81-S3 形状校验 + 82-SB 坐标真源校验）。返回 [(消息, 是否 warning)]：
+    · 形状（既有口径）：arrows≥1；species/bonds/lps 的 attach 必须是声明 arrows 的整数下标；
+      kind=break/form 的键必须挂 attach——这些全是「LLM 以为画了、实拍不对」的静默缺陷，阻断打回；
+    · 坐标（_ma.validate_props，与渲染侧同一份锚点语义）：端点合法性/值域、引用可解、
+      弧端点距最近锚点 ≤ MECH_ANCHOR_THRESH（超差=弯箭头指空，阻断→走既有回灌 A3 自愈）、
+      at 长度=**有效**箭数（脏坐标箭被渲染层静默跳过，按声明箭数对齐会音画错位）——阻断；
+    · 裸坐标兜底通道（含自动吸附）→ warning（MECH_COORD 记账，不阻断）：82D3 结论 A3 手算多数
+      只差 0~0.2 单位，一刀切断这条腿会把存量语料全打死；提示词已改锚点语法，新分镜应零裸坐标。
+    闸门侧原子半宽用 font_metrics 估算（本文件不 import scene/manim），容差已留吸附半径余量。"""
+    msgs: list[tuple[str, bool]] = []
+    species = [s for s in _seq(props.get("species")) if isinstance(s, dict)]
+    bonds = [b for b in _seq(props.get("bonds")) if isinstance(b, dict)]
+    lps = [l for l in _seq(props.get("lps")) if isinstance(l, dict)]
     arrows = [a for a in _seq(props.get("arrows")) if isinstance(a, dict)]
     if not arrows:
-        msgs.append("mechanism 至少要一支弯箭头（弯箭头=电子的移动，是机理图的揭示单元）")
+        msgs.append(("mechanism 至少要一支弯箭头（弯箭头=电子的移动，是机理图的揭示单元）", False))
     at = _seq(props.get("at")) if props.get("at") is not None else []
-    if at and arrows and len(at) != len(arrows):
-        msgs.append(f"mechanism 的 at 长度 {len(at)} ≠ 箭头数 {len(arrows)}（一箭一条，长度必须相等；"
-                    f"不等时渲染层退化为均匀铺批，揭示与口播脱钩）")
+    half_est = []
+    for s in species:
+        fs = _num(s.get("size"), 30.0)
+        if not (fs and fs > 0):
+            fs = 30.0
+        try:
+            w = _est_width(_text(s.get("text")), fs)
+        except Exception:  # noqa: BLE001  未标定字体退经验值，闸门不许因估宽本身崩
+            w = 0.45 * len(_text(s.get("text"))) * fs / 32.0
+        half_est.append((max(w / 2.0, 0.12), 0.30 * fs / 32.0))
+    errors, warns = _ma.validate_props(species, bonds, lps, arrows, bool(at), len(at),
+                                       half_est=half_est)
+    msgs.extend((m, False) for m in errors)
+    msgs.extend((m, True) for m in warns)
     if arrows:
-        for key in ("species", "bonds", "lps"):
-            for i, it in enumerate(_seq(props.get(key))):
-                if not isinstance(it, dict) or it.get("attach") is None:
+        for key, seq in (("species", species), ("bonds", bonds), ("lps", lps)):
+            for i, it in enumerate(seq):
+                if it.get("attach") is None:
                     continue
                 a = it.get("attach")
                 if isinstance(a, bool) or not isinstance(a, int) or not 0 <= a < len(arrows):
-                    msgs.append(f"mechanism 的 {key}[{i}] attach={a!r} 必须是 0~{len(arrows) - 1} 的整数"
-                                f"（声明的 arrows 下标；越界/非整数时该元素落静态层，揭示语义漂移）")
-        for i, bd in enumerate(_seq(props.get("bonds"))):
-            if isinstance(bd, dict) and _text(bd.get("kind")).strip().lower() in _MECH_BOND_KINDS \
-                    and bd.get("attach") is None:
-                msgs.append(f"mechanism 的 bonds[{i}] kind=「{_text(bd.get('kind'))}」必须挂 attach"
-                            f"（绑定到某支箭随批揭示；不绑定则断键/成键信息静态全显，失去揭示意义）")
+                    msgs.append((f"mechanism 的 {key}[{i}] attach={a!r} 必须是 0~{len(arrows) - 1} 的整数"
+                                 f"（声明的 arrows 下标；越界/非整数时该元素落静态层，揭示语义漂移）", False))
+        for i, bd in enumerate(bonds):
+            if _text(bd.get("kind")).strip().lower() in _MECH_BOND_KINDS and bd.get("attach") is None:
+                msgs.append((f"mechanism 的 bonds[{i}] kind=「{_text(bd.get('kind'))}」必须挂 attach"
+                             f"（绑定到某支箭随批揭示；不绑定则断键/成键信息静态全显，失去揭示意义）", False))
     return msgs
 
 
@@ -267,6 +291,67 @@ def _incline_vt_findings(props: dict) -> list[str]:
     return msgs
 
 
+def _rod_rails_findings(props: dict) -> list[str]:
+    """rod_rails 参数闸门（82-SC）：scene._v_rod_rails 对非法值静默落回默认/钳位——
+    钳完画面照样出，但杆的运动与读数就不是作者声明的那个物理情景，必须打回。"""
+    msgs = []
+    mode = _text(props.get("mode") or "plain").strip().lower()
+    if mode not in _ROD_MODES:
+        msgs.append(f"rod_rails 的 mode=「{_text(props.get('mode'))}」只能是 {sorted(_ROD_MODES)}"
+                    f"（未知串渲染层按 plain 画，回路的 R/C 元件会消失）")
+    for key in ("B", "L", "m", "R", "C", "T", "rail"):
+        v = props.get(key)
+        if v is not None and not _pos_num(v):
+            msgs.append(f"rod_rails 的 {key}={v!r} 必须是有限正数（B/L/m/R/C/T/rail 同 scene 默认口径）")
+    for key in ("F", "v0", "a"):
+        v = props.get(key)
+        if v is not None and (not _fin_num(v) or v < 0):
+            msgs.append(f"rod_rails 的 {key}={v!r} 必须是非负有限数（外力/初速/加速度）")
+    x0 = props.get("x0")
+    if x0 is not None and (not _fin_num(x0) or not 0.0 <= x0 <= 0.30):
+        msgs.append(f"rod_rails 的 x0={x0!r} 必须在 0~0.30（起点占轨长比例；越界渲染层静默钳位）")
+    travel = props.get("travel")
+    if travel is not None and (not _fin_num(travel) or not 0.2 <= travel <= 0.9):
+        msgs.append(f"rod_rails 的 travel={travel!r} 必须在 0.2~0.9（行程占轨长比例）")
+    else:
+        x = x0 if _fin_num(x0) else 0.10
+        if _fin_num(travel) and travel > 0.9 - x + 1e-9:
+            msgs.append(f"rod_rails 的 travel={travel!r} 超出 x0={x!r} 允许的行程上限 "
+                        f"{0.9 - x:.2f}（杆会冲出导轨右端，渲染层静默钳位）")
+    fld = props.get("field")
+    if fld is not None and _text(fld).strip().lower() not in ("in", "out"):
+        msgs.append(f"rod_rails 的 field=「{_text(fld)}」只能是 in/out（垂直纸面向里 × / 向外 ·）")
+    beats = props.get("beats")
+    if beats is not None:
+        ok = isinstance(beats, int) and not isinstance(beats, bool) and 2 <= beats <= 6
+        ok = ok or (isinstance(beats, float) and math.isfinite(beats)
+                    and float(beats).is_integer() and 2 <= beats <= 6)
+        if not ok:
+            msgs.append(f"rod_rails 的 beats={beats!r} 必须是 2~6 的整数（时钟拍数=建议字幕条数）")
+    at = props.get("at")
+    if isinstance(at, (list, tuple)) and beats is not None and len(at) != beats:
+        msgs.append(f"rod_rails 的 at 有 {len(at)} 个 cue，但 beats={beats}：长度不等会整镜按行序均摊，"
+                    f"杆的运动与口播脱同步")
+    # 运动学自洽：渲染层对全零初速+加速度会静默补 a=0.8（画面在动、物理是编的），
+    # 电阻模式 v0=0 则杆一动不动。两种都不许出片。
+    try:
+        v0 = float(props.get("v0")) if props.get("v0") is not None else None
+        a_ = float(props.get("a")) if props.get("a") is not None else None
+        F_ = float(props.get("F")) if props.get("F") is not None else None
+    except (TypeError, ValueError):
+        return msgs
+    if mode == "resistor":
+        if v0 is not None and v0 <= 0:
+            msgs.append("rod_rails(resistor) 的 v0 必须为正：无外力自由减速从 0 出发杆不会动（画面静止）")
+    else:
+        has_a = a_ is not None and a_ > 0
+        has_f = F_ is not None and F_ > 0
+        if (v0 is None or v0 <= 0) and not has_a and not (mode == "capacitor" and (F_ is None or has_f)):
+            msgs.append("rod_rails 的运动参数全零（v0≤0 且 a/F≤0）：渲染层会静默补 a=0.8，"
+                        "杆在动但物理量是编的；请给 v0/F/a 中至少一个正值")
+    return msgs
+
+
 def _unresolved_findings(unresolved, shot=-1) -> list[dict]:
     """81-G（S4 遗留 6 的执行面）：把渲染期 scene.UNRESOLVED（复核自认救不回来的必挂冲突）
     转成 report 级 findings——blocking=False，记账不拦出片。
@@ -276,6 +361,17 @@ def _unresolved_findings(unresolved, shot=-1) -> list[dict]:
              "msg": f"渲染期字重叠复核自认必挂：「{_text(t)}」（残差 {r}），成片里注定叠字——"
                     f"不拦出片，出片后反查该镜"}
             for r, t in _seq(unresolved)]
+
+
+def _mech_drift_findings(drift, shot=-1) -> list[dict]:
+    """82-SB：渲染侧把机理弯箭头「端点距所绑锚点超差」（scene.MECH_DRIFT，落笔前自测）
+    转成 report 级 MECH_ARROW_DRIFT finding——与 LABEL_CLASH 同口径：记账、blocking=False、
+    不拦出片；阈值锚在 mech_anchors.MECH_ANCHOR_THRESH（场景单位，1080p 下 1u≈135px）。
+    接线同 81-E2 T1a：由 run.replay_unresolved 收集、harvest 并入 review.json。"""
+    return [{"shot": shot, "code": "MECH_ARROW_DRIFT", "blocking": False,
+             "msg": f"机理弯箭头锚定超差：{t} 端点距最近锚点 {d}u > 容差 {_ma.MECH_ANCHOR_THRESH}u，"
+                    f"弧在成片里指空——电子源/汇请改锚点引用 {{\"atom\"/\"bond\"/\"lp\": 下标}}（82-SB 记账）"}
+            for t, d in _seq(drift)]
 
 
 def _texts(obj, out=None):
@@ -393,6 +489,9 @@ def _visual_height(shot: Shot) -> float:
             h += 3.2
         elif v.kind == "incline":
             h += 3.4
+        elif v.kind == "rod_rails":
+            # 单杆装置 + 右侧五行实时读数（scene._v_rod_rails 实测 3.05~3.56 高）。
+            h += 3.6
         elif v.kind == "trajectory":
             h += 3.6
         elif v.kind == "derivation":
@@ -408,6 +507,120 @@ def _visual_height(shot: Shot) -> float:
     return h
 
 
+# ---------------------------------------------------------------------------
+# 学段感知超纲闸门（82P1a 事故）：brief.grade=H2（页眉「化学 · 高二」）的片子
+# 讲成了大学有机化学。证据链：
+#   .local/82P1a_run/chemistry_20261020_095720-1dc0/brief.json:3   "grade": "H2"
+#   .local/.../plan.json:6-27                                     refs 全是 Keeler & Wothers
+#                                                                 大学教材第 7/11/12 章
+#   mvp/pipeline/data/kp/chemistry/substitution_reaction.json     原标 grade=H2（已改 U2）
+#   同文件 :42/:55/:93/:138/:160/:194/:277/:368                   HOMO/LUMO、σ*/π*、
+#                                                                 SN1/SN2、亲核取代、离去基团
+#   同文件 :46-52                                                 forbidden 只有整句错误说法，
+#                                                                 没有这些术语
+#   review.py:515/573-579（改前）                                 旧闸门只做 forbidden 整句字面
+#                                                                 包含，且完全不看学段
+# 结论（2026-10-20 用户口径「高中大学都有很正常，分就是验来源」）：学段由**可核来源**定，
+# 不由内容词猜。该条目 6 条 refs 全为大学教材，已改标 U2；kp_auto 的「SN1水解机理」原引
+# 人教版第 80 页（实为盐类水解），属编造出处，已清空 refs 并改标 U2。闸门仍保留：条目可以
+# 跨级引用，但输出必须服从 brief.grade。这里用确定性词表兜底，与 A3/K0 提示词共用同一份规则
+# （scope_prompt）：生成前提示、生成后 FAIL。
+#
+# 逐条依据：
+# - SN1/SN2：条目 refs 第 11 章 §11.1（大学教材）；高中只讲「取代反应」，不编号命名机理。
+# - E1/E2：同书 §11/§12 的命名消除机理；高中教材只讲「消去反应」，不编号。
+# - HOMO/LUMO/前线轨道：条目 prior:42 明写「HOMO 与 LUMO 的辨认」，属大学前线轨道理论。
+# - 分子轨道/反键轨道/σ*/π*：条目 must_say:55 的「σ* 分子轨道」；高中只讲 σ/π 键。
+# - 亲核取代/离去基团：条目 aliases:9-12 与 sequence:277/368 直接出现，属大学有机术语。
+# - 「杂化轨道」**不在**表内：人教版选择性必修《物质结构与性质》已讲，且用户明确要求保留。
+# - E1/E2 只在化学学科命中：物理里 E1/E2 可作场强/能级编号，避免误伤。
+SCOPE_TERM_RULES = (
+    # (展示名, 匹配式, 限定学科 None=全学科)
+    ("SN1", re.compile(r"(?<![A-Za-z0-9])SN1(?![0-9])", re.I), None),
+    ("SN2", re.compile(r"(?<![A-Za-z0-9])SN2(?![0-9])", re.I), None),
+    ("E1", re.compile(r"(?<![A-Za-z0-9])E1(?![0-9])", re.I), ("chemistry",)),
+    ("E2", re.compile(r"(?<![A-Za-z0-9])E2(?![0-9])", re.I), ("chemistry",)),
+    ("HOMO", re.compile(r"(?<![A-Za-z])HOMO(?![A-Za-z])", re.I), None),
+    ("LUMO", re.compile(r"(?<![A-Za-z])LUMO(?![A-Za-z])", re.I), None),
+    ("前线轨道", re.compile(r"前线轨道"), None),
+    ("分子轨道", re.compile(r"分子轨道"), None),
+    ("反键轨道", re.compile(r"反键轨道"), None),
+    ("σ*", re.compile(r"σ\s*\*"), None),
+    ("π*", re.compile(r"π\s*\*"), None),
+    ("亲核取代", re.compile(r"亲核取代"), None),
+    ("离去基团", re.compile(r"离去基团"), None),
+)
+
+_GRADE_ZH = {"G8": "初二", "G9": "初三", "H1": "高一", "H2": "高二", "H3": "高三",
+             "U": "大学", "U1": "大一", "U2": "大二", "U3": "大三", "U4": "大四"}
+
+
+def _norm_grade(grade) -> str:
+    return unicodedata.normalize("NFKC", _text(grade)).strip()
+
+
+def grade_stage(grade) -> str | None:
+    """把各种学段写法归成 k12（初中/高中）、u（大学）或 None（未知，不启用词表）。
+
+    后台/旧 plan.json 可能写「高二」「高中」「大学」「大二」等中文，不能只认 H2/U2。
+    """
+    g = _norm_grade(grade)
+    up = g.upper()
+    if up in ("H1", "H2", "H3", "K12", "K-12") or re.match(r"高[一二三]", g) or "高中" in g:
+        return "k12"
+    if up in ("G7", "G8", "G9") or re.match(r"初[一二三]", g) or "初中" in g:
+        return "k12"
+    if (up in ("U", "U1", "U2", "U3", "U4") or re.match(r"大[一二三四]", g)
+            or "大学" in g or "本科" in g or "研究生" in g):
+        return "u"
+    return None
+
+
+def grade_label(grade) -> str:
+    """命中消息里的学段写法：能认的中文就写「高二（H2）」这种双写法。"""
+    g = _norm_grade(grade)
+    zh = _GRADE_ZH.get(g.upper(), g)
+    return f"{zh}（{g}）" if zh and zh != g else (zh or "未知学段")
+
+
+def _scope_terms(subject: str = "") -> list[str]:
+    subject = _text(subject).strip().lower()
+    return [term for term, _pat, subjects in SCOPE_TERM_RULES
+            if not subjects or not subject or subject in subjects]
+
+
+def scope_prompt(grade, subject: str = "") -> str:
+    """A3/K0 共用的学段提示（与 review.check 同一份词表，避免生成与闸门口径漂移）。"""
+    stage = grade_stage(grade)
+    if stage not in ("k12", "u"):
+        return ""
+    label = grade_label(grade)
+    terms = "、".join(_scope_terms(subject))
+    if stage == "k12":
+        return (f"【学段红线】当前学段「{label}」：全片口播、标题、屏上文字都不得出现大学级概念：{terms}。"
+                f"请改用高中教材口径（讲反应物、条件、现象、产物），不要写命名机理与轨道符号；"
+                f"确需讲这些概念时，把学段改为大一/大二再生成。"
+                f"「杂化轨道」属高中选择性必修内容，不在禁止之列，不要误删。")
+    return (f"【学段口径】当前学段「{label}」：{terms} 等大学级概念可以使用，"
+            f"但仍须逐字服从知识点条目，不得添加条目外的内容。")
+
+
+def _scope_hits(shot: Shot, subject: str = "") -> list[str]:
+    """一镜所有会念出口或写上屏的文字里命中的超纲词（按词表顺序、去重）。"""
+    texts = [_text(shot.title), _text(shot.narration), _text(shot.emphasis)]
+    texts += _texts([{"kind": v.kind, "props": v.props} for v in _seq(shot.visuals)])
+    raw = unicodedata.normalize("NFKC", "\n".join(texts)).casefold()
+    compact = re.sub(r"\s+", "", raw)   # 「S N 2」「σ *」这种排版/口播写法
+    subject = _text(subject).strip().lower()
+    hits = []
+    for term, pat, subjects in SCOPE_TERM_RULES:
+        if subjects and subject not in subjects:
+            continue
+        if pat.search(raw) or pat.search(compact):
+            hits.append(term)
+    return hits
+
+
 def check(plan: Plan, kp: dict | None = None) -> list[dict]:
     findings: list[dict] = []
 
@@ -418,6 +631,9 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
     forbidden = _seq((kp or {}).get("forbidden"))
     # 模型起草的库外条目本来就没有教材出处（sidecar 的 kp_origin 如实标注），不按缺出处打回。
     draft_kp = bool(kp) and kp.get("origin") == "model_draft"
+    scope_stage = grade_stage(getattr(getattr(plan, "brief", None), "grade", ""))
+    scope_subject = _text(getattr(getattr(plan, "brief", None), "subject", ""))
+    scope_label = grade_label(getattr(getattr(plan, "brief", None), "grade", "")) if scope_stage == "k12" else ""
 
     # 同片"写全了限定"的那几句（结论 emphasis / 屏上正文 / 条目声明的 must_say）。
     # 第四轮 F-3：chem 末镜「一句话记住」把 shot6 的 emphasis「氧化型浓度升高，电极电势增大」压成
@@ -480,6 +696,17 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
             on_screen = _texts([{"kind": v.kind, "props": v.props} for v in _seq(s.visuals)])
             if word in _text(s.narration) or any(word in t for t in on_screen):
                 add(s.index, "TERM", f"出现库中标记为易错/不规范的表述：{word}")
+
+        # 学段感知超纲：高中/初中brief出现大学级术语 → 阻断。不能只靠 kp.forbidden 的整句
+        # 字面匹配（substitution_reaction 的 forbidden 里没有 SN1/SN2/HOMO/σ*，这些词恰恰
+        # 写在 must_say/sequence 里，见本条上方证据链）。
+        if scope_stage == "k12":
+            hits = _scope_hits(s, scope_subject)
+            if hits:
+                add(s.index, "GRADE_SCOPE",
+                    f"学段「{scope_label}」超纲：出现大学级概念「{'、'.join(hits)}」；"
+                    f"建议改用高中教材口径（讲反应物、条件、现象、产物，删去命名机理与轨道符号），"
+                    f"或把学段改为大一/大二后再生成")
 
         for v in _seq(s.visuals):
             props = v.props if isinstance(v.props, dict) else {}
@@ -610,10 +837,30 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                     # 81-S2 斜面↔v-t 联动参数：越界值渲染层静默钳位，钳完物理量就不是作者说的那个
                     for msg in _incline_vt_findings(props):
                         add(s.index, "KIND", msg)
-            if v.kind == "mechanism":
-                # 81-S3 推电子箭头机理协议（81S3_report §3 props 表）
-                for msg in _mech_findings(props):
+            if v.kind == "rod_rails":
+                for msg in _rod_rails_findings(props):
                     add(s.index, "KIND", msg)
+                at = props.get("at")
+                if isinstance(at, (list, tuple)) and at:
+                    cue_text = "".join(x["text"] for x in s.subtitles())
+                    for j, key in enumerate(at):
+                        if isinstance(key, (int, float)) and not isinstance(key, bool):
+                            if not 0.0 <= float(key) <= 1.0:
+                                add(s.index, "KIND",
+                                    f"rod_rails 的 at[{j}]={key!r} 越界：行序比例必须在 0~1")
+                        elif _text(key).strip() and _text(key) not in cue_text:
+                            add(s.index, "KIND",
+                                f"rod_rails 的 at[{j}]「{_text(key)}」不在本镜任何一条字幕里，"
+                                f"该拍会掉到镜尾兜底、与口播脱同步")
+            if v.kind == "mechanism":
+                # 81-S3 推电子箭头机理协议 + 82-SB 坐标真源闸门：阻断走 KIND（回灌 A3 自愈），
+                # 裸坐标兜底 warning 单列 MECH_COORD（blocking=False，记账不拦出片）
+                for msg, warn in _mech_findings(props):
+                    if warn:
+                        findings.append({"shot": s.index, "code": "MECH_COORD", "blocking": False,
+                                         "msg": msg})
+                    else:
+                        add(s.index, "KIND", msg)
             if v.kind == "trajectory" and _text(props.get("mode") or "projectile") not in _TRAJECTORY_MODES:
                 add(s.index, "KIND", f"trajectory 的 mode 只能是 {sorted(_TRAJECTORY_MODES)}")
             if v.kind == "derivation":

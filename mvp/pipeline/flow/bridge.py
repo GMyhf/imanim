@@ -5,7 +5,7 @@
   reports/<stage>_prompt_system.md / <stage>_prompt_user.md / <stage>_response*.md / <stage>.md
 
 抗 524（Spec 第 11 节第 2 条 + .local/complex_trial/gateway.py 实战形态）：
-  max_tokens 缺省 4000；HTTP 524 或响应截断（JSON 解析坏）→ 按分段策略（Stage.segments）
+  max_tokens 缺省 8000；响应截断（JSON 解析坏）→ 按分段策略（Stage.segments）
   逐段调用、逐段落盘 _response_part<i>.md，再机械拼接（text=原文串接；json=逐段抽取合并）。
 
 独立性棒（K2/P/A8/S22）不由 --auto 内联跑：打印

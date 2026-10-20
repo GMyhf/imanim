@@ -14,12 +14,13 @@ license: MIT
 > ⚠️ **在线生成默认开放，但有两道先决条件没满足前不保证能出片。**
 > 移植阻断项 ①②③④ 都已从代码层面解除（配音走网关 HTTP、字体开源替代、字距运行时标定、
 > 字幕字体 env 化，见下表），但镜像尚未经 `docker build` 验证、生成还依赖创空间环境变量注入的
-> 网关密钥（`QX_LLM_API_KEY`）。密钥没配、或字体探针没跑出标定缓存时，生成会如实报错
-> 而不是假装在跑；画廊浏览不受影响。要现场跑一条，请在 Windows 上按 `PROJECT.md` 的命令执行。
+> 两套密钥：推理后端 `QX_LLM_API_KEY`（缺省 ModelScope）与配音网关 `QX_TTS_API_KEY`。
+> 密钥没配、或字体探针没跑出标定缓存时，生成会如实报错而不是假装在跑；画廊浏览不受影响。
+> 要现场跑一条，请在 Windows 上按 `PROJECT.md` 的命令执行。
 
 ## 这里能看什么
 
-首页是**作品墙**：每条知识点一支成片，旁边挂着它的四份中间产物，全部可下载可核对——
+首页是**作品墙**：每条知识点一支成片，卡片上可进分镜查看/修订；成片与中间产物仍可经接口下载核对——
 
 | 文件 | 它是什么 |
 | --- | --- |
@@ -37,8 +38,8 @@ license: MIT
 ```
 Brief（学科/学段/知识点/时长/风格）
   → Knowledge（本地资料库检索，命中教材锚点，无 LLM）
-  → Plan（分镜 IR：15 种视觉原语）
-  → review（19 类静态监督闸门，不过则拒绝出片）
+  → Plan（分镜 IR：24 种视觉原语）
+  → review（22 类静态监督闸门，不过则拒绝出片）
   → ManimCE 渲染（无声画面；公式走 latex+dvisvgm，缺 TeX 自动退回 Pango 排版）
   → TTS（网关 qwen3-tts-flash，HTTP POST /v1/audio/speech）→ 字幕对齐 → subs.srt
   → ffmpeg 混流 → 时长/音画漂移闸门 → 成片 + sidecar.json
@@ -57,8 +58,8 @@ Brief（学科/学段/知识点/时长/风格）
 
 ## 当前状态（如实）
 
-- 语料：8 条知识点（数学 4 / 物理 3 / 化学 1），学段 G8–H2。
-- 测试：257 项全绿（`mvp/tests/`，含每条闸门的"必然命中"反向用例，也含字体标定这类
+- 语料：16 条知识点（数学 5 / 物理 6 / 化学 5），学段 G8–U2（学段由可核教材来源定）。
+- 测试：874 项全绿（`mvp/tests/`，含每条闸门的"必然命中"反向用例，也含字体标定这类
   不渲染像素、直接读 SVG 轮廓的复检用例）。
 - 验收：**正在按四维量表做第五轮独立复评**（batch_v8），两名互不知情的评审人各自读图打分后交叉裁定
   （科学性/易懂/美学/完成度，通过线 S ≥ 4.5、U/A/C ≥ 3.5、总分 ≥ 4.0，
@@ -71,7 +72,7 @@ Brief（学科/学段/知识点/时长/风格）
 
 | # | 阻断项 | 现状（已核对源码） | 结论 / 需要的改动 |
 | --- | --- | --- | --- |
-| ① | 配音 | **已解除（#60-A）**。`audio/tts.py` 不再走 Windows SAPI/powershell，改为第三方网关 HTTP：`POST {QX_LLM_BASE_URL}/v1/audio/speech`（默认 `https://api.openai-next.com`），模型 `qwen3-tts-flash`，voice `cherry`。间歇性 403/408/429/5xx 已内置重试：共 5 次尝试、间隔 3s 起翻倍（3/6/12/24s）。网关 WAV 头 size 字段溢出、speed 参数无效两个坑均已在代码内处理/如实记账 | Linux 容器可用，但有三个前提：**(a)** 密钥经 env 注入——`QX_LLM_API_KEY` 直接给值，或 `QX_LLM_KEY_FILE` 指向容器内可读的密钥文件（代码缺省的 `D:\Desktop\key.txt` 在 Linux 不存在，必须二选一，**密钥只走创空间的环境变量配置，不进镜像、不进仓库**）；**(b)** 容器出网可达 `api.openai-next.com`（可用 `QX_LLM_BASE_URL` 换网关）；**(c)** 接受 403/429 抖动——重试已内置，但网关持续不可用时配音会失败 |
+| ① | 配音 | **已解除（#60-A）**。`audio/tts.py` 不再走 Windows SAPI/powershell，改为第三方网关 HTTP：`POST {QX_TTS_BASE_URL}/v1/audio/speech`（缺省 `https://api.openai-next.com`），模型 `qwen3-tts-flash`，voice `cherry`。ModelScope 推理网关**没有** TTS 路由（实测 404），所以配音端点/密钥与活动 LLM 后端解耦：`QX_TTS_API_KEY` / `QX_TTS_KEY_FILE`。间歇性 403/408/429/5xx 已内置重试：共 5 次尝试、间隔 3s 起翻倍（3/6/12/24s）。网关 WAV 头 size 字段溢出、speed 参数无效两个坑均已在代码内处理/如实记账 | Linux 容器可用，但有三个前提：**(a)** 密钥经 env 注入——`QX_TTS_API_KEY` 直接给值，或 `QX_TTS_KEY_FILE` 指向容器内可读的密钥文件（代码缺省的 `D:\Desktop\key.txt` 在 Linux 不存在，必须二选一，**密钥只走创空间的环境变量配置，不进镜像、不进仓库**）；**(b)** 容器出网可达 `api.openai-next.com`（可用 `QX_TTS_BASE_URL` 换网关）；**(c)** 接受 403/429 抖动——重试已内置，但网关持续不可用时配音会失败 |
 | ② | 中文字体 | `scene.py` 默认已不是 YaHei：`T()` 中文走 `SimSun`（宋体）、拉丁/数字走 `Times New Roman`，分别可用 env `MVP_TEXT_FONT` / `MVP_LATIN_FONT` 覆盖 | **两款都是商业字体，不能打进 Linux 镜像**。替代映射：SimSun → `Noto Serif CJK SC`（衬线、全量 CJK，`fonts-noto-cjk` 提供）；Times New Roman → `TeX Gyre Termes`（Times 度量兼容，`fonts-texgyre`）或 `Liberation Serif`（`fonts-liberation`）。Dockerfile 已按此装包并设 env |
 | ③ | 字号/字距标定 | 标定值与字体**强绑定**：`scene.py` 的 `_DELTA_DESC/_DELTA_CJK/_DELTA_PAREN`（分段基线拼接）与 `review.py` 的 `UNIT_CJK/UNIT_ASCII`（LEGIBLE 闸门估宽）都是量着 SimSun+Times 实测的，唯一事实源在 `mvp/font_metrics.py` 的 `CALIBRATED` 表（键=字体对），未标定字体对会抛 `FontMetricsError` 硬拒、绝不静默沿用旧值 | **已运行时化（#9）**。容器换字体后不用人进容器手填：`start.sh` 起服务前自动跑 `python mvp/tools_fontmetrics.py --out mvp/font_metrics_cache.json`，`font_metrics.metrics_for()` 未标定时读这份缓存把实测值注册进表；探针跑不出就如实保持"只当画廊"（生成报 `FontMetricsError`），画廊不受影响 |
 | ④ | 字幕烧录 | `pipeline/mux.py` 的 ASS Style 里 `FontName` **写死 `Microsoft YaHei`**，Linux 容器没有这款字 | **已解除**。`SUB_FONT` 改读 env `MVP_SUB_FONT`（缺省仍是 YaHei，Windows 行为不变）；Dockerfile 已设 `MVP_SUB_FONT="Noto Serif CJK SC"` 与画面字体同源。默认不出烧录版（画面内已排字幕），要外挂/烧录版才走这条 |
@@ -84,9 +85,9 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
   `libpango1.0-dev`、`pkg-config`、`gcc` 现场编译；Dockerfile 已按此写，第一次构建要盯这一步。
 - 免费档只有 2vCPU/8G、无 GPU，一条 60–120s 的片子在容器里的墙钟时间未实测；
   磁盘配额（系统盘 / `/mnt/workspace`）也没有官方数字，直接决定能预置多少条成片
-  （当前画廊 16 条约 119MB，最大单文件 10.0MB，无 >100MB 文件、不触 LFS）。
+  （当前画廊 2 条约 18.5MB，最大单文件 11.5MB，无 >100MB 文件、不触 LFS）。
 
-## push 检查单（一步到位版；至今无远端，任何 push/建空间都等用户确认）
+## push 检查单（一步到位版；远端为 sprwli/chengxiang_gallery，push/重新部署需用户授权）
 
 按 SubTask #45③ 底稿，补上本轮新增的两个前置步骤（**加粗**项）：
 
@@ -95,10 +96,11 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
    字距标定已运行时化：`start.sh` 起服务前自动跑 `tools_fontmetrics.py --out mvp/font_metrics_cache.json`，
    `font_metrics.metrics_for()` 未标定时读它注册（阻断项 ③）；探针跑不出就如实保持"只当画廊"。
    首次构建后应核对容器启动日志里探针是否成功落盘（这是生成入口能开的先决条件）。
-2. **[前置] 网关密钥注入**：在创空间"环境变量"里配 `QX_LLM_API_KEY`（或 `QX_LLM_KEY_FILE`
-   指向挂载的密钥文件）——**密钥只经 env 注入，绝不写进镜像/仓库/日志**；配好后在容器内
-   跑一次最短文本的 TTS 合成验证出网与密钥（阻断项 ① 的三个前提逐项打勾）。
-   朗读稿改写与 TTS 同网关：`start.sh` 已默认 `QX_LLM_VOICEOVER=1`（可 env 覆盖为 0 关闭），
+2. **[前置] 两套密钥注入**：推理后端配 `QX_LLM_API_KEY`（或 `QX_LLM_KEY_FILE`），产物配音配
+   `QX_TTS_API_KEY`（或 `QX_TTS_KEY_FILE`）——**密钥只经 env 注入，绝不写进镜像/仓库/日志**；
+   ModelScope 无 TTS 路由，两套不能合并成一个。配好后在容器内跑一次最短文本的 TTS 合成验证
+   出网与密钥（阻断项 ① 的三个前提逐项打勾）。
+   朗读稿改写走推理后端（与 TTS 不同端点）：`start.sh` 已默认 `QX_LLM_VOICEOVER=1`（可 env 覆盖为 0 关闭），
    未配密钥/改写失败时自动回退 tts 正则兜底，画廊与出片不受影响。
    反馈持久化（创空间无持久盘，容器重建会丢本地文件）：另配 `QX_FEEDBACK_REPO`（私有 ModelScope
    数据集 id）与 `QX_FEEDBACK_REPO_TOKEN`（该数据集写 token），两者同时设置才启用写穿——
@@ -119,7 +121,12 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 - 字体：开发机用系统字体（Windows 上的 SimSun/Times New Roman，商业授权随系统）；
   Linux 镜像只打包开源替代（Noto Serif CJK / TeX Gyre / Liberation），不含任何商业字体。
 - 配音：第三方网关 TTS 服务（qwen3-tts-flash），密钥经 env 注入；不再依赖系统语音。
-- 片中只标注教材章节出处、不复制教材原文。
-- 第三方教材/数据集原件**不进本仓库**，逐条来源见项目根 `corpus/MANIFEST.txt`（在主仓库）。
+- 片中只标注教材章节出处、不复制教材原文；知识条目与成片文字均由团队自行撰写。
+- 出处定位语料：`mvp/pipeline/data/corpus/` 下为团队自行 OCR 的教材纯文本，**只用于起草环节的
+  字面命中**——命中片段（每条 ≤400 字）喂给 K0 作参照并回传书名与页码，语料本身不进渲染层；
+  条目与成片措辞由模型据此起草，再走出片闸门与人工核对。该目录不属于本项目的 MIT 开源范围、
+  不授权再分发，版权归原出版社所有。赛事演示期随空间镜像一起发布，商用与二次分发前整目录剔除
+  并替换为授权语料。
+- 项目根 `corpus/`（232MB 参考原件）仍不进仓库，只留 `corpus/MANIFEST.txt` 清单。
 
 *空间内容每次整改后重新生成；成片与中间产物一一对应，欢迎逐帧核对。*

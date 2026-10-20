@@ -24,7 +24,8 @@ from .storyboard import MIN_SHOTS, max_shots_for  # 81-A1b：镜头密度单一�
 # 与 render/scene.py 的 Scene.BUILDERS 同一份清单（tests/test_kp_draft.py 里做了比对，防漂移）。
 VISUAL_KINDS = ("axis_graph", "callout", "circuit", "compare", "derivation", "energy_dist", "field", "figure",
                 "force_diagram", "formula", "graph_vt", "incline", "mechanism", "microstate", "mind_map",
-                "optics", "particle_box", "stat_chart", "steps", "summary", "table", "title", "trajectory")
+                "optics", "particle_box", "rod_rails", "stat_chart", "steps", "summary", "table", "title",
+                "trajectory")
 
 MAX_ATTEMPTS = 3       # 第一版 + 两次带问题清单的重写
 # MIN_SHOTS / max_shots_for 见 storyboard（81-A1b）：镜头数上限随目标时长伸缩，短片仍是旧口径 10。
@@ -57,6 +58,10 @@ def _user_message(subject: str, grade: str, topic: str, target_seconds: float,
                   raw_text: str, problems: list[str] | None, hits: list | None) -> str:
     lines = [f"学科：{subject}；学段：{GRADE_ZH.get(grade, grade)}（讲解深度按这个学段控制）；知识点：{topic}",
              f"目标总时长：{target_seconds:g} 秒（口播总量按这个时长控制）。"]
+    # 与 A3/A4 同一份学段词表：K0 起草阶段就不把大学内容写进 H2 条目。
+    scope = review.scope_prompt(grade, subject)
+    if scope:
+        lines.append(scope)
     if hits:
         lines.append("【教材检索命中：refs 只能逐字照抄下面清单里的 source 与 locator；"
                      "每条引用都要在口播里真的讲到对应内容；不要写清单之外的出处】")
@@ -203,7 +208,8 @@ def draft(subject: str, grade: str, topic: str, target_seconds: float = 120.0,
             f"知识点库里没有「{topic}」，补这条内容需要模型起草，但生成环节当前未开启"
             "（部署侧需 QX_LLM_K0=1 或 QX_LLM_ALL=1，并配好密钥）")
     topic = str(topic).strip()
-    hits = corpus.search(subject, f"{topic} {raw_text}".strip(), max_hits=5)
+    hits = [h for h in corpus.search(subject, f"{topic} {raw_text}".strip(), max_hits=5)
+            if corpus.page_has(h, [topic])]
     allowed, seen = [], set()
     for h in hits:
         key = (h.source, h.page)

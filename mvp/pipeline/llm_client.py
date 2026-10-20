@@ -1,10 +1,20 @@
 """LLM 接入层：OpenAI 兼容 chat/completions，纯标准库。
 
+两套后端预设（env QX_LLM_PROVIDER，缺省 modelscope）：
+  · modelscope —— ModelScope 推理网关，商用默认。主力生成 DeepSeek-V4-Pro-0813，
+    轻量/多模态 Qwen3.8-Flash-Next，视觉与核对 Qwen3.8-27B。
+  · gateway    —— 旧赛方网关（api.openai-next.com，claude/gemini/gpt 系列），保留回退。
+各棒模型按任务性质分层，不按版本号猜能力；实测可用性见 .local/ms_*_probe 记录。
+
 四个环节各用各的模型 + 各自的提示词（A1 需求分析 / A3 分镜 / A8 终审视觉 / S2.2 独立评审）。
 默认全部关闭——确定性实现仍是默认与兜底；开关见 enabled()。
 
 密钥只在请求发出前一刻读入内存：env QX_LLM_API_KEY 优先，其次 QX_LLM_KEY_FILE 指向的文件
-（缺省 D:\\Desktop\\key.txt）。不写日志、不入异常信息、不落盘。
+（按 provider 缺省：modelscope→D:\\Desktop\\ms_token.txt，gateway→D:\\Desktop\\key.txt）。
+不写日志、不入异常信息、不落盘。
+
+TTS 不走本模块的 BASE_URL：ModelScope 没有 /v1/audio/speech 路由，audio/tts.py 固定回退
+gateway 网关，端点与密钥独立可配（QX_TTS_BASE_URL / QX_TTS_API_KEY）。
 """
 
 from __future__ import annotations
@@ -17,8 +27,54 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE_URL = os.environ.get("QX_LLM_BASE_URL", "https://api.openai-next.com").rstrip("/")
-DEFAULT_KEY_FILE = r"D:\Desktop\key.txt"
+# 模型 ID 一律照实测清单原样复制。相同 ID 的棒次是同模型不同上下文（如 K2 与 A8 独立核对），
+# S22 与 A3 必须异构——这是防同源盲点的红线，不是可调参数。
+PROVIDERS = {
+    "modelscope": {
+        "base": "https://api-inference.modelscope.cn",
+        "key_file": r"D:\Desktop\ms_token.txt",
+        "models": {
+            "A1": "Qwen/Qwen3.8-Flash-Next",
+            "A3": "deepseek-ai/DeepSeek-V4-Pro-0813",
+            "A8": "Qwen/Qwen3.8-27B",
+            "S22": "Qwen/Qwen3.8-27B",
+            "K0": "deepseek-ai/DeepSeek-V4-Pro-0813",
+            "K1": "deepseek-ai/DeepSeek-V4-Pro-0813",
+            "K2": "Qwen/Qwen3.8-27B",
+            "P": "Qwen/Qwen3.8-27B",
+            "V0": "deepseek-ai/DeepSeek-V4-Pro-0813",
+            "M1": "deepseek-ai/DeepSeek-V4-Pro-0813",
+            "M2": "deepseek-ai/DeepSeek-V4-Pro-0813",
+            "VOICEOVER": "Qwen/Qwen3.8-Flash-Next",
+        },
+    },
+    "gateway": {
+        "base": "https://api.openai-next.com",
+        "key_file": r"D:\Desktop\key.txt",
+        "models": {
+            "A1": "gpt-6.1-sol",
+            "A3": "claude-opus-5-5",
+            "A8": "gemini-3.1-pro-preview-thinking",
+            "S22": "claude-opus-4-8",
+            "K0": "claude-opus-5-5",
+            "K1": "claude-opus-5-5",
+            "K2": "gemini-3.1-pro-preview-thinking",
+            "P": "gemini-3.1-pro-preview-thinking",
+            "V0": "claude-opus-5-5",
+            "M1": "claude-opus-5-5",
+            "M2": "claude-opus-5-5",
+            "VOICEOVER": "claude-opus-5-5",
+        },
+    },
+}
+
+PROVIDER = (os.environ.get("QX_LLM_PROVIDER", "modelscope").strip().lower() or "modelscope")
+if PROVIDER not in PROVIDERS:
+    raise RuntimeError(f"QX_LLM_PROVIDER 未知：{PROVIDER}（可选 {'/'.join(PROVIDERS)}）")
+_PRESET = PROVIDERS[PROVIDER]
+BASE_URL = (os.environ.get("QX_LLM_BASE_URL") or _PRESET["base"]).rstrip("/")
+DEFAULT_KEY_FILE = _PRESET["key_file"]
+MODELS = dict(_PRESET["models"])
 
 # 可重试的 HTTP 状态码：网关/上游瞬时故障。520~527 是 Cloudflare 系（524=代理读超时，
 # 上游在 120s 内没回完），530=源站错误，599=某些 CDN 的网络连接超时——这些都不该一次定生死，
@@ -26,22 +82,6 @@ DEFAULT_KEY_FILE = r"D:\Desktop\key.txt"
 RETRYABLE_HTTP = (408, 429, 500, 502, 503, 504,
                   520, 521, 522, 523, 524, 525, 526, 527, 530, 599)
 
-# 模型 ID 一律照 guide/resources 原样复制，不按版本号改写。各环节任务性质不同，模型分开选。
-# flow v2（Spec_AgentFlow_v2.md §2）：生成型棒次钉死 claude-opus-5-5；核对/视觉棒异构 gemini；S22 异构 opus-4-8。
-MODELS = {
-    "A1": "gpt-6.1-sol",
-    "A3": "claude-opus-5-5",
-    "A8": "gemini-3.1-pro-preview-thinking",
-    "S22": "claude-opus-4-8",
-    "K0": "claude-opus-5-5",
-    "K1": "claude-opus-5-5",
-    "K2": "gemini-3.1-pro-preview-thinking",
-    "P": "gemini-3.1-pro-preview-thinking",
-    "V0": "claude-opus-5-5",
-    "M1": "claude-opus-5-5",
-    "M2": "claude-opus-5-5",
-    "VOICEOVER": "claude-opus-5-5",
-}
 STAGES = tuple(MODELS)
 
 
@@ -53,16 +93,34 @@ def model_for(stage: str) -> str:
     return os.environ.get(f"QX_LLM_MODEL_{stage}", MODELS[stage])
 
 
-def enabled(stage: str) -> bool:
-    """QX_LLM_<STAGE>=1 单独开某一环节；QX_LLM_ALL=1 全开。默认关。"""
-    return os.environ.get(f"QX_LLM_{stage}") == "1" or os.environ.get("QX_LLM_ALL") == "1"
+def base_url_for(provider: str = "") -> str:
+    """指定后端的基础 URL；活动后端受 QX_LLM_BASE_URL 覆盖。"""
+    provider = (provider or PROVIDER).lower()
+    if provider not in PROVIDERS:
+        raise LLMError(f"未知 provider：{provider}")
+    if provider == PROVIDER and os.environ.get("QX_LLM_BASE_URL"):
+        return os.environ["QX_LLM_BASE_URL"].rstrip("/")
+    return PROVIDERS[provider]["base"].rstrip("/")
 
 
-def _api_key() -> str:
-    k = os.environ.get("QX_LLM_API_KEY", "").strip()
+def api_key_for(provider: str = "", key_file: str = "") -> str:
+    """读指定后端的密钥。活动后端认 QX_LLM_API_KEY/QX_LLM_KEY_FILE，非活动后端认
+    QX_LLM_<PROVIDER>_API_KEY/QX_LLM_<PROVIDER>_KEY_FILE——TTS 在 modelscope 模式下
+    仍要用 gateway 的密钥，两套不能互相串。key_file 非空时优先于一切文件配置。
+    """
+    provider = (provider or PROVIDER).lower()
+    if provider not in PROVIDERS:
+        raise LLMError(f"未知 provider：{provider}")
+    upper = provider.upper()
+    if provider == PROVIDER:
+        k = os.environ.get("QX_LLM_API_KEY", "").strip()
+        path_s = key_file or os.environ.get("QX_LLM_KEY_FILE", "").strip()
+    else:
+        k = os.environ.get(f"QX_LLM_{upper}_API_KEY", "").strip()
+        path_s = key_file or os.environ.get(f"QX_LLM_{upper}_KEY_FILE", "").strip()
     if k:
         return k
-    path = Path(os.environ.get("QX_LLM_KEY_FILE", DEFAULT_KEY_FILE))
+    path = Path(path_s or PROVIDERS[provider]["key_file"])
     try:
         k = path.read_text(encoding="utf-8").strip()
     except OSError as e:
@@ -70,6 +128,15 @@ def _api_key() -> str:
     if not k:
         raise LLMError(f"密钥文件为空：{path}")
     return k
+
+
+def _api_key(provider: str = "") -> str:
+    return api_key_for(provider)
+
+
+def enabled(stage: str) -> bool:
+    """QX_LLM_<STAGE>=1 单独开某一环节；QX_LLM_ALL=1 全开。默认关。"""
+    return os.environ.get(f"QX_LLM_{stage}") == "1" or os.environ.get("QX_LLM_ALL") == "1"
 
 
 def image_part(png: Path) -> dict:
@@ -127,8 +194,12 @@ def _read_body(r) -> str:
 
 def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *,
          max_tokens: int = 8000, timeout: float = 300.0, retries: int = 2,
-         json_mode: bool = False) -> str:
-    """单轮对话，返回文本。images 为 PNG 路径列表（多模态环节用）。"""
+         json_mode: bool = False, thinking: bool = False) -> str:
+    """单轮对话，返回文本。images 为 PNG 路径列表（多模态环节用）。
+
+    thinking 只对 modelscope 生效：V4/Qwen3.8 的思考 token 计入 max_tokens，结构化长 JSON
+    棒次默认关思考，避免推理吃掉输出预算导致截断；需要长链推理的调用方可显式传 True。
+    """
     content: object = user
     if images:
         content = [{"type": "text", "text": user}] + [image_part(p) for p in images]
@@ -138,6 +209,8 @@ def chat(stage: str, system: str, user: str, images: list[Path] | None = None, *
         "max_tokens": max_tokens,
         "stream": True,
     }
+    if PROVIDER == "modelscope":
+        body["enable_thinking"] = bool(thinking)
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")

@@ -83,16 +83,12 @@ SUBJECTS = [("math", "数学"), ("physics", "物理"), ("chemistry", "化学")]
 GRADES = [("G8", "初二"), ("G9", "初三"), ("H1", "高一"), ("H2", "高二"), ("H3", "高三"), ("U1", "大一"), ("U2", "大二")]
 STYLES = [("clean", "clean · 白底板书"), ("board", "board · 深色黑板")]
 DURATIONS = [60, 120, 180, 300, 600, 1200]
-# 81-W1 诚实标注：长片（600/1200s）在 2 核容器的渲染墙钟时间远超旧档，选择器上就把
-# 预计耗时说在前面（口径：短片 120s@1080p 实测墙钟约 100s，线性外推再按 2 核实测余量放大）。
+# 选择器只写目标时长与画质本身；渲染耗时随机器负载和内容波动，不做逐档承诺。
 DURATION_LABELS = {
     60: "60 秒 · 1 分钟", 120: "120 秒 · 2 分钟", 180: "180 秒 · 3 分钟",
-    300: "300 秒 · 5 分钟",
-    600: "600 秒 · 10 分钟（长片：1080p 在演示机要数十分钟，建议 480p/720p）",
-    1200: "1200 秒 · 20 分钟（超长片：1080p 在演示机可能要 1 小时以上，强烈建议 480p/720p）",
+    300: "300 秒 · 5 分钟", 600: "600 秒 · 10 分钟", 1200: "1200 秒 · 20 分钟",
 }
-QUALITIES = [("draft", "480p 草稿（约 30s，演示用；长片建议档）"), ("hd", "720p（约 60s；长片建议档）"),
-             ("fullhd", "1080p 正式（短片约 100s；600/1200s 长片很慢，建议改用 480p/720p）")]
+QUALITIES = [("draft", "480p 草稿"), ("hd", "720p 高清"), ("fullhd", "1080p 正式")]
 STAGE_LABELS = {"retrieve": "检索知识点库", "draft": "起草知识点（库外）", "storyboard": "生成分镜", "narration": "配音合成",
                 "review": "静态监督检查", "render": "画面渲染", "mux": "音幕合成",
                 "done": "已完成", "failed": "失败", "queued": "排队中", "starting": "启动中"}
@@ -729,7 +725,6 @@ class Handler(BaseHTTPRequestHandler):
                 "grades": [{"value": v, "label": l} for v, l in GRADES],
                 "styles": [{"value": v, "label": l} for v, l in STYLES],
                 "durations": DURATIONS,
-                # 长档（600/1200）的预计耗时与画质建议如实下发（81-W1），前端拼选择器文案用。
                 "duration_labels": {str(k): v for k, v in DURATION_LABELS.items()},
                 "qualities": [{"value": v, "label": l} for v, l in QUALITIES],
                 "topics": kp_entries(),

@@ -68,7 +68,7 @@ async function loadTopics() {
   fill($("#fGrade"), d.grades, pref.grade || DEFAULTS.grade);
   fill($("#fStyle"), d.styles, pref.style || DEFAULTS.style);
   fill($("#fQuality"), d.qualities, pref.quality || DEFAULTS.quality);
-  // 时长档文案由服务端 duration_labels 下发（81-W1 诚实标注：长片写明预计耗时与画质建议），
+  // 时长档文案由服务端 duration_labels 下发（只写目标时长，不承诺渲染耗时），
   // 没有标注的旧服务回落到 "N 秒"。
   const dlabels = d.duration_labels || {};
   $("#fSeconds").append(...d.durations.map((s) => opt(String(s), dlabels[String(s)] || (s + " 秒"))));
@@ -500,7 +500,7 @@ function drawWall(items) {
   grid.textContent = "";
   resetWallLazy();
   $("#wallHint").textContent = list.length
-    ? `共 ${list.length} 条 · 卡片元数据来自每个 run 的 sidecar.json / brief.json`
+    ? `共 ${list.length} 条`
     : "新作品制作中：旧稿正在批量更换，更换完成的合格作品才会出现在这里。";
   if (!list.length) return;
   // 分段渲染：哨兵贴在批次尾部，进入视口（提前 600px）就续下一批；无 IO 时一次铺完兜底
@@ -552,21 +552,17 @@ function wallCard(it) {
   const meta = el("div", "meta-line");
   meta.append(
     tag(labelSubject(it.subject)), tag(it.grade_label || it.grade || "—"),
-    tag(it.seconds ? it.seconds + "s" : "时长未知"),
-    tag(it.size_mb ? it.size_mb + "MB" : "—"), tag(it.date || ""), tag(it.source));
+    tag(it.seconds ? Math.round(it.seconds) + "s" : "时长未知"));
   body.append(meta);
 
   const row = el("div", "wrow");
-  const open = el("button", "linkbtn", "查看 / 改分镜");
-  open.type = "button";
-  open.addEventListener("click", () => openWall(it));
-  row.append(open);
-  for (const f of (it.files || []).filter((x) => ["final", "burned", "srt", "plan"].includes(x.role))) {
-    const a = el("a", "linkbtn", "↓ " + f.name);
-    a.href = f.url + "?download=1";
-    row.append(a);
+  if (it.plan_url) {
+    const open = el("button", "linkbtn", "查看 / 改分镜");
+    open.type = "button";
+    open.addEventListener("click", () => openWall(it));
+    row.append(open);
   }
-  body.append(row);
+  if (row.children.length) body.append(row);
   card.append(body);
   return card;
 }

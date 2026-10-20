@@ -81,7 +81,8 @@ def save_draft(entry: dict) -> Path:
     if entry.get("origin") != "model_draft":
         raise ValueError("只有 origin=model_draft 的条目能走 save_draft，库内条目不许被覆盖")
     if entry.get("refs"):
-        problems = corpus.validate_refs(str(entry["subject"]), entry["refs"])
+        needles = [str(entry.get("topic") or "")] + [str(a) for a in entry.get("aliases") or []]
+        problems = corpus.validate_refs(str(entry["subject"]), entry["refs"], needles)
         if problems:
             raise ValueError("refs 未通过语料核对：" + "；".join(problems[:3]))
     _check(entry)

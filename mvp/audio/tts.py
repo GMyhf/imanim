@@ -4,6 +4,10 @@
 （Linux）跑不了；网关 TTS 走 HTTP，任何部署环境都能出中文语音。语音时长用 wave 头直接
 读，不额外依赖 ffprobe。
 
+TTS 固定在赛方 gateway 网关：ModelScope 推理网关没有 /v1/audio/speech 路由（实测 404）。
+LLM 后端切到 modelscope 后，配音仍用 gateway 的端点与密钥——QX_TTS_BASE_URL /
+QX_TTS_API_KEY（或 QX_TTS_KEY_FILE）独立覆盖，与 llm_client 的活动 provider 解耦。
+
 SubTask #60-A 实测口径（照此实现，勿凭文档改）：
 1. 响应头 Content-Type 写 audio/mpeg，实际返回体是 RIFF/WAV（pcm_s16le、24000Hz、mono、
    16bit）——按字节解析，别信头。
@@ -34,6 +38,8 @@ from pipeline import ir, llm_client
 
 VOICE = "cherry"
 MODEL = "qwen3-tts-flash"
+# ModelScope 无 TTS 路由，配音固定回退赛方 gateway；密钥/端点不再借用活动 LLM provider。
+TTS_PROVIDER = "gateway"
 # 2026-10-18 T0 实测：auto 语言判定把含数学术语（x²、i、ℂ）的中文口播判成日语。
 # 钉死 language_type=zh（qwen3-tts 文档字段名），env QX_TTS_LANGUAGE 可覆盖。
 LANGUAGE = "zh"
@@ -56,6 +62,17 @@ def _language() -> str:
 
 def _model() -> str:
     return os.environ.get("QX_TTS_MODEL", MODEL)
+
+
+def _base() -> str:
+    return (os.environ.get("QX_TTS_BASE_URL") or llm_client.base_url_for(TTS_PROVIDER)).rstrip("/")
+
+
+def _key() -> str:
+    k = os.environ.get("QX_TTS_API_KEY", "").strip()
+    if k:
+        return k
+    return llm_client.api_key_for(TTS_PROVIDER, os.environ.get("QX_TTS_KEY_FILE", "").strip())
 
 
 def _repair_wav(blob: bytes) -> bytes:
@@ -92,11 +109,11 @@ def _post(body: dict) -> bytes:
     密钥只在构造请求头前一刻读入内存；任何日志/异常消息都不含密钥或请求头。
     """
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    key = llm_client._api_key()
+    key = _key()
     last = "未知错误"
     for attempt in range(MAX_ATTEMPTS):
         req = urllib.request.Request(
-            f"{llm_client.BASE_URL}/v1/audio/speech", data=data, method="POST",
+            f"{_base()}/v1/audio/speech", data=data, method="POST",
             headers={"Content-Type": "application/json",
                      "Authorization": f"Bearer {key}",
                      # Accept 必须 */*：网关对 audio/wav 回 400 InvalidParameter（实测）

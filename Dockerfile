@@ -8,8 +8,12 @@
 #   pip/apt 的可安装性按 manim 官方 Linux 依赖列 + Debian bookworm 包名写对，第一次构建就可能在
 #   pycairo/manimpango 上翻车，翻车时先看 requirements.txt 顶部注释的两条退路。
 #
-# 密钥纪律：API 密钥**只经创空间的环境变量注入**（QX_LLM_API_KEY 或 QX_LLM_KEY_FILE），
-# 不写进本文件、不 COPY 进镜像、不落任何日志。下面 ENV 只放非敏感占位/默认值。
+# 密钥纪律：API 密钥**只经创空间的环境变量注入**，不写进本文件、不 COPY 进镜像、不落任何日志。
+# 两套后端互不相串（2026-10-20 换血）：
+#   QX_LLM_PROVIDER=modelscope|gateway    —— 缺省 modelscope（DeepSeek/Qwen 推理网关）
+#   QX_LLM_API_KEY / QX_LLM_KEY_FILE      —— 活动 LLM 后端密钥
+#   QX_TTS_API_KEY / QX_TTS_KEY_FILE      —— 配音 gateway 密钥（ModelScope 无 TTS 路由）
+# 下面 ENV 只放非敏感占位/默认值。
 FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
@@ -28,8 +32,11 @@ ENV PYTHONUNBUFFERED=1 \
     MVP_LATIN_FONT="TeX Gyre Termes" \
     MVP_SUB_FONT="Noto Serif CJK SC"
     # 在线生成还需要（在创空间"环境变量"页配置，不写在这里）：
-    #   QX_LLM_API_KEY=<网关密钥>        —— 或 QX_LLM_KEY_FILE=<容器内密钥文件路径>
-    #   QX_LLM_BASE_URL                  —— 可选，默认 https://api.openai-next.com，容器需出网可达
+    #   QX_LLM_PROVIDER                  —— 可选，缺省 modelscope；回退旧网关写 gateway
+    #   QX_LLM_API_KEY=<推理网关密钥>    —— 或 QX_LLM_KEY_FILE=<容器内密钥文件路径>
+    #   QX_LLM_BASE_URL                  —— 可选，缺省随 provider；容器需出网可达
+    #   QX_TTS_API_KEY=<配音网关密钥>    —— 或 QX_TTS_KEY_FILE；配音固定走 gateway
+    #   QX_TTS_BASE_URL                  —— 可选，缺省 https://api.openai-next.com
     #   MVP_ALLOW_GENERATE=1             —— 可选，置 1 才开生成入口（见 start.sh）
 
 # ffmpeg：混流与字幕烧录（mux.py 按 os.name 选 ffmpeg/ffmpeg.exe，Linux 走 PATH）
@@ -37,14 +44,20 @@ ENV PYTHONUNBUFFERED=1 \
 #   fonts-liberation：Liberation Serif，Termes 不可用时的兜底替代
 # libcairo2-dev / libpango1.0-dev / pkg-config / gcc：pycairo 与 manimpango 在 Linux 上没有现成轮子，
 #   pip 会现场编译，这三个 + gcc 是编译前提（manim 官方 Linux 安装说明同源）
-# texlive 四件套（Spec_Video_Defaults 缺口 1）：scene.py 已接入 MathTex（latex → dvisvgm），
-#   公式渲染需要 texlive-latex-base + texlive-latex-extra（standalone）+
-#   texlive-fonts-recommended（amssymb/mathptmx）+ dvisvgm。Linux 走 texlive 全量预装，
-#   没有 MiKTeX"渲染时才按需联网下宏包"的问题；缺 TeX 时管线自动退回 Pango 排版，不会崩。
+# texlive 六件套（Spec_Video_Defaults 缺口 1；82-F1 起公式/推导走 LaTeX）：
+#   模板是 xelatex + xeCJK + mathptmx（scene.py 的 _tex_math，中文下标靠 xeCJK 的
+#   \hbox{\fontsize{0.5em}...\selectfont 停} 才缩小下沉），所以除了
+#   texlive-latex-base（standalone）+ texlive-latex-extra + texlive-fonts-recommended
+#   （amssymb/mathptmx）+ dvisvgm，还必须补 texlive-xetex（xelatex 本体）与
+#   texlive-lang-chinese（xeCJK、ctex 宏包）。中文字体由 fonts-noto-cjk 提供，容器里
+#   没有 SimSun，模板的 \IfFontExistsTF 会自动落到 Noto Serif CJK SC。
+#   Linux 走 texlive 全量预装，没有 MiKTeX"渲染时才按需联网下宏包"的问题；
+#   缺 TeX / 缺 xelatex / 缺 dvisvgm 时管线自动退回 Pango 排版（rich），不会崩。
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg fontconfig \
         fonts-noto-cjk fonts-texgyre fonts-liberation \
         texlive-latex-base texlive-latex-extra texlive-fonts-recommended dvisvgm \
+        texlive-xetex texlive-lang-chinese \
         libcairo2-dev libpango1.0-dev pkg-config gcc \
     && rm -rf /var/lib/apt/lists/*
 
