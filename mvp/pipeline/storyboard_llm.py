@@ -11,10 +11,21 @@ import json
 from copy import deepcopy
 
 from . import kp_draft, llm_client, llm_prompts, review, storyboard
-from .ir import VISUAL_KINDS, NATURAL_CPS, Brief, Plan
+from .ir import VISUAL_KINDS, FIGURE_SHAPES, NATURAL_CPS, Brief, Plan
 from .storyboard import MIN_SHOTS, max_shots_for  # 81-A1b：镜头密度单一真源在 storyboard，不再各写一份 MAX_SHOTS
 
 MAX_FEEDBACK_RETRIES = 2
+
+# #85 T2：回灌反馈要带**行动指引**，不能只把清单重列一遍。
+# 线上圆锥曲线片的三轮回灌全烧在同一句「kind 必须是 (…) 之一且 props 是对象」上：模型想画的
+# 双曲线当时不在 figure 的 shape 里，而 axis_graph 其实能画任意采样曲线、marks[].label 能标任意
+# 点名——降级路径一直存在，只是报错从没告诉过模型，于是它只能再自造一个 kind。
+# 指引文案放模块级常量，回灌各轮复用同一份（不拼三份、不与 review 的白名单各写一套）。
+SCHEMA_GUIDE = (
+    "要画的曲线/点在这份清单里找不到对应写法时：改用 axis_graph——curves[].points 给采样点"
+    "（[[x,y],…] 至少两点）就能画任意曲线，marks[].label 支持任意字符点名；"
+    f"圆锥曲线一类的几何图形用 figure（shape 枚举：{'/'.join(FIGURE_SHAPES)}，"
+    '动点字母用 point_label、轴端点用 vertices）。不要自造清单之外的 kind 名。')
 
 
 def _schema_errors(data, target_seconds: float = 0.0) -> list[str]:
@@ -40,8 +51,17 @@ def _schema_errors(data, target_seconds: float = 0.0) -> list[str]:
             errs.append(f"shots[{i}] visuals 必须是非空数组")
             continue
         for j, v in enumerate(vs):
-            if not isinstance(v, dict) or v.get("kind") not in VISUAL_KINDS or not isinstance(v.get("props", {}), dict):
-                errs.append(f"shots[{i}].visuals[{j}] 的 kind 必须是 {list(VISUAL_KINDS)} 之一且 props 是对象")
+            props = v.get("props", {}) if isinstance(v, dict) else {}
+            if not isinstance(v, dict) or v.get("kind") not in VISUAL_KINDS or not isinstance(props, dict):
+                # 报错口径与旧版一致（列合法 kind），再附一句可直接照做的降级路径。
+                errs.append(f"shots[{i}].visuals[{j}] 的 kind 必须是 {list(VISUAL_KINDS)} 之一且 props 是对象"
+                            f"；{SCHEMA_GUIDE}")
+                continue
+            if v["kind"] == "figure" and props.get("shape") is not None \
+                    and str(props["shape"]) not in FIGURE_SHAPES:
+                # shape 非法要说清 shape 枚举，不要泛泛报 props（#85：模型收到"props 有问题"只会换个说法再猜）。
+                errs.append(f"shots[{i}].visuals[{j}] 的 figure shape 必须是 {'/'.join(FIGURE_SHAPES)} 之一，"
+                            f"收到 {props['shape']!r}")
     return errs
 
 

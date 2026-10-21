@@ -16,7 +16,7 @@ import font_metrics as _fm  # noqa: E402  纯标准库：不破坏本文件「�
 import mech_anchors as _ma  # noqa: E402  82-SB mechanism 锚点表——与渲染侧同一份锚点语义/容差，纯标准库
 
 from .ir import (ACCEPTABLE_RATE, ANIMATION_PENDING as _PENDING, BUDGET_REF_KIND, FAST_CPS,
-                 GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
+                 FIGURE_SHAPES as FIGURE_SHAPE_ENUM, GRAPHIC_KINDS, MAX_CAP_UNITS, MAX_TTS_RATE,
                  MIN_SHOT_SECONDS, MOTION_CAPABLE, MOTION_REQUIRED, NATURAL_CPS, PHYS_FIGURE_KINDS,
                  RATE_FACTOR, SHOT_HEAD, SHOT_TAIL, SPEED_LADDER, TEXT_ONLY_KINDS,
                  VISUAL_KINDS, Plan, Shot, cap_width, num)
@@ -46,7 +46,10 @@ REF_FS = 18.0
 REF_WIDE = SAFE_WIDTH
 REF_MIN_FS = 15.0
 # figure 原语支持的图形；scene._v_figure 一一对应，加一种要两边同步。
-FIGURE_SHAPES = {"ellipse", "right_triangle", "chord"}
+# #85 T1.4：枚举的唯一定义挪到 ir.FIGURE_SHAPES（提示词 VISUALS_SPEC 与本文件的白名单共用），
+# 这里保留 set 只是本文件的判据写法沿用旧口径。a > b 只对椭圆成立（b² = a² − c²）；
+# 双曲线是 c² = a² + b²，a、b 没有大小关系，只要都是正数。
+FIGURE_SHAPES = set(FIGURE_SHAPE_ENUM)
 
 # 物理图示的方向词与元件类型（与 render/scene.py 的 _FORCE_DIRS / circuit 符号同源）。
 _FORCE_DIRS = {"up", "down", "left", "right", "upleft", "upright", "downleft", "downright"}
@@ -528,9 +531,9 @@ def _visual_height(shot: Shot) -> float:
         elif v.kind == "graph_vt":
             h += 3.6
         elif v.kind == "figure":
-            # 椭圆按 4.6×2.6 画再加图注；直角三角形与弦图被刻意压到 2.4~2.6 高，
-            # 因为它们那两镜还要和公式卡 / 五行步骤同屏（scene._f_* 里同一套尺寸约束）。
-            h += 3.4 if _text(p.get("shape")) == "ellipse" else 3.0
+            # 椭圆/双曲线按 4.6×2.6 画再加图注（scene._f_ellipse / _f_hyperbola 同一把尺子）；
+            # 直角三角形与弦图被刻意压到 2.4~2.6 高，因为它们那两镜还要和公式卡 / 五行步骤同屏。
+            h += 3.4 if _text(p.get("shape")) in ("ellipse", "hyperbola") else 3.0
         elif v.kind == "axis_graph":
             h += 3.6
         elif v.kind in ("particle_box", "energy_dist", "stat_chart"):
@@ -821,11 +824,14 @@ def check(plan: Plan, kp: dict | None = None) -> list[dict]:
                 shape = _text(props.get("shape")) or "ellipse"
                 a, b = _num(props.get("a")), _num(props.get("b"))
                 if shape not in FIGURE_SHAPES:
-                    add(s.index, "KIND", f"figure 不支持 shape={shape}，渲染层只画 {sorted(FIGURE_SHAPES)}")
+                    add(s.index, "KIND", f"figure 不支持 shape={shape}，渲染层只画 {sorted(FIGURE_SHAPES)}"
+                                         "（要画别的曲线改用 axis_graph：curves[].points 采样点 + marks[].label 点名）")
                 elif shape == "ellipse" and not a > b > 0:
                     add(s.index, "KIND", f"椭圆要求 a > b > 0，当前 a={props.get('a')}、b={props.get('b')}")
                 elif shape != "ellipse" and not (a > 0 and b > 0):
-                    add(s.index, "KIND", f"{shape} 是两条直角边拼出来的图，要求 a、b 均为正数")
+                    add(s.index, "KIND", f"{shape} 要求 a、b 均为正数"
+                                         + ("（双曲线只要求都是正数，不要求 a > b）" if shape == "hyperbola" else
+                                            "（两条直角边拼出来的图）"))
             if v.kind == "axis_graph":
                 curves = [c for c in _seq(props.get("curves")) if isinstance(c, dict)]
                 if not curves or any(len(_seq(c.get("points"))) < 2 for c in curves):

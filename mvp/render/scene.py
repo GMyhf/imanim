@@ -3264,14 +3264,18 @@ class Explainer(Scene):
     def _v_figure(self, p, th):
         """几何图形原语：把"看得见的那件事"真画出来，而不是只写在字上。
 
-        ellipse（评审 D8：整片讲椭圆却全程无图）/ right_triangle（勾股三边上的正方形）/
-        chord（赵爽弦图，"用面积拼一拼"没有图就是空话，batch_v4 评审 U1=2）。
+        ellipse（评审 D8：整片讲椭圆却全程无图）/ hyperbola（#85：线上圆锥曲线片"双曲线那段
+        没有双曲线"——shape 词表缺这一种，模型只能自造 kind，必被闸门拦下）/
+        right_triangle（勾股三边上的正方形）/ chord（赵爽弦图，"用面积拼一拼"没有图就是空话，
+        batch_v4 评审 U1=2）。
         """
         shape = str(p.get("shape") or "ellipse")
         if shape == "right_triangle":
             return self._f_right_triangle(p, th)
         if shape == "chord":
             return self._f_chord(p, th)
+        if shape == "hyperbola":
+            return self._f_hyperbola(p, th)
         return self._f_ellipse(p, th)
 
     def _f_right_triangle(self, p, th):
@@ -3338,6 +3342,47 @@ class Explainer(Scene):
         # P3 halo：本镜主角叠静态假辉光环（垫底、无脉冲；见 _halo_ring）。
         return VGroup(_halo_ring(g, th["key"], buff=0.18), g)
 
+    # ---- 圆锥曲线共用件（#85：椭圆与双曲线同画法，两套口径不许漂移）----
+    def _c_axes(self, a, b, s, p, th):
+        """两条坐标轴 + 两个轴名：从 _f_ellipse 原样抽出，椭圆与双曲线共用。"""
+        ax = Line(LEFT * (a * s + 0.6), RIGHT * (a * s + 0.6), color=th["dim"], stroke_width=2)
+        ay = Line(DOWN * (b * s + 0.45), UP * (b * s + 0.45), color=th["dim"], stroke_width=2)
+        xlab = T(str(p.get("x_label") or "x"), font_size=22, color=th["dim"]).next_to(ax, RIGHT, buff=0.12)
+        ylab = T(str(p.get("y_label") or "y"), font_size=22, color=th["dim"]).next_to(ay, UP, buff=0.08)
+        return VGroup(ax, ay, xlab, ylab)
+
+    @staticmethod
+    def _c_focus_dots(c, s, th):
+        """两焦点 F_1/F_2：实轴（x 轴）上 ±c，写法与 _f_ellipse 原样一致。"""
+        out = []
+        for sign, name in ((-1, "F_1"), (1, "F_2")):
+            f = Dot([sign * c * s, 0, 0], radius=0.06, color=th["warn"])
+            out.append(VGroup(f, rich(name, 22, th["warn"]).next_to(f, DOWN, buff=0.1)))
+        return out
+
+    @staticmethod
+    def _c_vertex_dots(a, s, p, th, toward_center=False):
+        """#85 T1.2：`vertices: ["A","B"]` 在长轴/实轴两端点上画点并标给定字符。
+
+        线上反馈「ABM 都没对上，椭圆怎么点 P 而不是 ABM」——旁白讲 A、B 时图上标不出来。
+        缺省（不写 vertices）一律不标，旧条目行为不变。标注沿用 Dot+rich+next_to，
+        22 号起、不引入新的碰撞机制。
+        toward_center：双曲线专用——它的焦点在顶点**外侧**（c=√(a²+b²) > a），两个正下方标签
+        会并排挤在一起（实测 F₁ 与 A 只差 0.39u），所以顶点名朝图内一侧让开。
+        """
+        labels = [str(v) for v in (p.get("vertices") or []) if str(v).strip()][:2]
+        out = []
+        for sign, name in zip((-1, 1), labels):
+            d = Dot([sign * a * s, 0, 0], radius=0.06, color=th["key"])
+            direction = DOWN + (RIGHT if sign < 0 else LEFT) if toward_center else DOWN
+            out.append(VGroup(d, rich(name, 22, th["key"]).next_to(d, direction, buff=0.1)))
+        return out
+
+    @staticmethod
+    def _c_point_label(p):
+        """动点标签：`point_label` 可自定义（旁白讲 M 就写 M），缺省仍是 P（旧条目不回归）。"""
+        return str(p.get("point_label") or "P").strip() or "P"
+
     def _f_ellipse(self, p, th):
         """椭圆：把"绳长不变"这件事画出来（评审 D8）。"""
         a = float(p.get("a", 5))
@@ -3351,28 +3396,71 @@ class Explainer(Scene):
                        stroke_color=th["key"], stroke_width=8, stroke_opacity=0.3, fill_opacity=0)
         halo.move_to(curve.get_center())
         halo.set_z_index(-1)
-        ax = Line(LEFT * (a * s + 0.6), RIGHT * (a * s + 0.6), color=th["dim"], stroke_width=2)
-        ay = Line(DOWN * (b * s + 0.45), UP * (b * s + 0.45), color=th["dim"], stroke_width=2)
-        xlab = T(str(p.get("x_label") or "x"), font_size=22, color=th["dim"]).next_to(ax, RIGHT, buff=0.12)
-        ylab = T(str(p.get("y_label") or "y"), font_size=22, color=th["dim"]).next_to(ay, UP, buff=0.08)
-        g = VGroup(halo, curve, ax, ay, xlab, ylab)
+        g = VGroup(halo, curve, *self._c_axes(a, b, s, p, th))
         if p.get("foci"):
-            for sign, name in ((-1, "F_1"), (1, "F_2")):
-                f = Dot([sign * c * s, 0, 0], radius=0.06, color=th["warn"])
-                g.add(VGroup(f, rich(name, 22, th["warn"]).next_to(f, DOWN, buff=0.1)))
+            g.add(*self._c_focus_dots(c, s, th))
         if p.get("point"):
             t = math.radians(float(p.get("point_angle", 55)))
             pos = [a * math.cos(t) * s, b * math.sin(t) * s, 0]
             dot = Dot(pos, radius=0.06, color=th["accent"])
-            g.add(dot, rich("P", 22, th["accent"]).next_to(dot, UP, buff=0.1))
+            g.add(dot, rich(self._c_point_label(p), 22, th["accent"]).next_to(dot, UP, buff=0.1))
             for sign in (-1, 1):  # 两条焦半径 = 拉紧的绳子
                 g.add(DashedLine([sign * c * s, 0, 0], pos, dash_length=0.12,
                                  color=th["accent"], stroke_width=3))
+        g.add(*self._c_vertex_dots(a, s, p, th))
         if p.get("label"):
             # 几何图的标签是**图注**，不是引线标签：椭圆内部被曲线、两轴、两条焦半径占满，
             # 任何落在图内的位置都会压住某条线（test_layout 实测残差 4），教材里这条式子本来也写在图下方。
             g.add(rich(p["label"], 24, th["key"]).next_to(g, DOWN, buff=0.24))
         return g
+
+    def _f_hyperbola(self, p, th):
+        """双曲线 x²/a² − y²/b² = 1（实轴在 x 轴）：左右两支 + 两轴 + 可选焦点/动点/顶点标注。
+
+        #85 T1.1：线上圆锥曲线片的原话是"双曲线那一段怎么没有双曲线"——词表里没有这一种
+        shape，模型只能自造 kind，被闸门拦死。画法沿用本文件既有工具：
+          · 两支各采样 24 个点走 _polyline（≥4 点自动平滑，与 axis_graph 的曲线同一条机器）；
+          · 采样到**轴端为止**（轴长 = a·s+0.6 / b·s+0.45，与 _c_axes 同一把尺），
+            渐近线方向不无限延伸，整图尺寸与 _f_ellipse 同档（不超过约 4.6×2.6）；
+          · 焦点 c = √(a²+b²) 落在实轴上（与椭圆的 c=√(a²−b²) 只差这一处，两边各自算）；
+          · 左支按 at 逐支揭示（reveal_keys 与 _v_axis_graph 同口径；键对不上口播时
+            reveal_cue_index 返回 None，该支从镜初就在——绝不因为脏数据整支不出现）。
+        """
+        a = float(p.get("a", 3))
+        b = float(p.get("b", 2))
+        s = min(4.6 / (2 * a), 2.6 / (2 * b))
+        c = math.sqrt(a * a + b * b)
+        # 曲线画到轴端为止：轴端对应的数据坐标，取"横轴到端"与"纵轴到端"里更近的一头。
+        x_end = min(a + 0.6 / s, a * math.sqrt(1.0 + ((b + 0.45 / s) / b) ** 2))
+        t_end = math.acosh(max(x_end / a, 1.0))
+        n = 24
+        right = [[a * math.cosh(t_end * i / (n - 1)), b * math.sinh(t_end * i / (n - 1))]
+                 for i in range(n)]
+        coords = lambda pts: [np.array([x * s, y * s, 0.0]) for x, y in pts]   # noqa: E731
+        br = _polyline(coords(right), th["key"], 5)
+        bl = _polyline(coords([[-x, y] for x, y in right]), th["key"], 5)
+        g = VGroup(br, bl, *self._c_axes(a, b, s, p, th))
+        if p.get("foci"):
+            g.add(*self._c_focus_dots(c, s, th))
+        if p.get("point"):
+            # 双支上的点用参数式取：选与 point_angle 方向最贴近的那个采样点，保证点一定在线上
+            # （从中心出发的射线只有斜率小于渐近线斜率 b/a 才交到双曲线，直接解角度会无解）。
+            target = math.radians(float(p.get("point_angle", 30)))
+            k = min(range(n), key=lambda i: abs(math.atan2(right[i][1], right[i][0]) - target))
+            pos = [right[k][0] * s, right[k][1] * s, 0.0]
+            dot = Dot(pos, radius=0.06, color=th["accent"])
+            g.add(dot, rich(self._c_point_label(p), 22, th["accent"]).next_to(dot, UP, buff=0.1))
+            if p.get("foci"):  # 两条焦半径：双曲线是"到两焦点距离之差恒为 2a"
+                for sign in (-1, 1):
+                    g.add(DashedLine([sign * c * s, 0, 0], pos, dash_length=0.12,
+                                     color=th["accent"], stroke_width=3))
+        g.add(*self._c_vertex_dots(a, s, p, th, toward_center=True))
+        if p.get("label"):
+            g.add(rich(p["label"], 24, th["key"]).next_to(g, DOWN, buff=0.24))
+        keys = reveal_keys(p.get("at"), 2)
+        tag_reveal(bl, keys[1])
+        # P3 halo：本镜主角叠静态假辉光环（垫底、无脉冲；见 _halo_ring），与另两种 shape 同约定。
+        return VGroup(_halo_ring(g, th["key"], buff=0.18), g)
 
     def _clear_ticks(self, ticks, lines, boxes, plane) -> tuple[int, int]:
         """刻度数字不得被图线/导引虚线穿过，也不得压住轴名或被推回坐标轴上。

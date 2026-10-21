@@ -20,6 +20,10 @@ VISUAL_KINDS = ("title", "formula", "compare", "graph_vt", "figure", "steps", "s
                 "axis_graph", "particle_box", "microstate", "energy_dist", "stat_chart", "mind_map", "table",
                 "force_diagram", "field", "circuit", "optics", "incline", "trajectory", "derivation",
                 "mechanism", "rod_rails")
+# figure 原语的 shape 枚举（#85：线上圆锥曲线片要画双曲线，词表缺这一种时模型只能自造 kind 被闸门拦死）。
+# 顺序即提示词与报错里的展示顺序；scene._v_figure 一一对应，review 的白名单与 llm_prompts 的枚举
+# 都从这一处取——一处定义、三处引用，加一种只改这里 + scene.py 的分派。
+FIGURE_SHAPES = ("ellipse", "hyperbola", "right_triangle", "chord")
 # 以「画」为主的版式：整片至少要有一个（review.NO_FIGURE），讲具体对象的图都算。
 # derivation 也计入：它不是文字罗列，是带代换动画的推导过程呈现（#79-B，与 incline/trajectory 同理）。
 # mechanism 计入（81-S3）：有机机理推电子箭头图是"画"不是"列"，与 force_diagram 同理。

@@ -39,6 +39,15 @@ from pipeline.ir import SHOT_HEAD, SHOT_TAIL, Brief, Plan, num  # noqa: E402
 
 _SOURCE_NAME_RE = re.compile(r"[A-Za-z0-9._-]+")
 
+# #85 T3：改进意见没改出可用版本时给人看的那句「接下来怎么办」（do_improve 唯一用处）。
+# 措辞要点：① 说清上一版成片还在（不是把片毁了）；② 给一个能直接照抄的写法示例；
+# ③ 给一条退路（意见拆短 / 改分镜脚本重出片）。渲染层词表扩了 hyperbola 之后仍可能有
+# 画不出来的诉求，这句话是那条路径的兜底，不是本次的补丁。
+IMPROVE_FALLBACK_SUGGESTION = (
+    "这条改进意见要求的画面当前画不出来（或模型连续改写未通过检查），已保留上一版成片。"
+    "请把意见改成对现有图型的具体调整（比如『双曲线那段改用 figure 画双曲线并标注 A、B、M』），"
+    "或缩短意见、一次只提一件事；也可以在分镜脚本里直接改那一镜再重出片。")
+
 
 def _load_source_plan(source_key: str, out_dir: Path) -> Plan | None:
     """手改/改进的基线：source_key（"job:<id>" 或 "out:<目录名>"）指向源任务的 plan.json。
@@ -460,7 +469,15 @@ def do_improve(plan_file: Path, out_dir: Path, quality: str, pg: Progress, instr
     new_plan, info = storyboard_llm.improve(brief, kp, plan, instruction)
     pg.end("storyboard")
     if info["source"] != "llm":
-        raise RuntimeError("改进版没能通过静态检查，已保留上一版成片：" + str(info.get("reason") or "模型未改写"))
+        # #85 T3：改进失败分级。这里原来裸抛 RuntimeError，用户在前端只看到一句内部术语
+        # （「回灌 2 次后仍未过静态闸门：- [SCHEMA] shots[2].visuals[0] 的 kind 必须是 …」），
+        # 既不知道发生了什么也没有可照做的下一步（违反管线韧性三层之③）。
+        # 复用 cli.GenerationError：kind=content（改意见能救），闸门原文一字不改留在 error 里，
+        # suggestion 给人话。前端 app.js 已按 {error, kind, suggestion} 渲染，展示面不用动。
+        raise cli.GenerationError(
+            "content",
+            "改进版没能通过静态检查，已保留上一版成片：" + str(info.get("reason") or "模型未改写"),
+            IMPROVE_FALLBACK_SUGGESTION)
     improved = out_dir / "plan_improved.json"
     new_plan.save(improved)
     result = do_render(improved, out_dir, quality, pg, source_key)

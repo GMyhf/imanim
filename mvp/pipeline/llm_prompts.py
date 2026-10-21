@@ -4,7 +4,7 @@ A1 归一（分类，宁缺毋滥） / A3 生成（受约束的结构化创作�
 生成者（A3）与评判者（A8、S22）刻意用不同提示词、不同模型：既生成又评判会破坏监督独立性（Spec_Workflow §1）。
 """
 
-from .ir import NATURAL_CPS
+from .ir import NATURAL_CPS, FIGURE_SHAPES
 
 A1_SYSTEM = """你是「澄象」知识讲解视频系统的需求分析员（A1）。
 老师在表单里写了一个自然语言的知识点名称。你的唯一任务：判断它是否对应资料库里已有的某个知识点。
@@ -39,7 +39,10 @@ VISUALS_SPEC = """【visuals：只能用下列 24 种 kind，props 结构如下�
               "cases": 可选 [{"points": [[x,y],..至少2点], "label": 字符串, "at": 字符串, "tone": "accent"}]}
               数学/化学的 graph_vt 必须写 x_label 与 y_label；物理图象不限 v-t：x-t / a-t / F-t 同样用 graph_vt，
               把 y_label 写成「x / m」「a / (m·s⁻²)」「F / N」（不写默认是 v-t），x-t 讲斜率=速度、a-t 与 F-t 讲面积=Δv / 冲量；cases[].at 必须是本镜口播里逐字出现的一个短语（图线在口播说到它时才出现）
-- figure     {"shape": "ellipse"|"right_triangle"|"chord", "a": 正数, "b": 正数, 可选 "foci","point","point_angle","x_label","y_label","label"}；椭圆必须 a > b > 0
+- figure     {"shape": {{FIGURE_SHAPES}}, "a": 正数, "b": 正数, 可选 "foci","point","point_angle","point_label","vertices","x_label","y_label","label","at"}；
+              椭圆必须 a > b > 0；双曲线（hyperbola，x²/a²−y²/b²=1，实轴在 x 轴、两支都会画）a、b 均为正数即可、不要求 a > b；
+              "point_label" 是动点在图上的那个字母（缺省 P；旁白讲 M 就写 M），"vertices": ["A","B"] 在长轴/实轴两端点画点并标这两个字母（缺省不标）——
+              旁白点名谁，图上就标谁，不要让口播讲 A、B、M 而图上只有一个 P
 - steps      {"heading": 可选, "lines": [最多6条]}
 - summary    {"points": [最多6条]}
 - callout    {"text": 字符串, "tone": "key"|"warn"}                            一行字，过长请用「 · 」分成两条以上
@@ -90,6 +93,11 @@ VISUALS_SPEC = """【visuals：只能用下列 24 种 kind，props 结构如下�
 - 【恒外力通用】配速 / 平衡 / 受恒力类问题，恒外力不预设只有重力：电场力 qE、恒定摩擦、恒定阻力等同样按恒外力分析；力的方向由题设决定，不默认竖直或水平。
 - 每镜版面保持简洁，一屏只讲一件事。
 - 不要输出本说明以外的 kind 或 props 字段。"""
+
+# figure 的 shape 枚举跟着 ir.FIGURE_SHAPES 走（模板里留 {{FIGURE_SHAPES}} 占位，这里替换）：
+# 白名单的唯一真源在 ir.py，加一种 shape 不必再来提示词里改第二份（#85 T1.4——线上「画双曲线」
+# 这种诉求撞的就是这份枚举，两边漏同步就会让模型写出闸门不认的 shape）。
+VISUALS_SPEC = VISUALS_SPEC.replace("{{FIGURE_SHAPES}}", "|".join(f'"{s}"' for s in FIGURE_SHAPES))
 
 
 A3_HEAD = """你是「澄象」的分镜编剧（A3）。你把一个已入库、可核对的知识点，改编成中学理科讲解短片的分镜。
