@@ -16,6 +16,7 @@ license: MIT
 > 字幕字体 env 化，见下表），但镜像尚未经 `docker build` 验证、生成还依赖创空间环境变量注入的
 > 两套密钥：推理后端 `QX_LLM_API_KEY`（缺省 ModelScope）与配音网关 `QX_TTS_API_KEY`。
 > 密钥没配、或字体探针没跑出标定缓存时，生成会如实报错而不是假装在跑；画廊浏览不受影响。
+> 本地开发没有配音密钥时，可设 `QX_TTS_ENGINE=edge` 改用 Edge 在线语音（需 `pip install edge-tts`）完整出片。
 > 要现场跑一条，请在 Windows 上按 `PROJECT.md` 的命令执行。
 
 ## 这里能看什么
@@ -131,17 +132,18 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 
 *空间内容每次整改后重新生成；成片与中间产物一一对应，欢迎逐帧核对。*
 
-## CS101 算法短视频样片
+## CS101 算法短视频
 
-新增“栈与队列”本地样片，依据 `2020fall-cs101` 的 OpenJudge 04099。
-支持并排状态动画、中文配音、代码展示和练习题；生成方式与产物说明见
-[`mvp/cs101/README.md`](mvp/cs101/README.md)。此入口为独立样片脚本，尚未接入在线生成。
+**3B1B 风格知识点短片**（[`mvp/cs101/cinematic/`](mvp/cs101/cinematic/README.md)）：依据《计算概论（B）》2026fall 讲义与旁白稿，
+共 10 支、约 29 分钟，1080p60，Edge TTS 中文配音、画面内字幕。每支片的数字都由测试对照讲义原版代码核验，
+每次渲染自动做画面检查（文字出画、重叠、遮挡、压字幕）。
 
-搜索与动态规划两条短视频也已加入；通过 `--lesson search` 和 `--lesson dp` 生成，详见上述说明。
+- 系列入口页（按周次、可在线播放 720p 版）：**https://infomall.zhengmao.ltd/cs101-anim/**
+- 片目：第 6 周排序；第 8 周斐波那契、汉诺塔、全排列；第 9 周并查集；第 10 周区间贪心；第 11 周 0/1 背包；
+  第 12 周 BFS、Dijkstra、二分答案。成片在 `mvp/out/cs101_cine_*/`，逐支依据见该目录 README。
+- 生成：`python mvp/cs101/cinematic/make.py --lesson <id>`（需要 manim 0.22.0、edge-tts、ffmpeg、LaTeX）。
 
-3B1B 风格的知识点短视频见 [`mvp/cs101/cinematic/`](mvp/cs101/cinematic/README.md)：首支《斐波那契：一棵树怎样塌缩成一行》
-（2026fall 第 8 周递归 P23–P25），1080p60、Edge TTS 配音，成片在 `mvp/out/cs101_cine_fib/`；
-第二支《汉诺塔：相信更小的自己》（P26–P28）在 `mvp/out/cs101_cine_hanoi/`；
-第三支《全排列：在决策树上走一遍》（P29–P35）在 `mvp/out/cs101_cine_perm/`；
-第 9 周《并查集：让森林越查越矮》在 `mvp/out/cs101_cine_dsu/`，第 12 周《BFS：一圈一圈往外推》在 `mvp/out/cs101_cine_bfs/`；
-另有排序（第 6 周）、区间贪心（第 10 周）、0/1 背包（第 11 周）、Dijkstra 与二分答案（第 12 周），共 10 支，片目见 `mvp/cs101/cinematic/README.md`。
+**早期样片**（[`mvp/cs101/README.md`](mvp/cs101/README.md)）：栈与队列（2020fall OpenJudge 04099）、搜索、动态规划三条，
+用 macOS 系统语音配音，`mvp/cs101/sample.py --lesson stack_queue|search|dp` 生成。
+
+以上都是独立脚本，尚未接入在线生成。

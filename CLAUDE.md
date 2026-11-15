@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-澄象：把结构化知识点（数理化，学段 G8–U2）做成带配音、字幕、时长可控的 1080p 讲解短视频的确定性管线（ManimCE 0.22.0 + ffmpeg + 网关 TTS）；`mvp/cs101/` 另有一组独立的算法样片。注释、文档、提交说明一律中文。
+澄象：把结构化知识点（数理化，学段 G8–U2）做成带配音、字幕、时长可控的 1080p 讲解短视频的确定性管线（ManimCE 0.22.0 + ffmpeg + 网关 TTS）；`mvp/cs101/` 另有独立的 CS101 算法短片（早期样片 + `cinematic/` 下 10 支 3B1B 风格片，入口页 https://infomall.zhengmao.ltd/cs101-anim/）。注释、文档、提交说明一律中文。
 
 本仓库是魔搭创空间部署版（docker，`0.0.0.0:7860`，入口 `start.sh`）。`PROJECT.md` / README 里提到的 `mvp/tests/`、`tests/run_tests.py`、`deploy/`、`Projrct_Plan/`、`corpus/`、`.local/` **都不在本仓库**，不要去找，也别照着跑。
 
@@ -25,6 +25,8 @@ python pipeline/flow_bridge_test.py                               # flow v2 状�
 CS101（工作目录为仓库根，配音用 macOS `say`，不需要密钥）：`.venv/bin/python mvp/cs101/sample.py --lesson stack_queue|search|dp`；加 `--prepare-only --out .local/x` 只验证轨迹。
 
 CS101 3B1B 风格片（`mvp/cs101/cinematic/`，Edge TTS 配音，详见该目录 README）：`python mvp/cs101/cinematic/make.py --lesson <id> [--quality draft]`（id 见 make.py 的 `LESSONS`，共 10 支），测试 `(cd mvp/cs101/cinematic && python -m unittest test_*.py)`；每次渲染自动做画面检查（`audit.json`，目标 0 处）。公式要 TinyTeX 的 latex + dvisvgm，跑前把 `$HOME/.TinyTeX/bin/x86_64-linux` 加进 PATH。
+
+渲染主力是 Mac Studio（`ssh hfyan@100.76.69.33`，仓库 `~/git/imanim`，M1 Ultra 20 核，可多支 make.py 并行）：`export PATH=$PWD/.venv/bin:/opt/homebrew/bin:/Library/TeX/texbin:$PATH` 后同样命令。常用做法是本机写代码、rsync `mvp/cs101/cinematic/` 过去渲染，在 Mac 上提交推送（已设 `http.postBuffer`，否则推几十 MB 视频会 HTTP 400 且只显示 `Everything up-to-date`），再回本机 pull。
 
 本机（Linux）环境：虚拟环境在仓库根 `.venv/`（`uv venv .venv && uv pip install --python .venv/bin/python 'manim==0.22.0'`，pycairo 编译需要 `libcairo2-dev libpango1.0-dev`）。ffmpeg 在 `~/.local/bin`，跑之前设 `PATH=$PWD/../.venv/bin:$PATH MVP_FFMPEG_DIR=$HOME/.local/bin`。`run.py` 即使加 `--no-narration` 也会读 TTS 密钥；没有密钥时设 `QX_TTS_ENGINE=edge`（见下）即可完整出片。
 
@@ -61,7 +63,8 @@ Brief → knowledge.load（data/kp 确定性检索；未命中 → kp_draft K0 �
 - **`render/scene.py`**（约 6900 行）只有一个场景 `Explainer`。`motion.py` / `motion_contract.py` 是动效契约；`physics/` 的定步长 RK4 积分驱动过程动画，靠数值演化，不摆关键帧。
 - **Web**（`web/server.py`，纯标准库）：每个任务一个线程，加一个跑 `web/jobrunner.py --mode generate|render|improve` 的子进程，进度写进 `progress.json`。作品墙扫 `mvp/out/` 与 `web/jobs/` 下的 `sidecar.json`，有 `.gallery_ok` 标记的才上墙。任务目录名必须是纯 ASCII。
 - **`pipeline/flow/`**：AgentFlow v2 多环节流程，在试行，还没进产品链路；`flow_produce.flow_enabled(subject)` 为假时不导入。
-- **`mvp/cs101/`**：复用 Plan/Shot、字幕切分、音频拼接，但不走数理化闸门，也没接入 Web。内容在 `lesson.json` / `search.json` / `dp.json` 里改；`trace.json` 由真实的数据结构操作生成，`test_algorithms.py` 用独立 oracle（并查集、穷举路径）对照验证。
+- **`mvp/cs101/cinematic/`**（3B1B 风格片）：每支片四个文件——`<id>.json` 旁白稿（按句号切句，句级时间戳驱动字幕与 `cue_start` 对齐）、`<id>data.py` 讲义代码原样插桩、`test_<id>.py` 对撞讲义输出/独立算法/旁白数字、`<id>_scene.py` 继承 `cine.Lesson`；新片登记进 `make.py` 的 `LESSONS`。`cine.py` 的自动画面检查查不出「挤但没重叠」「箭头太短」，抽帧目检仍要做。已知坑：`LaggedStart` 作用在子对象上会把它们提到最上层，带不透明填充会永久盖住同组文字；`Integer.animate.set_value` 位数变少会报错，用 `ChangeDecimalToValue`；`Code` 字符串里空行会打乱 `code_lines` 下标；Edge TTS 偶尔断流不报错（make.py 已校验）。入口页由 `site/build.py`（`--standalone` 为部署版）生成，部署见该目录 README。
+- **`mvp/cs101/`** 早期样片：复用 Plan/Shot、字幕切分、音频拼接，但不走数理化闸门，也没接入 Web。内容在 `lesson.json` / `search.json` / `dp.json` 里改；`trace.json` 由真实的数据结构操作生成，`test_algorithms.py` 用独立 oracle（并查集、穷举路径）对照验证。
 
 ## 数据与产物
 

@@ -1,5 +1,8 @@
 # CS101 算法短视频
 
+> 这里是早期样片（栈与队列、搜索、动态规划）。后续的 10 支 3B1B 风格知识点短片在 [`cinematic/`](cinematic/README.md)，
+> 系列入口页：https://infomall.zhengmao.ltd/cs101-anim/
+
 内容依据本机 `2020fall-cs101/2020fall_cs101.openjudge.cn_problems.md` 中
 `04099: 队列和栈`。原题第一组操作为 `push 1, push 3, pop, push 5`，
 最终队列为 `[3, 5]`，栈为 `[1, 5]`。旁白、分镜与结尾练习为本样片编写。
