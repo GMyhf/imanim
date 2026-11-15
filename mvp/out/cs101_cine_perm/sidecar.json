@@ -1,0 +1,25 @@
+{
+  "lesson": "perm",
+  "title": "全排列：在决策树上走一遍",
+  "source": "计算概论（B）2026fall · 第8周 递归 P29–P35 · OpenJudge 02748 · LeetCode 78",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 218.92,
+  "speech_seconds": 207.05,
+  "beats": {
+    "title": 0.0,
+    "choose": 13.77,
+    "tree": 40.57,
+    "code": 60.82,
+    "walk": 81.18,
+    "copy": 104.73,
+    "count": 120.28,
+    "implicit": 154.15,
+    "subsets": 179.8,
+    "recap": 199.87
+  },
+  "subtitles": 41,
+  "size_mb": 16.75,
+  "wall_seconds": 445.0
+}

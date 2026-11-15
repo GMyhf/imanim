@@ -192,9 +192,9 @@ class FibLesson(Lesson):
     # ---------------------------------------------------------------- 重叠子问题
     def repeat_beat(self):
         self.beat("repeat")
-        self.play(LaggedStart(*[m[0].animate.set_stroke(NCOLOR[nd.n]).set_fill(
-            interpolate_color(ManimColor(BG), ManimColor(NCOLOR[nd.n]), 0.22), 1)
-            for nd, m in zip(self.nodes, self.mobs)], lag_ratio=0.06, run_time=2.4))
+        # 半透明填充：LaggedStart 会把这些圆重新加到场景最上层，不透明填充会把圆里的数字永久盖住
+        self.play(LaggedStart(*[m[0].animate.set_stroke(NCOLOR[nd.n]).set_fill(NCOLOR[nd.n], 0.22)
+                                for nd, m in zip(self.nodes, self.mobs)], lag_ratio=0.06, run_time=2.4))
         tally = VGroup()
         step = max(1.0, min(2.6, (self.left() - 3.2) / 3))
         for i, k in enumerate((4, 3, 2)):

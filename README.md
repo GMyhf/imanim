@@ -141,4 +141,5 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 
 3B1B 风格的知识点短视频见 [`mvp/cs101/cinematic/`](mvp/cs101/cinematic/README.md)：首支《斐波那契：一棵树怎样塌缩成一行》
 （2026fall 第 8 周递归 P23–P25），1080p60、Edge TTS 配音，成片在 `mvp/out/cs101_cine_fib/`；
-第二支《汉诺塔：相信更小的自己》（P26–P28）在 `mvp/out/cs101_cine_hanoi/`。
+第二支《汉诺塔：相信更小的自己》（P26–P28）在 `mvp/out/cs101_cine_hanoi/`；
+第三支《全排列：在决策树上走一遍》（P29–P35）在 `mvp/out/cs101_cine_perm/`。
