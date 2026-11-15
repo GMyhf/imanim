@@ -221,7 +221,7 @@ class DSULesson(Lesson):
         roots_note = T("根：父亲就是自己（代表元）", 24, C_YELLOW).move_to([0, 2.9, 0])
         self.wait_until(self.cue_start("树根就是代表元", self.now))
         self.play(FadeIn(roots_note), *[Indicate(n, color=C_YELLOW) for n in fo.nodes.values()], run_time=1.0)
-        self.wait_until(self.cue_start("union 先找到", self.now))
+        self.wait_until(self.cue_start("合并时先找到", self.now))
         step = max(0.8, min(1.4, (self.cue_start("find 沿着", self.now + 6) - self.now) / len(D.FOREST_UNIONS)))
         for (a, b), snap in zip(D.FOREST_UNIONS, snaps[1:]):
             changed = [i for i in range(D.FOREST_N) if snap[i] != fo.parent[i]]

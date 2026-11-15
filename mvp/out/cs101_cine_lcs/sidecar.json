@@ -1,0 +1,26 @@
+{
+  "lesson": "lcs",
+  "title": "LCS 与编辑距离：同一张二维表",
+  "source": "计算概论（B）2026fall · 第11周 动态规划 P20–P21 · OpenJudge 02806 · LeetCode 72",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 155.38,
+  "speech_seconds": 143.71,
+  "beats": {
+    "title": 0.0,
+    "define": 12.65,
+    "rule": 29.88,
+    "fill": 46.57,
+    "back": 62.13,
+    "edit": 80.52,
+    "edfill": 97.38,
+    "align": 114.15,
+    "same": 125.0,
+    "recap": 143.23
+  },
+  "subtitles": 34,
+  "audit_issues": 0,
+  "size_mb": 11.27,
+  "wall_seconds": 141.0
+}

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-澄象：把结构化知识点（数理化，学段 G8–U2）做成带配音、字幕、时长可控的 1080p 讲解短视频的确定性管线（ManimCE 0.22.0 + ffmpeg + 网关 TTS）；`mvp/cs101/` 另有独立的 CS101 算法短片（早期样片 + `cinematic/` 下 10 支 3B1B 风格片，入口页 https://infomall.zhengmao.ltd/cs101-anim/）。注释、文档、提交说明一律中文。
+澄象：把结构化知识点（数理化，学段 G8–U2）做成带配音、字幕、时长可控的 1080p 讲解短视频的确定性管线（ManimCE 0.22.0 + ffmpeg + 网关 TTS）；`mvp/cs101/` 另有独立的 CS101 算法短片（早期样片 + `cinematic/` 下 14 支 3B1B 风格片，入口页 https://infomall.zhengmao.ltd/cs101-anim/）。注释、文档、提交说明一律中文。
 
 本仓库是魔搭创空间部署版（docker，`0.0.0.0:7860`，入口 `start.sh`）。`PROJECT.md` / README 里提到的 `mvp/tests/`、`tests/run_tests.py`、`deploy/`、`Projrct_Plan/`、`corpus/`、`.local/` **都不在本仓库**，不要去找，也别照着跑。
 
@@ -24,7 +24,7 @@ python pipeline/flow_bridge_test.py                               # flow v2 状�
 
 CS101（工作目录为仓库根，配音用 macOS `say`，不需要密钥）：`.venv/bin/python mvp/cs101/sample.py --lesson stack_queue|search|dp`；加 `--prepare-only --out .local/x` 只验证轨迹。
 
-CS101 3B1B 风格片（`mvp/cs101/cinematic/`，Edge TTS 配音，详见该目录 README）：`python mvp/cs101/cinematic/make.py --lesson <id> [--quality draft]`（id 见 make.py 的 `LESSONS`，共 10 支），测试 `(cd mvp/cs101/cinematic && python -m unittest test_*.py)`；每次渲染自动做画面检查（`audit.json`，目标 0 处）。公式要 TinyTeX 的 latex + dvisvgm，跑前把 `$HOME/.TinyTeX/bin/x86_64-linux` 加进 PATH。
+CS101 3B1B 风格片（`mvp/cs101/cinematic/`，Edge TTS 配音，详见该目录 README）：`python mvp/cs101/cinematic/make.py --lesson <id> [--quality draft]`（id 见 make.py 的 `LESSONS`，共 14 支），测试 `(cd mvp/cs101/cinematic && python -m unittest test_*.py)`；每次渲染自动做画面检查（`audit.json`，目标 0 处）；出片后在 Mac 上跑 `asr_check.py <id>` 做配音校对。成片 mp4 不进 git，放 GitHub Releases `cs101-anim-2026fall`（重渲后 `gh release upload ... --clobber`）。公式要 TinyTeX 的 latex + dvisvgm，跑前把 `$HOME/.TinyTeX/bin/x86_64-linux` 加进 PATH。
 
 渲染主力是 Mac Studio（`ssh hfyan@100.76.69.33`，仓库 `~/git/imanim`，M1 Ultra 20 核，可多支 make.py 并行）：`export PATH=$PWD/.venv/bin:/opt/homebrew/bin:/Library/TeX/texbin:$PATH` 后同样命令。常用做法是本机写代码、rsync `mvp/cs101/cinematic/` 过去渲染，在 Mac 上提交推送（已设 `http.postBuffer`，否则推几十 MB 视频会 HTTP 400 且只显示 `Everything up-to-date`），再回本机 pull。
 

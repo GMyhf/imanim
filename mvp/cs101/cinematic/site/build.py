@@ -1,7 +1,8 @@
 """生成系列入口页 index.html：films.json（周次、简介、出处）+ 各片 sidecar.json（标题、时长）。
 
 python build.py               # Artifact 版（发布时外层自动补 HTML 骨架，用 Google Fonts）
-python build.py --standalone  # 独立部署版（完整 HTML 骨架、只用系统字体：国内访问不了 Google Fonts），
+python build.py --standalone [--feedback]  # 独立部署版；--feedback 加每支片的反馈栏（需中转上的 feedback_server.py）
+                              # 独立部署版（完整 HTML 骨架、只用系统字体：国内访问不了 Google Fonts），
                               # 部署在 https://infomall.zhengmao.ltd/cs101-anim/（成都中转 /srv/cs101-anim）
 """
 import html
@@ -10,6 +11,7 @@ import sys
 from pathlib import Path
 
 STANDALONE = "--standalone" in sys.argv
+FEEDBACK = STANDALONE and "--feedback" in sys.argv     # 反馈栏要求中转上已部署 feedback_server.py
 
 HERE = Path(__file__).parent
 data = json.loads((HERE / "films.json").read_text(encoding="utf-8"))
@@ -19,6 +21,21 @@ side = {p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in (HERE 
 def mmss(s):
     s = int(round(s))
     return f"{s // 60}:{s % 60:02d}"
+
+
+RATINGS = [("ok", "看懂了"), ("hard", "有点难"), ("fast", "节奏太快"), ("slow", "节奏太慢")]
+
+
+def feedback(fid):
+    """部署版才有的反馈栏：选项按钮（附可选留言）→ POST api/feedback，计数取 api/summary。"""
+    btns = "".join(f'<button type="button" data-r="{k}">{v}<b></b></button>' for k, v in RATINGS)
+    return f"""
+          <div class="fb" data-film="{fid}">
+            <div class="fb-row"><span class="fb-q">这支片</span>{btns}</div>
+            <details><summary>附一句建议（可选，点上面的按钮时一起提交）</summary>
+              <textarea id="c-{fid}" maxlength="500" rows="2" placeholder="哪里没看懂、哪里太快……"></textarea></details>
+            <span class="fb-msg" aria-live="polite"></span>
+          </div>"""
 
 
 total = 0.0
@@ -38,7 +55,7 @@ for w in data["weeks"]:
         <div class="film-body">
           <h3>{html.escape(title)}</h3>
           <p>{html.escape(f['desc'])}</p>
-          <div class="meta"><span class="dur">{mmss(sc['seconds'])}</span><span class="src">讲义 {html.escape(f['src'])}</span></div>
+          <div class="meta"><span class="dur">{mmss(sc['seconds'])}</span><span class="src">讲义 {html.escape(f['src'])}</span></div>{feedback(f['id']) if FEEDBACK else ""}
         </div>
       </article>""")
     sections.append(f"""
@@ -49,6 +66,49 @@ for w in data["weeks"]:
     </section>""")
 
 nav = "".join(f'<a href="#w{w["week"]}">W{w["week"]:02d}<span>{html.escape(w["topic"])}</span></a>' for w in data["weeks"])
+FB_SCRIPT = """<script>
+(function () {
+  var NAMES = {ok: "看懂了", hard: "有点难", fast: "节奏太快", slow: "节奏太慢"};
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function paint(box, counts) {
+    box.querySelectorAll("button[data-r]").forEach(function (b) {
+      var n = counts && counts[b.dataset.r];
+      b.querySelector("b").textContent = n ? n : "";
+    });
+  }
+  var boxes = document.querySelectorAll(".fb");
+  fetch("api/summary").then(function (r) { return r.ok ? r.json() : {}; }).then(function (s) {
+    boxes.forEach(function (box) { paint(box, s[box.dataset.film]); });
+  }).catch(function () {});
+  boxes.forEach(function (box) {
+    var film = box.dataset.film, msg = box.querySelector(".fb-msg"), voted = load("fb-" + film);
+    function lock(r) {
+      box.querySelectorAll("button[data-r]").forEach(function (b) {
+        b.disabled = true; if (b.dataset.r === r) b.classList.add("picked");
+      });
+    }
+    if (voted) { lock(voted); msg.textContent = "你选了「" + NAMES[voted] + "」，谢谢。"; }
+    box.querySelectorAll("button[data-r]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var r = b.dataset.r, ta = box.querySelector("textarea");
+        msg.textContent = "提交中…";
+        fetch("api/feedback", {method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({film: film, rating: r, comment: ta ? ta.value : ""})})
+          .then(function (res) { return res.json().then(function (j) { return {ok: res.ok, j: j}; }); })
+          .then(function (x) {
+            if (!x.ok) { msg.textContent = x.j.error || "没提交成功，稍后再试。"; return; }
+            save("fb-" + film, r); lock(r); paint(box, x.j.summary);
+            msg.textContent = "已收到，谢谢！";
+          })
+          .catch(function () { msg.textContent = "网络不通，没提交成功，稍后再试。"; });
+      });
+    });
+  });
+})();
+</script>
+"""
+
 head = ("""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -108,6 +168,19 @@ nav.weeks a:hover, nav.weeks a:focus-visible {{ border-color: var(--accent); out
 .meta {{ display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--f-mono); font-size: 12px; color: var(--muted);
   font-variant-numeric: tabular-nums; }}
 .meta .dur {{ color: var(--yellow); }}
+.fb {{ display: grid; gap: 6px; margin-top: 4px; padding-top: 10px; border-top: 1px dashed var(--line); }}
+.fb-row {{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }}
+.fb-q {{ font-size: 13px; color: var(--muted); margin-right: 2px; }}
+.fb button {{ font: inherit; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: transparent; color: var(--fg); cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }}
+.fb button b {{ font-weight: 400; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }}
+.fb button:hover, .fb button:focus-visible {{ border-color: var(--accent); outline: none; }}
+.fb button.picked {{ border-color: var(--yellow); color: var(--yellow); }}
+.fb button:disabled {{ cursor: default; }}
+.fb details summary {{ font-size: 12px; color: var(--muted); cursor: pointer; }}
+.fb textarea {{ width: 100%; margin-top: 6px; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }}
+.fb-msg {{ font-size: 12px; color: var(--muted); min-height: 1em; }}
 footer {{ margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px;
   display: grid; gap: 6px; }}
 footer code {{ font-family: var(--f-mono); font-size: 12px; }}
@@ -129,6 +202,6 @@ html {{ scroll-behavior: smooth; }}
     <span>制作：Manim Community 0.22 渲染，Edge TTS 配音，每支片附对撞测试与自动画面检查。</span>
   </footer>
 </div>
-""" + ("</body>\n</html>\n" if STANDALONE else "")
+""" + ((FB_SCRIPT if FEEDBACK else "") + "</body>\n</html>\n" if STANDALONE else "")
 (HERE / ("index.standalone.html" if STANDALONE else "index.html")).write_text(page, encoding="utf-8")
 print(n_films, mmss(total))

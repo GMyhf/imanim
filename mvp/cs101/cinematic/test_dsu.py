@@ -91,7 +91,7 @@ class DSUFacts(unittest.TestCase):
         text = "".join(b["narration"] for b in json.loads(
             Path(__file__).with_name("dsu.json").read_text(encoding="utf-8"))["beats"])
         for s in ("路径是七、五、二、一", "七和五被改挂到根一下面", "九和十不在路径上",
-                  "零、四、七、九是根，一共四个集合", "零变成负七", "最后剩七组", "union 返回 False"):
+                  "零、四、七、九是根，一共四个集合", "零变成负七", "最后剩七组", "合并返回 False"):
             self.assertIn(s, text)
 
 

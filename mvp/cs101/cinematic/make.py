@@ -36,7 +36,11 @@ LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "sort": ("sort.json", "sort_scene.py", "SortLesson"),
            "dijkstra": ("dijkstra.json", "dijkstra_scene.py", "DijkstraLesson"),
            "bsearch": ("bsearch.json", "bsearch_scene.py", "BSearchLesson"),
-           "interval": ("interval.json", "interval_scene.py", "IntervalLesson")}
+           "interval": ("interval.json", "interval_scene.py", "IntervalLesson"),
+           "lcs": ("lcs.json", "lcs_scene.py", "LCSLesson"),
+           "queens": ("queens.json", "queens_scene.py", "QueensLesson"),
+           "dpintro": ("dpintro.json", "dpintro_scene.py", "DPIntroLesson"),
+           "stack": ("stack.json", "stack_scene.py", "StackLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 
@@ -69,6 +73,11 @@ async def _tts(text: str, voice: str, rate: str, mp3: Path) -> list[dict]:
     return cues
 
 
+def _plain(text: str) -> str:
+    """去掉标点和空白，只留文字，用来比较句子时间轴是否覆盖了整段旁白。"""
+    return "".join(ch for ch in text if ch.isalnum())
+
+
 def synth(beat: dict, voice: str, rate: str, cache: Path) -> dict:
     """合成一个 beat；按 (voice, rate, text) 缓存，改稿自动失效。"""
     key = hashlib.sha1(f"{voice}|{rate}|{beat['narration']}".encode()).hexdigest()[:12]
@@ -86,10 +95,14 @@ def synth(beat: dict, voice: str, rate: str, cache: Path) -> dict:
             run([ffmpeg(), "-v", "error", "-y", "-i", str(mp3), "-ar", str(SR), "-ac", "1", "-sample_fmt", "s16", str(wav)])
             with wave.open(str(wav)) as w:
                 got = w.getnframes() / w.getframerate()
-            if cues and got + 0.3 < cues[-1]["end"]:      # 音频流中途断了却没报错：音频比最后一句字幕短
+            said = sum(len(_plain(c["text"])) for c in cues)
+            want = len(_plain(beat["narration"]))
+            # 音频流中途断了却没报错，有两种样子：音频比最后一句字幕短；或者音频和句子时间轴一起在半路结束
+            # （并查集「应用」段曾少了整整一句）。两样都查。
+            if not cues or got + 0.3 < cues[-1]["end"] or said < 0.95 * want:
                 wav.unlink()
                 if attempt == 4:
-                    raise SystemExit(f"TTS 音频残缺（{beat['id']}）：{got:.2f}s < 字幕结束 {cues[-1]['end']:.2f}s")
+                    raise SystemExit(f"TTS 音频残缺（{beat['id']}）：音频 {got:.2f}s，句子覆盖 {said}/{want} 字")
                 time.sleep(3 * 2 ** attempt)
                 continue
             break

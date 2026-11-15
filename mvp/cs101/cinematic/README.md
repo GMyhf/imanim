@@ -22,10 +22,20 @@
 | 0/1 背包：一张表，两个方向 | 2026fall 第 11 周 背包 P4–P8 | `mvp/out/cs101_cine_knap/` |
 | Dijkstra：带权的波纹 | 2026fall 第 12 周 最短路 P17–P20（走山路） | `mvp/out/cs101_cine_dijkstra/` |
 | 二分答案：最小化最大值 | 2026fall 第 12 周 二分答案 P22–P26（河中跳房子、月度开销） | `mvp/out/cs101_cine_bsearch/` |
+| 栈：后进先出的三种用法 | 2026fall 第 7 周 栈 P4–P18（括号匹配、后缀求值、单调栈接雨水） | `mvp/out/cs101_cine_stack/` |
+| 八皇后：回溯与剪枝 | 2026fall 第 9 周 回溯 P5–P6、P11–P13 | `mvp/out/cs101_cine_queens/` |
+| 动态规划入门：状态少了一维 | 2026fall 第 10 周 DP 入门 P13–P24 | `mvp/out/cs101_cine_dpintro/` |
+| LCS 与编辑距离：同一张二维表 | 2026fall 第 11 周 序列 DP P20–P21 | `mvp/out/cs101_cine_lcs/` |
+
+**成片 mp4 不进 git**（`.gitignore` 排除 `mvp/out/cs101_cine_*/*.mp4`），放在 GitHub Releases：
+https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
+下载：`gh release download cs101-anim-2026fall -R GMyhf/imanim -D <目录>`。各片目录里仍提交 `sidecar.json`、`timing.json`、
+`marks.json`、`audit.json`、`asr.json`、`subs.srt`、`preview.png`；重渲后用 `gh release upload cs101-anim-2026fall <mp4> --clobber` 覆盖。
 
 系列入口页（按周次排列、页面内可播放 720p 版）由 `site/build.py` 生成：`site/films.json` 写周次、简介、出处，
 标题和时长读各片 `sidecar.json`；页面版视频用 `ffmpeg -vf "scale=1280:-2,fps=30" -crf 30` 转码，封面取 `preview.png`。
-`build.py --standalone` 生成独立部署版（完整 HTML、只用系统字体，国内打不开 Google Fonts），部署在
+`build.py --standalone` 生成独立部署版（完整 HTML、只用系统字体，国内打不开 Google Fonts；加 `--feedback` 带每支片的反馈栏，
+需先在中转上部署 `site/feedback_server.py`，见该文件说明），部署在
 https://infomall.zhengmao.ltd/cs101-anim/（成都中转 `/srv/cs101-anim`，Caddy `handle_path /cs101-anim/*`，换文件无需 reload；中转出口约 5 Mbps，只放 720p 版）。
 
 ## 制作
@@ -33,7 +43,7 @@ https://infomall.zhengmao.ltd/cs101-anim/（成都中转 `/srv/cs101-anim`，Cad
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python mvp/cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（--lesson fib|hanoi|perm|dsu|bfs|sort|interval|knap|dijkstra|bsearch）
+python mvp/cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 14 支）
 python mvp/cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python mvp/cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 
@@ -69,8 +79,12 @@ Mac 仓库已设 `git config http.postBuffer 524288000`：一次推多支视频�
   文字被后画的不透明形状盖住、内容压字幕带——写进 `audit.json`，make.py 打印并计入 sidecar 的 `audit_issues`，目标 0 处。
   故意的过渡帧（同参节点合并、全屏波纹）用 `self.play(..., audit=False)` 跳过；透明度 < 0.3 的文字视为装饰。
   它查不出「排版挤但没重叠」「箭头太短」这类问题，抽帧目检仍要做。
+- **配音校对**（`asr_check.py`，Mac 上跑，需 mlx-whisper、pypinyin、cn2an）：Whisper 把每段配音转写回文字，两边统一数字写法后
+  按拼音比对，只报漏读/断流、读音不符、英文词被听成中文三类，写 `asr.json`。首轮查出并查集片的 union 被念成「永远」一类
+  （已改口语「合并」），以及一段整句缺失的断流。Whisper 也会听错，报告是「值得复听的位置」。
 - `make.py`：TTS（按稿件哈希缓存）→ `timing.json` → 渲染（场景写 `marks.json` 记录各 beat 实际起点）→
-  按实际起点摆放配音 → 混流（TTS 每次限时 60 秒；音频比最后一句字幕短视为流中断，丢弃重试——Edge TTS 偶尔断流却不报错，汉诺塔片头曾因此只剩 2 秒），产出成片、`subs.srt`、`sidecar.json`、`preview.png`。动画超出配音时 beat 顺延，音画不会错位。
+  按实际起点摆放配音 → 混流（TTS 每次限时 60 秒；断流校验两条：音频比最后一句字幕短，或句子时间轴拼起来覆盖不到旁白的 95%——Edge TTS 偶尔断流却不报错，
+汉诺塔片头曾只剩 2 秒，并查集「应用」段曾连音频带时间轴一起少了一整句），产出成片、`subs.srt`、`sidecar.json`、`preview.png`。动画超出配音时 beat 顺延，音画不会错位。
 
 新增一条片：写 `<lesson>.json` 旁白稿 + `<lesson>_scene.py`（继承 `Lesson`），登记进 `make.py` 的 `LESSONS`，
 数字放进可测试的数据模块并写对撞测试。

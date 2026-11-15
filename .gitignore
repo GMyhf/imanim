@@ -7,3 +7,6 @@ media/
 mvp/out/*/audio/
 mvp/out/*/track.wav
 mvp/out/*/render.log
+
+# CS101 3B1B 系列成片放 GitHub Releases（cs101-anim-2026fall），不进 git；目录里的 sidecar/timing/audit 等仍提交
+mvp/out/cs101_cine_*/*.mp4

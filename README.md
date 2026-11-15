@@ -135,12 +135,13 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 ## CS101 算法短视频
 
 **3B1B 风格知识点短片**（[`mvp/cs101/cinematic/`](mvp/cs101/cinematic/README.md)）：依据《计算概论（B）》2026fall 讲义与旁白稿，
-共 10 支、约 29 分钟，1080p60，Edge TTS 中文配音、画面内字幕。每支片的数字都由测试对照讲义原版代码核验，
-每次渲染自动做画面检查（文字出画、重叠、遮挡、压字幕）。
+共 14 支、约 41 分钟，1080p60，Edge TTS 中文配音、画面内字幕。每支片的数字都由测试对照讲义原版代码核验，
+每次渲染自动做画面检查（文字出画、重叠、遮挡、压字幕），配音经 Whisper 转写回文字与旁白稿比对。
 
 - 系列入口页（按周次、可在线播放 720p 版）：**https://infomall.zhengmao.ltd/cs101-anim/**
-- 片目：第 6 周排序；第 8 周斐波那契、汉诺塔、全排列；第 9 周并查集；第 10 周区间贪心；第 11 周 0/1 背包；
-  第 12 周 BFS、Dijkstra、二分答案。成片在 `mvp/out/cs101_cine_*/`，逐支依据见该目录 README。
+- 片目：第 6 周排序；第 7 周栈；第 8 周斐波那契、汉诺塔、全排列；第 9 周八皇后、并查集；第 10 周区间贪心、DP 入门；
+  第 11 周 0/1 背包、LCS 与编辑距离；第 12 周 BFS、Dijkstra、二分答案。逐支依据见该目录 README。
+- 1080p60 成片不进 git，在 GitHub Releases：https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
 - 生成：`python mvp/cs101/cinematic/make.py --lesson <id>`（需要 manim 0.22.0、edge-tts、ffmpeg、LaTeX）。
 
 **早期样片**（[`mvp/cs101/README.md`](mvp/cs101/README.md)）：栈与队列（2020fall OpenJudge 04099）、搜索、动态规划三条，

@@ -1,0 +1,25 @@
+{
+  "lesson": "queens",
+  "title": "八皇后：回溯与剪枝",
+  "source": "计算概论（B）2026fall · 第9周 回溯 P5–P6、P11–P13 · OpenJudge 02754",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 173.08,
+  "speech_seconds": 162.34,
+  "beats": {
+    "title": 0.0,
+    "rules": 16.2,
+    "sets": 36.97,
+    "diag": 59.32,
+    "walk": 81.32,
+    "tree": 110.22,
+    "count": 127.95,
+    "all": 145.42,
+    "recap": 155.28
+  },
+  "subtitles": 38,
+  "audit_issues": 0,
+  "size_mb": 13.4,
+  "wall_seconds": 199.4
+}

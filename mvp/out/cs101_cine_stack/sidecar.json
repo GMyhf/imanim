@@ -1,0 +1,25 @@
+{
+  "lesson": "stack",
+  "title": "栈：后进先出的三种用法",
+  "source": "计算概论（B）2026fall · 第7周 栈 P4–P18 · LeetCode 20、42 · OpenJudge 24588",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 159.02,
+  "speech_seconds": 148.3,
+  "beats": {
+    "title": 0.0,
+    "ops": 15.6,
+    "paren": 31.57,
+    "fail": 46.57,
+    "postfix": 65.35,
+    "evaluate": 81.52,
+    "mono": 103.4,
+    "rain": 122.83,
+    "recap": 142.3
+  },
+  "subtitles": 36,
+  "audit_issues": 0,
+  "size_mb": 9.73,
+  "wall_seconds": 124.6
+}

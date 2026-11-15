@@ -1,0 +1,26 @@
+{
+  "lesson": "dpintro",
+  "title": "动态规划入门：状态少了一维",
+  "source": "计算概论（B）2026fall · 第10周 动态规划入门 P13–P24",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 196.53,
+  "speech_seconds": 184.85,
+  "beats": {
+    "title": 0.0,
+    "premise": 17.4,
+    "paths": 40.98,
+    "naive": 61.43,
+    "where": 82.92,
+    "property": 100.85,
+    "fixed": 122.52,
+    "duel": 144.4,
+    "three": 162.62,
+    "recap": 179.63
+  },
+  "subtitles": 40,
+  "audit_issues": 0,
+  "size_mb": 13.8,
+  "wall_seconds": 186.6
+}
