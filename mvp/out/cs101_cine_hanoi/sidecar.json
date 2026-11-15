@@ -1,0 +1,25 @@
+{
+  "lesson": "hanoi",
+  "title": "汉诺塔：相信更小的自己",
+  "source": "计算概论（B）2026fall · 第8周 递归 P26–P28 · OpenJudge 04147",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 178.97,
+  "speech_seconds": 166.27,
+  "beats": {
+    "title": 0.0,
+    "rules": 16.92,
+    "idea": 29.88,
+    "code": 54.53,
+    "run": 67.08,
+    "tree": 88.53,
+    "inorder": 105.18,
+    "count": 123.37,
+    "legend": 143.32,
+    "recap": 159.57
+  },
+  "subtitles": 38,
+  "size_mb": 11.93,
+  "wall_seconds": 329.9
+}

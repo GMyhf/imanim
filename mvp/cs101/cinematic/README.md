@@ -13,17 +13,18 @@
 | 片目 | 依据 | 产物 |
 | --- | --- | --- |
 | 斐波那契：一棵树怎样塌缩成一行 | 2026fall 第 8 周 递归 P23–P25（OpenJudge 02753），衔接第 10–12 周动态规划 | `mvp/out/cs101_cine_fib/` |
+| 汉诺塔：相信更小的自己 | 2026fall 第 8 周 递归 P26–P28 与讲义 3.2 节（OpenJudge 04147） | `mvp/out/cs101_cine_hanoi/` |
 
 ## 制作
 
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python mvp/cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟
+python mvp/cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（--lesson fib|hanoi）
 python mvp/cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python mvp/cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 
-(cd mvp/cs101/cinematic && python -m unittest test_fib)             # 片中数字的独立对撞
+(cd mvp/cs101/cinematic && python -m unittest test_fib test_hanoi) # 片中数字的独立对撞
 ```
 
 依赖：`manim==0.22.0`、`edge-tts`、ffmpeg；公式要 `latex` + `dvisvgm`（TinyTeX 需
@@ -31,11 +32,15 @@ python mvp/cs101/cinematic/make.py --lesson fib --tts-only          # 只合成�
 
 ## 结构
 
+- `cine.py`：公共骨架。配色、字体，以及 `Lesson` 基类：beat 计时（`beat()` / `left()` / `wait_until()`）、
+  画面字幕、`cue_times()`（当前 beat 的句级时间戳，用来把动画对齐到某一句话，如汉诺塔七步各落在对应那句上）。
 - `fib.json`：旁白稿，按 beat 切分，配音音色与语速也写在这里。旁白要写成口语（数字、符号写成汉字读法）。
 - `fibdata.py`：调用树、记忆化剪枝、计数；画面和旁白里的每个数字都从这里来。
 - `test_fib.py`：用带计数器的真实递归和 `functools.lru_cache` 对撞 `fibdata`，并检查旁白稿里写死的数字。
-- `fib_scene.py`：场景。`Lesson` 基类负责 beat 计时（`beat()` / `left()`）与画面字幕；字幕在 beat 开始时一次建好、
-  只靠透明度切换——Cairo 渲染器在每次 `play` 开始时就固定了绘制列表，动画中途增删的对象会漏画或叠字。
+- `fib_scene.py`、`hanoi_scene.py`：各片场景（继承 `cine.Lesson`）。字幕在 beat 开始时一次建好、只靠透明度切换——
+  Cairo 渲染器在每次 `play` 开始时就固定了绘制列表，动画中途增删的对象会漏画或叠字。
+- `hanoidata.py` / `test_hanoi.py`：汉诺塔的移动序列、调用树中序编号、步数与年代换算；测试用三根栈逐步模拟验证每一步合法，
+  并对撞讲义里的程序输出和旁白数字。
 - `make.py`：TTS（按稿件哈希缓存）→ `timing.json` → 渲染（场景写 `marks.json` 记录各 beat 实际起点）→
   按实际起点摆放配音 → 混流，产出成片、`subs.srt`、`sidecar.json`、`preview.png`。动画超出配音时 beat 顺延，音画不会错位。
 

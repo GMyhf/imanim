@@ -27,7 +27,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MVP = HERE.parent.parent
 SR = 24000
-LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson")}
+LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
+           "hanoi": ("hanoi.json", "hanoi_scene.py", "HanoiLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 
