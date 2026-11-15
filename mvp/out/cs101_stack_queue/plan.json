@@ -1,0 +1,772 @@
+{
+  "version": "S1-2026.10",
+  "knowledge_id": "cs101.stack_queue",
+  "refs": [
+    {
+      "source": "2020fall-cs101 / OpenJudge 04099 队列和栈",
+      "locator": "2020fall_cs101.openjudge.cn_problems.md / ## 04099: 队列和栈",
+      "url": "http://cs101.openjudge.cn/practice/04099/"
+    }
+  ],
+  "brief": {
+    "subject": "cs101",
+    "grade": "U1",
+    "topic": "栈与队列：同样存数，为什么取出的不同？",
+    "target_seconds": 90,
+    "style": "clean",
+    "narration": true,
+    "prior_knowledge": false,
+    "resolution": "1920x1080",
+    "fps": 30,
+    "subtitles": true,
+    "language": "zh",
+    "raw_text": ""
+  },
+  "total_seconds": 94.63,
+  "shots": [
+    {
+      "index": 0,
+      "title": "同样存数，取出的不同",
+      "seconds": 6.866666666666666,
+      "spoken": 6.8347500000000005,
+      "narration": "同样放入数字，为什么取出的结果不同？关键在于，栈和队列从哪里取数。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "同样存数，取出的不同",
+            "action": "intro",
+            "caption": "只改变取出的位置",
+            "code": "from collections import deque\nqueue = deque()\nstack = []",
+            "narration": "同样放入数字，为什么取出的结果不同？关键在于，栈和队列从哪里取数。",
+            "before": {
+              "queue": [],
+              "stack": []
+            },
+            "after": {
+              "queue": [],
+              "stack": []
+            },
+            "seconds": 6.866666666666666
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 1.52,
+          "text": "同样放入数字"
+        },
+        {
+          "i": 1,
+          "start": 1.52,
+          "end": 3.47,
+          "text": "为什么取出的结果不同？"
+        },
+        {
+          "i": 2,
+          "start": 3.47,
+          "end": 6.13475,
+          "text": "关键在于，栈和队列从哪里取数。"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "title": "先看队列：像排队买票",
+      "seconds": 7.633333333333334,
+      "spoken": 7.604500000000001,
+      "narration": "队列就像排队买票。新来的人站在队尾，先来的人从队首离开。这叫先进先出。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "先看队列：像排队买票",
+            "action": "explain_queue",
+            "caption": "先进先出 · FIFO",
+            "narration": "队列就像排队买票。新来的人站在队尾，先来的人从队首离开。这叫先进先出。",
+            "before": {
+              "queue": [],
+              "stack": []
+            },
+            "after": {
+              "queue": [],
+              "stack": []
+            },
+            "seconds": 7.633333333333334
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 2.16,
+          "text": "队列就像排队买票。"
+        },
+        {
+          "i": 1,
+          "start": 2.16,
+          "end": 3.68,
+          "text": "新来的人站在队尾"
+        },
+        {
+          "i": 2,
+          "start": 3.68,
+          "end": 5.58,
+          "text": "先来的人从队首离开。"
+        },
+        {
+          "i": 3,
+          "start": 5.58,
+          "end": 6.9045000000000005,
+          "text": "这叫先进先出。"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "再看栈：像一摞盘子",
+      "seconds": 8.066666666666666,
+      "spoken": 8.049208333333333,
+      "narration": "栈就像一摞盘子，放和取都在最上面，叫后进先出。图里横着画，右端就是栈顶。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "再看栈：像一摞盘子",
+            "action": "explain_stack",
+            "caption": "后进先出 · LIFO",
+            "narration": "栈就像一摞盘子，放和取都在最上面，叫后进先出。图里横着画，右端就是栈顶。",
+            "before": {
+              "queue": [],
+              "stack": []
+            },
+            "after": {
+              "queue": [],
+              "stack": []
+            },
+            "seconds": 8.066666666666666
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 1.91,
+          "text": "栈就像一摞盘子"
+        },
+        {
+          "i": 1,
+          "start": 1.91,
+          "end": 3.58,
+          "text": "放和取都在最上面"
+        },
+        {
+          "i": 2,
+          "start": 3.58,
+          "end": 4.83,
+          "text": "叫后进先出。"
+        },
+        {
+          "i": 3,
+          "start": 4.83,
+          "end": 5.88,
+          "text": "图里横着画"
+        },
+        {
+          "i": 4,
+          "start": 5.88,
+          "end": 7.3492083333333325,
+          "text": "右端就是栈顶。"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "一起放入 1",
+      "seconds": 7.2,
+      "spoken": 7.194791666666667,
+      "narration": "现在一起操作。先放入一，两个容器都从右端加入，因此内容完全相同。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "一起放入 1",
+            "action": "push",
+            "value": 1,
+            "caption": "入队与入栈，都放到右端",
+            "code": "queue.append(1)\nstack.append(1)",
+            "narration": "现在一起操作。先放入一，两个容器都从右端加入，因此内容完全相同。",
+            "before": {
+              "queue": [],
+              "stack": []
+            },
+            "after": {
+              "queue": [
+                1
+              ],
+              "stack": [
+                1
+              ]
+            },
+            "seconds": 7.2
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 1.81,
+          "text": "现在一起操作。"
+        },
+        {
+          "i": 1,
+          "start": 1.81,
+          "end": 4.73,
+          "text": "先放入一，两个容器都从右端加入"
+        },
+        {
+          "i": 2,
+          "start": 4.73,
+          "end": 6.494791666666667,
+          "text": "因此内容完全相同。"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "title": "再放入 3",
+      "seconds": 7.0,
+      "spoken": 6.968791666666667,
+      "narration": "再放入三。一在左边，三在右边。三是后来的元素，也是当前的栈顶。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "再放入 3",
+            "action": "push",
+            "value": 3,
+            "caption": "相同的进入顺序：1 → 3",
+            "code": "queue.append(3)\nstack.append(3)",
+            "narration": "再放入三。一在左边，三在右边。三是后来的元素，也是当前的栈顶。",
+            "before": {
+              "queue": [
+                1
+              ],
+              "stack": [
+                1
+              ]
+            },
+            "after": {
+              "queue": [
+                1,
+                3
+              ],
+              "stack": [
+                1,
+                3
+              ]
+            },
+            "seconds": 7.0
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 3.36,
+          "text": "再放入三。一在左边，三在右边。"
+        },
+        {
+          "i": 1,
+          "start": 3.36,
+          "end": 4.72,
+          "text": "三是后来的元素"
+        },
+        {
+          "i": 2,
+          "start": 4.72,
+          "end": 6.268791666666667,
+          "text": "也是当前的栈顶。"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "title": "取出一次，区别出现了",
+      "seconds": 8.8,
+      "spoken": 8.774166666666666,
+      "narration": "取出一次。队列从左端取走先来的一；栈从右端取走后来的三。相同的输入，出现了不同的结果。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "取出一次，区别出现了",
+            "action": "pop",
+            "caption": "队列取出 1；栈取出 3",
+            "code": "queue.popleft()  # 1\nstack.pop()      # 3",
+            "narration": "取出一次。队列从左端取走先来的一；栈从右端取走后来的三。相同的输入，出现了不同的结果。",
+            "before": {
+              "queue": [
+                1,
+                3
+              ],
+              "stack": [
+                1,
+                3
+              ]
+            },
+            "removed": {
+              "queue": 1,
+              "stack": 3
+            },
+            "after": {
+              "queue": [
+                3
+              ],
+              "stack": [
+                1
+              ]
+            },
+            "seconds": 8.8
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 3.46,
+          "text": "取出一次。队列从左端取走先来的一；"
+        },
+        {
+          "i": 1,
+          "start": 3.46,
+          "end": 5.41,
+          "text": "栈从右端取走后来的三。"
+        },
+        {
+          "i": 2,
+          "start": 5.41,
+          "end": 8.074166666666667,
+          "text": "相同的输入，出现了不同的结果。"
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "title": "接着放入 5",
+      "seconds": 8.1,
+      "spoken": 8.078541666666666,
+      "narration": "接着放入五。队列剩下三和五，栈剩下一和五。这也是课程例题第一组样例的最终状态。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "接着放入 5",
+            "action": "push",
+            "value": 5,
+            "caption": "队列剩下 [3, 5]；栈剩下 [1, 5]",
+            "code": "queue.append(5)\nstack.append(5)",
+            "narration": "接着放入五。队列剩下三和五，栈剩下一和五。这也是课程例题第一组样例的最终状态。",
+            "before": {
+              "queue": [
+                3
+              ],
+              "stack": [
+                1
+              ]
+            },
+            "after": {
+              "queue": [
+                3,
+                5
+              ],
+              "stack": [
+                1,
+                5
+              ]
+            },
+            "seconds": 8.1
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 1.54,
+          "text": "接着放入五。"
+        },
+        {
+          "i": 1,
+          "start": 1.54,
+          "end": 2.82,
+          "text": "队列剩下三和五"
+        },
+        {
+          "i": 2,
+          "start": 2.82,
+          "end": 4.1,
+          "text": "栈剩下一和五。"
+        },
+        {
+          "i": 3,
+          "start": 4.1,
+          "end": 7.378541666666666,
+          "text": "这也是课程例题第一组样例的最终状态。"
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "title": "Python 里，取出的方法不同",
+      "seconds": 7.933333333333334,
+      "spoken": 7.914458333333334,
+      "narration": "用派森实现时，队列使用双端队列，从左端取出；栈使用列表，从右端取出。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "Python 里，取出的方法不同",
+            "action": "code",
+            "caption": "队列 popleft()；栈 pop()",
+            "code": "queue.append(5)\nqueue.popleft()\n\nstack.append(5)\nstack.pop()",
+            "narration": "用派森实现时，队列使用双端队列，从左端取出；栈使用列表，从右端取出。",
+            "before": {
+              "queue": [
+                3,
+                5
+              ],
+              "stack": [
+                1,
+                5
+              ]
+            },
+            "after": {
+              "queue": [
+                3,
+                5
+              ],
+              "stack": [
+                1,
+                5
+              ]
+            },
+            "seconds": 7.933333333333334
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 1.76,
+          "text": "用派森实现时"
+        },
+        {
+          "i": 1,
+          "start": 1.76,
+          "end": 3.51,
+          "text": "队列使用双端队列"
+        },
+        {
+          "i": 2,
+          "start": 3.51,
+          "end": 4.82,
+          "text": "从左端取出；"
+        },
+        {
+          "i": 3,
+          "start": 4.82,
+          "end": 5.91,
+          "text": "栈使用列表"
+        },
+        {
+          "i": 4,
+          "start": 5.91,
+          "end": 7.214458333333334,
+          "text": "从右端取出。"
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "title": "空了以后，还能取吗？",
+      "seconds": 6.066666666666666,
+      "spoken": 6.050833333333333,
+      "narration": "还有一个边界情况。重新从空容器开始，这时不能直接取数。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "空了以后，还能取吗？",
+            "action": "clear",
+            "caption": "重新从两个空容器开始",
+            "code": "queue = deque()\nstack = []",
+            "narration": "还有一个边界情况。重新从空容器开始，这时不能直接取数。",
+            "before": {
+              "queue": [
+                3,
+                5
+              ],
+              "stack": [
+                1,
+                5
+              ]
+            },
+            "after": {
+              "queue": [],
+              "stack": []
+            },
+            "seconds": 6.066666666666666
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 2.15,
+          "text": "还有一个边界情况。"
+        },
+        {
+          "i": 1,
+          "start": 2.15,
+          "end": 3.66,
+          "text": "重新从空容器开始"
+        },
+        {
+          "i": 2,
+          "start": 3.66,
+          "end": 5.350833333333333,
+          "text": "这时不能直接取数。"
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "title": "先检查，再取出",
+      "seconds": 8.266666666666667,
+      "spoken": 8.263291666666667,
+      "narration": "取出前先判断是否为空。按照这道例题的要求，空容器收到取出操作，就报告错误。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "先检查，再取出",
+            "action": "empty_pop",
+            "caption": "空容器取出 → error",
+            "code": "if queue:\n    queue.popleft()\nelse:\n    print('error')",
+            "narration": "取出前先判断是否为空。按照这道例题的要求，空容器收到取出操作，就报告错误。",
+            "before": {
+              "queue": [],
+              "stack": []
+            },
+            "removed": {
+              "queue": "error",
+              "stack": "error"
+            },
+            "after": {
+              "queue": [],
+              "stack": []
+            },
+            "seconds": 8.266666666666667
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 2.69,
+          "text": "取出前先判断是否为空。"
+        },
+        {
+          "i": 1,
+          "start": 2.69,
+          "end": 4.52,
+          "text": "按照这道例题的要求"
+        },
+        {
+          "i": 2,
+          "start": 4.52,
+          "end": 6.35,
+          "text": "空容器收到取出操作"
+        },
+        {
+          "i": 3,
+          "start": 6.35,
+          "end": 7.563291666666667,
+          "text": "就报告错误。"
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "title": "轮到你：放入 2，再放入 4",
+      "seconds": 10.533333333333333,
+      "spoken": 8.019208333333333,
+      "narration": "轮到你。两个空容器都先放入二，再放入四，然后取出一次。队列和栈各自取出谁？",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "轮到你：放入 2，再放入 4",
+            "action": "quiz_setup",
+            "caption": "先想一想：各自会取出谁？",
+            "code": "# 两个容器都执行\n# push 2\n# push 4\n# pop",
+            "narration": "轮到你。两个空容器都先放入二，再放入四，然后取出一次。队列和栈各自取出谁？",
+            "pause": 2.5,
+            "before": {
+              "queue": [],
+              "stack": []
+            },
+            "after": {
+              "queue": [
+                2,
+                4
+              ],
+              "stack": [
+                2,
+                4
+              ]
+            },
+            "seconds": 10.533333333333333
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 4.08,
+          "text": "轮到你。两个空容器都先放入二，再放入四"
+        },
+        {
+          "i": 1,
+          "start": 4.08,
+          "end": 5.42,
+          "text": "然后取出一次。"
+        },
+        {
+          "i": 2,
+          "start": 5.42,
+          "end": 7.319208333333333,
+          "text": "队列和栈各自取出谁？"
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "title": "揭晓：记住取出的位置",
+      "seconds": 8.166666666666666,
+      "spoken": 7.151708333333334,
+      "narration": "队列取出先来的二，栈取出后来的四。记住：队列先进先出，栈后进先出。",
+      "voiceover": "",
+      "emphasis": "",
+      "kp_refs": [],
+      "visuals": [
+        {
+          "kind": "cs_sequence_compare",
+          "props": {
+            "title": "揭晓：记住取出的位置",
+            "action": "pop",
+            "caption": "队列取出 2；栈取出 4",
+            "code": "queue.popleft()  # 2\nstack.pop()      # 4",
+            "narration": "队列取出先来的二，栈取出后来的四。记住：队列先进先出，栈后进先出。",
+            "pause": 1.0,
+            "before": {
+              "queue": [
+                2,
+                4
+              ],
+              "stack": [
+                2,
+                4
+              ]
+            },
+            "removed": {
+              "queue": 2,
+              "stack": 4
+            },
+            "after": {
+              "queue": [
+                4
+              ],
+              "stack": [
+                2
+              ]
+            },
+            "seconds": 8.166666666666666
+          }
+        }
+      ],
+      "subtitles": [
+        {
+          "i": 0,
+          "start": 0.45,
+          "end": 2.0,
+          "text": "队列取出先来的二"
+        },
+        {
+          "i": 1,
+          "start": 2.0,
+          "end": 3.55,
+          "text": "栈取出后来的四。"
+        },
+        {
+          "i": 2,
+          "start": 3.55,
+          "end": 5.29,
+          "text": "记住：队列先进先出"
+        },
+        {
+          "i": 3,
+          "start": 5.29,
+          "end": 6.451708333333333,
+          "text": "栈后进先出。"
+        }
+      ]
+    }
+  ],
+  "hash": "fee7aa7e"
+}

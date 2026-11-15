@@ -1,0 +1,14 @@
+{
+  "subject": "cs101",
+  "grade": "U1",
+  "topic": "动态规划：数字三角形的最大路径和",
+  "target_seconds": 120,
+  "style": "clean",
+  "narration": true,
+  "prior_knowledge": false,
+  "resolution": "1920x1080",
+  "fps": 30,
+  "subtitles": true,
+  "language": "zh",
+  "raw_text": ""
+}

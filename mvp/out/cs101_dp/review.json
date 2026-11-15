@@ -1,0 +1,9 @@
+{
+  "scope": "CS101 pilot algorithm trace only",
+  "passed": true,
+  "checks": [
+    "OJ02760 sample = 30",
+    "brute force path tests (test_algorithms.py)"
+  ],
+  "science_review_applied": false
+}

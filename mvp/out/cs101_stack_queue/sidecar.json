@@ -1,0 +1,28 @@
+{
+  "artifact": "/Users/hfyan/git/chengxiang_gallery/mvp/out/cs101_stack_queue/cs101-stack-queue.mp4",
+  "knowledge_id": "cs101.stack_queue",
+  "refs": [
+    {
+      "source": "2020fall-cs101 / OpenJudge 04099 队列和栈",
+      "locator": "2020fall_cs101.openjudge.cn_problems.md / ## 04099: 队列和栈",
+      "url": "http://cs101.openjudge.cn/practice/04099/"
+    }
+  ],
+  "shots": 12,
+  "subtitles": 44,
+  "tts": {
+    "provider": "macos-say",
+    "voice": "Tingting",
+    "rate": 230
+  },
+  "duration": {
+    "actual": 94.633,
+    "target": 90
+  },
+  "size_mb": 4.17,
+  "validation": {
+    "algorithm_trace": true,
+    "av_drift_under_0.1s": true
+  },
+  "renderer": "cs101/scene.py (pilot; general science renderer not used)"
+}

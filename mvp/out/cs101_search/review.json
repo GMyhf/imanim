@@ -1,0 +1,9 @@
+{
+  "scope": "CS101 pilot algorithm trace only",
+  "passed": true,
+  "checks": [
+    "three-component teaching grid",
+    "diagonal exercise"
+  ],
+  "science_review_applied": false
+}

@@ -1,0 +1,10 @@
+{
+  "scope": "CS101 pilot algorithm trace only",
+  "passed": true,
+  "checks": [
+    "OJ04099 sample",
+    "empty pop",
+    "exercise"
+  ],
+  "science_review_applied": false
+}

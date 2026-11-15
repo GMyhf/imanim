@@ -1,0 +1,135 @@
+{
+  "kind": "search",
+  "topic": "网格搜索：怎样数出池塘？",
+  "target_seconds": 120,
+  "knowledge_id": "cs101.bfs_ponds",
+  "scene": "SearchLesson",
+  "artifact": "cs101-search-ponds.mp4",
+  "source": {
+    "source": "2020fall-cs101 / 18108 池塘数目",
+    "locator": "2020fall_cs101.openjudge.cn_problems.md / ## 18108: 池塘数目"
+  },
+  "beats": [
+    {
+      "title": "水格子有七个，池塘有几个？",
+      "steps": [
+        0
+      ],
+      "caption": "W 是水，点号是陆地；先预测答案",
+      "code": "# 自编小网格\n# 改编自“池塘数目”",
+      "narration": "水格子有七个，池塘却未必有七个。今天用课程里的池塘数目问题，学习怎样搜索一整片相连的区域。"
+    },
+    {
+      "title": "先明确规则：八个方向都相邻",
+      "steps": [
+        0
+      ],
+      "caption": "斜着相邻，也属于同一个池塘",
+      "code": "directions = [\n  (dr, dc)\n  for dr in (-1, 0, 1)\n  for dc in (-1, 0, 1)\n  if dr or dc\n]",
+      "narration": "这道题规定，上下左右和四个斜角都算相邻。左上方两个水格子虽然只在角上接触，也属于同一个池塘。",
+      "diagonal": true
+    },
+    {
+      "title": "找到一个未访问的 W",
+      "steps": [
+        1
+      ],
+      "caption": "池塘数 +1；先标记，再入队",
+      "code": "count += 1\nseen.add((r, c))\nqueue.append((r, c))",
+      "narration": "逐行扫描，遇到还没访问过的水格子，就发现一个新池塘。计数加一，标记这个格子，再把它放进队列。"
+    },
+    {
+      "title": "从队首取出，检查八邻居",
+      "steps": [
+        2
+      ],
+      "caption": "着色表示已发现；金色边框表示当前格",
+      "code": "r, c = queue.popleft()\n# 检查八个邻居\n# 合法且未访问的水格\nseen.add((nr, nc))\nqueue.append((nr, nc))",
+      "narration": "从队首取出左上角，检查八个邻居。右下方也是水，而且没有访问过，于是立刻标记并入队。越界或陆地都跳过。"
+    },
+    {
+      "title": "队列为空，这一片搜完了",
+      "steps": [
+        3
+      ],
+      "caption": "发现两个水格，但只增加一次池塘计数",
+      "code": "r, c = queue.popleft()\n# 没有新的水邻居\n# queue 为空",
+      "narration": "继续取出刚发现的格子。它没有新的水邻居，队列变空，这一片就搜完了。两个水格已经统一标记，只算一个池塘。"
+    },
+    {
+      "title": "继续扫描，不重复计数",
+      "steps": [
+        3
+      ],
+      "caption": "已经标记过的 W，直接跳过",
+      "code": "if grid[r][c] == \"W\":\n    if (r, c) not in seen:\n        # 才启动新搜索\n        pass",
+      "narration": "外层扫描继续往后走。再遇到已经标记的水格，直接跳过。只有没访问过的水格，才能让池塘计数加一。"
+    },
+    {
+      "title": "右上角：第二个池塘",
+      "steps": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "caption": "整个搜索期间，计数保持为 2",
+      "code": "# 新池塘：count += 1\nwhile queue:\n    r, c = queue.popleft()\n    # 扩展未访问的八邻居",
+      "narration": "接着发现右上角的新水格，计数变成二。从这里出发，队列陆续找到同一片里的另外两个水格。搜索过程中，不再增加池塘数。"
+    },
+    {
+      "title": "左下角：第三个池塘",
+      "steps": [
+        8,
+        9,
+        10
+      ],
+      "caption": "标记在入队时完成，避免重复加入",
+      "code": "# 发现时就标记\nseen.add((nr, nc))\nqueue.append((nr, nc))",
+      "narration": "最后处理左下角，计数变成三。注意要在入队时就标记，这样同一个格子不会被不同邻居重复加入队列。"
+    },
+    {
+      "title": "扫描结束：答案是 3",
+      "steps": [
+        11
+      ],
+      "caption": "7 个水格 → 3 个连通区域",
+      "code": "print(count)  # 3",
+      "narration": "所有格子扫描完毕，答案是三个池塘。我们数的是连通区域，而不是水格子的数量。每个区域只在起点处计数一次。"
+    },
+    {
+      "title": "这就是广度优先搜索 BFS",
+      "steps": [
+        11
+      ],
+      "caption": "每格最多入队一次；时间 O(NM)",
+      "code": "# 队列负责保存待处理格\n# 每格检查固定 8 邻居\n# 时间 O(N * M)\n# 最坏空间 O(N * M)",
+      "narration": "用队列一层层扩展，这就是广度优先搜索。每个格子最多入队一次，只检查固定八个方向，时间和最坏空间都与网格大小成正比。"
+    },
+    {
+      "title": "小练习：对角线上的两个 W",
+      "steps": [
+        0
+      ],
+      "caption": "按本题八邻接规则，有几个池塘？",
+      "code": "# W.\n# .W\n# 先自己判断",
+      "narration": "现在换一个小网格。只有对角线上有两个水格。按这道题的八方向相邻规则，它们应该算几个池塘？",
+      "quiz": true,
+      "pause": 2.5
+    },
+    {
+      "title": "答案：1 个；连接规则决定结果",
+      "steps": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "caption": "八邻接：1 个；若只算四邻接：2 个",
+      "code": "# 八邻接：1\n# 四邻接：2",
+      "narration": "答案是一个。如果只允许上下左右四个方向，答案才是两个。做网格搜索前，先读清楚题目的连接规则。",
+      "quiz": true,
+      "pause": 1.0
+    }
+  ]
+}

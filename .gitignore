@@ -1,0 +1,9 @@
+.venv/
+.DS_Store
+.local/
+__pycache__/
+*.pyc
+media/
+mvp/out/*/audio/
+mvp/out/*/track.wav
+mvp/out/*/render.log
