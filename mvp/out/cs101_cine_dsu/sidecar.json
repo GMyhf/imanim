@@ -1,0 +1,25 @@
+{
+  "lesson": "dsu",
+  "title": "并查集：让森林越查越矮",
+  "source": "计算概论（B）2026fall · 第9周 并查集 P16–P30 · OpenJudge 02524",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 212.62,
+  "speech_seconds": 200.9,
+  "beats": {
+    "title": 0.0,
+    "ops": 14.73,
+    "forest": 33.82,
+    "chain": 54.45,
+    "weight": 73.32,
+    "compress": 99.87,
+    "code": 122.45,
+    "exam": 146.98,
+    "apps": 180.27,
+    "recap": 200.0
+  },
+  "subtitles": 38,
+  "size_mb": 15.62,
+  "wall_seconds": 258.2
+}

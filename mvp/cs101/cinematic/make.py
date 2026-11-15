@@ -29,7 +29,9 @@ MVP = HERE.parent.parent
 SR = 24000
 LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "hanoi": ("hanoi.json", "hanoi_scene.py", "HanoiLesson"),
-           "perm": ("perm.json", "perm_scene.py", "PermLesson")}
+           "perm": ("perm.json", "perm_scene.py", "PermLesson"),
+           "dsu": ("dsu.json", "dsu_scene.py", "DSULesson"),
+           "bfs": ("bfs.json", "bfs_scene.py", "BFSLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 

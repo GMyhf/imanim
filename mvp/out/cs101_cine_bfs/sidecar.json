@@ -1,0 +1,24 @@
+{
+  "lesson": "bfs",
+  "title": "BFS：一圈一圈往外推",
+  "source": "计算概论（B）2026fall · 第12周 BFS P9–P21 · LeetCode 542",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 155.8,
+  "speech_seconds": 145.08,
+  "beats": {
+    "title": 0.0,
+    "idea": 12.23,
+    "code": 37.4,
+    "maze": 62.23,
+    "path": 82.48,
+    "mark": 93.52,
+    "multi": 110.25,
+    "choose": 128.62,
+    "recap": 145.75
+  },
+  "subtitles": 30,
+  "size_mb": 11.57,
+  "wall_seconds": 158.3
+}

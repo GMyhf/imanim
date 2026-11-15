@@ -24,7 +24,7 @@ python pipeline/flow_bridge_test.py                               # flow v2 状�
 
 CS101（工作目录为仓库根，配音用 macOS `say`，不需要密钥）：`.venv/bin/python mvp/cs101/sample.py --lesson stack_queue|search|dp`；加 `--prepare-only --out .local/x` 只验证轨迹。
 
-CS101 3B1B 风格片（`mvp/cs101/cinematic/`，Edge TTS 配音，详见该目录 README）：`python mvp/cs101/cinematic/make.py --lesson fib|hanoi|perm [--quality draft]`，测试 `(cd mvp/cs101/cinematic && python -m unittest test_fib test_hanoi test_perm)`。公式要 TinyTeX 的 latex + dvisvgm，跑前把 `$HOME/.TinyTeX/bin/x86_64-linux` 加进 PATH。
+CS101 3B1B 风格片（`mvp/cs101/cinematic/`，Edge TTS 配音，详见该目录 README）：`python mvp/cs101/cinematic/make.py --lesson fib|hanoi|perm|dsu|bfs [--quality draft]`，测试 `(cd mvp/cs101/cinematic && python -m unittest test_fib test_hanoi test_perm test_dsu test_bfs)`。公式要 TinyTeX 的 latex + dvisvgm，跑前把 `$HOME/.TinyTeX/bin/x86_64-linux` 加进 PATH。
 
 本机（Linux）环境：虚拟环境在仓库根 `.venv/`（`uv venv .venv && uv pip install --python .venv/bin/python 'manim==0.22.0'`，pycairo 编译需要 `libcairo2-dev libpango1.0-dev`）。ffmpeg 在 `~/.local/bin`，跑之前设 `PATH=$PWD/../.venv/bin:$PATH MVP_FFMPEG_DIR=$HOME/.local/bin`。`run.py` 即使加 `--no-narration` 也会读 TTS 密钥；没有密钥时设 `QX_TTS_ENGINE=edge`（见下）即可完整出片。
 
