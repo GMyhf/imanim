@@ -24,7 +24,7 @@ python pipeline/flow_bridge_test.py                               # flow v2 状�
 
 CS101（工作目录为仓库根，配音用 macOS `say`，不需要密钥）：`.venv/bin/python mvp/cs101/sample.py --lesson stack_queue|search|dp`；加 `--prepare-only --out .local/x` 只验证轨迹。
 
-本机（Linux）环境：虚拟环境在仓库根 `.venv/`（`uv venv .venv && uv pip install --python .venv/bin/python 'manim==0.22.0'`，pycairo 编译需要 `libcairo2-dev libpango1.0-dev`）。ffmpeg 在 `~/.local/bin`，跑之前设 `PATH=$PWD/../.venv/bin:$PATH MVP_FFMPEG_DIR=$HOME/.local/bin`。`run.py` 即使加 `--no-narration` 也会读 TTS 密钥；没有密钥时，可以用 `knowledge.load` + `storyboard.build` 生成 plan.json，再用上面的 `PLAN_JSON=... manim` 命令验证渲染。
+本机（Linux）环境：虚拟环境在仓库根 `.venv/`（`uv venv .venv && uv pip install --python .venv/bin/python 'manim==0.22.0'`，pycairo 编译需要 `libcairo2-dev libpango1.0-dev`）。ffmpeg 在 `~/.local/bin`，跑之前设 `PATH=$PWD/../.venv/bin:$PATH MVP_FFMPEG_DIR=$HOME/.local/bin`。`run.py` 即使加 `--no-narration` 也会读 TTS 密钥；没有密钥时设 `QX_TTS_ENGINE=edge`（见下）即可完整出片。
 
 没有 lint 配置。控制台是 GBK 时先设 `PYTHONIOENCODING=utf-8`。
 
@@ -34,6 +34,7 @@ CS101（工作目录为仓库根，配音用 macOS `say`，不需要密钥）：
 - 字体 `MVP_TEXT_FONT` / `MVP_LATIN_FONT` / `MVP_SUB_FONT`：本机 SimSun + Times New Roman；容器用 Noto Serif CJK SC + TeX Gyre Termes。
 - LLM：`QX_LLM_PROVIDER=modelscope|gateway`，密钥 `QX_LLM_API_KEY`（或 `QX_LLM_KEY_FILE`）。各环节**默认关**：`QX_LLM_<STAGE>=1` 逐个打开（A1/K0/A3/VOICEOVER/A8/S22…），`QX_LLM_ALL=1` 全开。全关时管线走确定性兜底，照常出片，本地调试优先用这种模式。
 - TTS：`QX_TTS_API_KEY`（或 `QX_TTS_KEY_FILE`）、`QX_TTS_BASE_URL`。和 LLM 是两套密钥，不能合并。网关的 speed 参数无效（`tts.SPEED_SUPPORTED`）。
+- 免密钥配音：`QX_TTS_ENGINE=edge` 改走 Edge 在线语音（需 `pip install edge-tts`，未写进 requirements.txt；音色 `QX_TTS_EDGE_VOICE`，缺省 `zh-CN-XiaoxiaoNeural`）。MP3 经 ffmpeg 转成与网关同格式的 24kHz/16bit/mono WAV。实测约 4.5 字/秒，略低于标定的 4.7。本地无密钥时用它跑完整出片。
 - 密钥只经 env 注入，不进代码、镜像、日志。
 
 ## 主链路 `run.generate()`

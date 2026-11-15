@@ -25,9 +25,13 @@ from __future__ import annotations
 
 import http.client
 import json
+import asyncio
 import os
 import re
+import shutil
 import struct
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -190,6 +194,57 @@ def speakable(text: str) -> str:
     return _FORMULA.sub(lambda m: _speak_formula(m.group(0)), _fix_polyphone(text))
 
 
+# 可选引擎：QX_TTS_ENGINE=edge 走微软 Edge 在线语音（edge-tts 包，免密钥），不设则走网关。
+# 实测口径（2026-11-15，zh-CN-XiaoxiaoNeural）：38 字 8.45s ≈ 4.5 字/秒，与网关标定的
+# NATURAL_CPS=4.7 同量级，时长预算/闸门沿用不改。返回 MP3（24kHz mono），这里用 ffmpeg 转成
+# 与网关同格式的 24kHz/16bit/mono WAV，mux 拼接不用区分来源。rate 档位同样照收但忽略
+# （SPEED_SUPPORTED 由 ir.SPEED_LADDER 统一说了算，引擎不各说各话）。
+EDGE_VOICE = "zh-CN-XiaoxiaoNeural"
+
+
+def _engine() -> str:
+    return os.environ.get("QX_TTS_ENGINE", "gateway").strip().lower() or "gateway"
+
+
+def _ffmpeg() -> str:
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    d = os.environ.get("MVP_FFMPEG_DIR", "")
+    exe = Path(d) / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    if d and exe.exists():
+        return str(exe)
+    raise RuntimeError("TTS(edge) 需要 ffmpeg 把 MP3 转成 WAV：PATH 与 MVP_FFMPEG_DIR 里都找不到 ffmpeg")
+
+
+def _edge_synth(text: str, out_wav: Path) -> None:
+    try:
+        import edge_tts  # 懒导入：只有选了 edge 引擎才需要这个包
+    except ImportError:
+        raise RuntimeError("QX_TTS_ENGINE=edge 需要先安装 edge-tts（pip install edge-tts）") from None
+    voice = os.environ.get("QX_TTS_EDGE_VOICE", EDGE_VOICE)
+    last = "未知错误"
+    with tempfile.TemporaryDirectory() as td:
+        mp3 = Path(td) / "seg.mp3"
+        for attempt in range(MAX_ATTEMPTS):
+            try:
+                asyncio.run(edge_tts.Communicate(text, voice).save(str(mp3)))
+                if mp3.exists() and mp3.stat().st_size > 0:
+                    break
+                last = "返回空音频"
+            except Exception as e:  # noqa: BLE001 edge-tts 的网络/服务端异常类型不固定
+                last = f"{type(e).__name__}: {str(e)[:200]}"
+            if attempt < MAX_ATTEMPTS - 1:
+                time.sleep(BACKOFF_BASE * (2 ** attempt))
+        else:
+            raise RuntimeError(f"TTS(edge) 合成失败（重试 {MAX_ATTEMPTS} 次后仍不可用）：{last}")
+        r = subprocess.run([_ffmpeg(), "-v", "error", "-y", "-i", str(mp3), "-ar", "24000", "-ac", "1",
+                            "-sample_fmt", "s16", str(out_wav)], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            raise RuntimeError(f"TTS(edge) MP3→WAV 转码失败：{(r.stderr or '')[-300:]}")
+
+
 def synth(text: str, out_wav: Path, workdir: Path, rate: int = 0) -> float:
     """把一段口播合成成 wav，返回实测时长（秒）。
 
@@ -198,6 +253,10 @@ def synth(text: str, out_wav: Path, workdir: Path, rate: int = 0) -> float:
     SPEED_SUPPORTED 如实记账。workdir 不再使用（HTTP 无中间文件），仅为兼容签名保留。
     """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
+    if _engine() == "edge":
+        _edge_synth(speakable(text), out_wav)
+        with wave.open(str(out_wav), "rb") as w:
+            return round(w.getnframes() / w.getframerate(), 3)
     blob = _post({"model": _model(), "input": speakable(text), "voice": _voice(),
                   "language_type": _language()})
     out_wav.write_bytes(_repair_wav(blob))
