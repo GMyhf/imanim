@@ -23,11 +23,13 @@ SOFTWARE.
 --------------------------------------------------------------------------
 适用范围（重要）/ Scope (important)
 --------------------------------------------------------------------------
-本许可证只覆盖本仓库中的**代码与结构化数据**（mvp/ 目录下的管线、渲染脚本、
-前端与知识点 JSON）。
+本许可证只覆盖本仓库中的**代码与结构化数据**（cs101/ 下的动画脚本与测试，chengxiang/mvp/ 下的管线、
+渲染脚本、前端与知识点 JSON；chengxiang/mvp/pipeline/data/corpus/ 除外）。
 
 This license covers ONLY the code and structured data in this repository
-(the mvp/ tree: pipeline, renderer, web front-end, knowledge-point JSON).
+(cs101/ animation scripts and tests; the chengxiang/mvp/ tree: pipeline,
+renderer, web front-end, knowledge-point JSON; excluding
+chengxiang/mvp/pipeline/data/corpus/).
 
 本仓库不包含第三方教材、开源数据集原件与字体文件（见 .gitignore 与
 corpus/MANIFEST.txt）。这些资料的版权归原作者或原权利人所有，是否可商用需

@@ -1,0 +1,27 @@
+{
+  "artifact": "/Users/hfyan/git/chengxiang_gallery/cs101/out/cs101_search/cs101-search-ponds.mp4",
+  "knowledge_id": "cs101.bfs_ponds",
+  "refs": [
+    {
+      "source": "2020fall-cs101 / 18108 池塘数目",
+      "locator": "2020fall_cs101.openjudge.cn_problems.md / ## 18108: 池塘数目"
+    }
+  ],
+  "shots": 12,
+  "subtitles": 54,
+  "tts": {
+    "provider": "macos-say",
+    "voice": "Tingting",
+    "rate": 230
+  },
+  "duration": {
+    "actual": 124.3,
+    "target": 120
+  },
+  "size_mb": 6.62,
+  "validation": {
+    "algorithm_trace": true,
+    "av_drift_under_0.1s": true
+  },
+  "renderer": "cs101/algorithm_scene.py (pilot; general science renderer not used)"
+}
