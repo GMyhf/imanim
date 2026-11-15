@@ -1,7 +1,15 @@
-"""生成系列入口页 index.html：films.json（周次、简介、出处）+ 各片 sidecar.json（标题、时长）。"""
+"""生成系列入口页 index.html：films.json（周次、简介、出处）+ 各片 sidecar.json（标题、时长）。
+
+python build.py               # Artifact 版（发布时外层自动补 HTML 骨架，用 Google Fonts）
+python build.py --standalone  # 独立部署版（完整 HTML 骨架、只用系统字体：国内访问不了 Google Fonts），
+                              # 部署在 https://infomall.zhengmao.ltd/cs101-anim/（成都中转 /srv/cs101-anim）
+"""
 import html
 import json
+import sys
 from pathlib import Path
+
+STANDALONE = "--standalone" in sys.argv
 
 HERE = Path(__file__).parent
 data = json.loads((HERE / "films.json").read_text(encoding="utf-8"))
@@ -41,11 +49,20 @@ for w in data["weeks"]:
     </section>""")
 
 nav = "".join(f'<a href="#w{w["week"]}">W{w["week"]:02d}<span>{html.escape(w["topic"])}</span></a>' for w in data["weeks"])
-page = f"""<title>CS101 算法动画</title>
+head = ("""<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="计算概论（B）2026fall 算法动画短片，按周次排列，可在页面内直接播放。">
+<title>CS101 算法动画</title>
+<style>html,body{margin:0}</style>
+""" if STANDALONE else """<title>CS101 算法动画</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400&display=swap">
-<style>
+""")
+page = head + f"""<style>
 /* 布局：片子的深色画布延伸成页面——按周次分节，每节一列可直接播放的短片卡；周次编号是真实课程顺序 */
 :root {{
   --bg: #f4f5f8; --surface: #ffffff; --fg: #1b1e26; --muted: #5d6475; --line: #dde1ea;
@@ -97,7 +114,7 @@ footer code {{ font-family: var(--f-mono); font-size: 12px; }}
 @media (prefers-reduced-motion: reduce) {{ * {{ scroll-behavior: auto !important; }} }}
 html {{ scroll-behavior: smooth; }}
 </style>
-
+{"</head>" + chr(10) + "<body>" if STANDALONE else ""}
 <div class="wrap">
   <header class="hero">
     <div class="kicker">计算概论（B）· 2026 FALL · 知识点短片</div>
@@ -112,6 +129,6 @@ html {{ scroll-behavior: smooth; }}
     <span>制作：Manim Community 0.22 渲染，Edge TTS 配音，每支片附对撞测试与自动画面检查。</span>
   </footer>
 </div>
-"""
-(HERE / "index.html").write_text(page, encoding="utf-8")
+""" + ("</body>\n</html>\n" if STANDALONE else "")
+(HERE / ("index.standalone.html" if STANDALONE else "index.html")).write_text(page, encoding="utf-8")
 print(n_films, mmss(total))

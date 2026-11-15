@@ -25,6 +25,8 @@
 
 系列入口页（按周次排列、页面内可播放 720p 版）由 `site/build.py` 生成：`site/films.json` 写周次、简介、出处，
 标题和时长读各片 `sidecar.json`；页面版视频用 `ffmpeg -vf "scale=1280:-2,fps=30" -crf 30` 转码，封面取 `preview.png`。
+`build.py --standalone` 生成独立部署版（完整 HTML、只用系统字体，国内打不开 Google Fonts），部署在
+https://infomall.zhengmao.ltd/cs101-anim/（成都中转 `/srv/cs101-anim`，Caddy `handle_path /cs101-anim/*`，换文件无需 reload；中转出口约 5 Mbps，只放 720p 版）。
 
 ## 制作
 
