@@ -1,0 +1,29 @@
+{
+  "checked": [
+    "ANIMATION",
+    "AXIS_LABEL",
+    "COUNT",
+    "DUR_SHARE",
+    "DUR_SHORT",
+    "GLYPH",
+    "GRADE_SCOPE",
+    "KIND",
+    "LEGIBLE",
+    "MECH_ARROW_DRIFT",
+    "MECH_COORD",
+    "MISSING_QUALIFIER",
+    "NO_FIGURE",
+    "NO_REF",
+    "OVERLOAD",
+    "PACING",
+    "QUALIFIER_LOSS",
+    "SAFE_AREA",
+    "SUB_OVERLAP",
+    "SUB_RANGE",
+    "SUB_WIDTH",
+    "TARGET",
+    "TERM",
+    "TEXT_ONLY"
+  ],
+  "violations": []
+}
