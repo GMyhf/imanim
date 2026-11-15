@@ -138,3 +138,6 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 [`mvp/cs101/README.md`](mvp/cs101/README.md)。此入口为独立样片脚本，尚未接入在线生成。
 
 搜索与动态规划两条短视频也已加入；通过 `--lesson search` 和 `--lesson dp` 生成，详见上述说明。
+
+3B1B 风格的知识点短视频见 [`mvp/cs101/cinematic/`](mvp/cs101/cinematic/README.md)：首支《斐波那契：一棵树怎样塌缩成一行》
+（2026fall 第 8 周递归 P23–P25），1080p60、Edge TTS 配音，成片在 `mvp/out/cs101_cine_fib/`。

@@ -1,0 +1,25 @@
+{
+  "lesson": "fib",
+  "title": "斐波那契：一棵树怎样塌缩成一行",
+  "source": "计算概论（B）2026fall · 第8周 递归 P23–P25 · OpenJudge 02753",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 163.32,
+  "speech_seconds": 152.16,
+  "beats": {
+    "title": 0.0,
+    "define": 14.25,
+    "code": 27.95,
+    "tree": 45.92,
+    "repeat": 65.27,
+    "growth": 82.08,
+    "memo": 95.73,
+    "collapse": 116.73,
+    "table": 130.33,
+    "recap": 147.92
+  },
+  "subtitles": 33,
+  "size_mb": 13.31,
+  "wall_seconds": 281.8
+}
