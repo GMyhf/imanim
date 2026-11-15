@@ -17,24 +17,34 @@
 | 全排列：在决策树上走一遍 | 2026fall 第 8 周 递归 P29–P35 与讲义 3.3–3.4 节（OpenJudge 02748、LeetCode 78） | `mvp/out/cs101_cine_perm/` |
 | 并查集：让森林越查越矮 | 2026fall 第 9 周 并查集 P16–P30 与讲义第 2 节（OpenJudge 02524，期中手算题） | `mvp/out/cs101_cine_dsu/` |
 | BFS：一圈一圈往外推 | 2026fall 第 12 周 BFS P9–P21 与讲义 2.1–2.5 节（LeetCode 542） | `mvp/out/cs101_cine_bfs/` |
+| 排序：从 n 平方到 n log n | 2026fall 第 6 周 排序 P26–P34 | `mvp/out/cs101_cine_sort/` |
+| 区间贪心：先按右端点排序 | 2026fall 第 10 周 区间问题 P4–P12（LeetCode 56、435、452） | `mvp/out/cs101_cine_interval/` |
+| 0/1 背包：一张表，两个方向 | 2026fall 第 11 周 背包 P4–P8 | `mvp/out/cs101_cine_knap/` |
+| Dijkstra：带权的波纹 | 2026fall 第 12 周 最短路 P17–P20（走山路） | `mvp/out/cs101_cine_dijkstra/` |
+| 二分答案：最小化最大值 | 2026fall 第 12 周 二分答案 P22–P26（河中跳房子、月度开销） | `mvp/out/cs101_cine_bsearch/` |
+
+系列入口页（按周次排列、页面内可播放 720p 版）由 `site/build.py` 生成：`site/films.json` 写周次、简介、出处，
+标题和时长读各片 `sidecar.json`；页面版视频用 `ffmpeg -vf "scale=1280:-2,fps=30" -crf 30` 转码，封面取 `preview.png`。
 
 ## 制作
 
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python mvp/cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（--lesson fib|hanoi|perm|dsu|bfs）
+python mvp/cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（--lesson fib|hanoi|perm|dsu|bfs|sort|interval|knap|dijkstra|bsearch）
 python mvp/cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python mvp/cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 
-(cd mvp/cs101/cinematic && python -m unittest test_fib test_hanoi test_perm test_dsu test_bfs) # 片中数字的独立对撞
+(cd mvp/cs101/cinematic && python -m unittest test_*.py) # 片中数字的独立对撞
 ```
 
 依赖：`manim==0.22.0`、`edge-tts`、ffmpeg；公式要 `latex` + `dvisvgm`（TinyTeX 需
 `tlmgr install preview dvisvgm`）。中文字体缺省 `Noto Sans CJK SC`，可用 `CINE_FONT` / `CINE_MONO` 覆盖。
 macOS（Mac Studio，`~/git/imanim`）：`brew install cairo pango pkgconf` 后 `uv venv .venv && uv pip install --python .venv/bin/python 'manim==0.22.0' edge-tts`，
-TeX 用 MacTeX（`/Library/TeX/texbin`）；没有 Noto Sans Mono CJK，设 `CINE_MONO=Menlo`（并查集、BFS 两支即用 Menlo 渲染）。
-多支片可同时起多个 make.py 并行渲染。
+TeX 用 MacTeX（`/Library/TeX/texbin`）。代码字体统一为 Noto Sans Mono CJK SC：Mac 上把 Linux 的
+`NotoSansCJK-Regular.ttc`（OFL）放进 `~/Library/Fonts`，不要再设 `CINE_MONO`。多支片可同时起多个 make.py 并行渲染。
+Mac 仓库已设 `git config http.postBuffer 524288000`：一次推多支视频（几十 MB）时，默认缓冲会让 GitHub 回 HTTP 400，
+而终端只显示 `Everything up-to-date`，容易误以为推成功了。
 
 ## 结构
 
@@ -53,8 +63,12 @@ TeX 用 MacTeX（`/Library/TeX/texbin`）；没有 Noto Sans Mono CJK，设 `CIN
 - `dsudata.py` / `test_dsu.py`、`bfsdata.py` / `test_bfs.py`：并查集（讲义 DSU 原样、期中题、退化链对比）与 BFS（迷宫事件序列、多源、入队标记反例、DFS/BFS 顺序）；
   测试对撞讲义输出、期中题答案、随机数据连通块、松弛法求的真最短距离。
 - `Forest`（dsu_scene）：父指针箭头用 updater 实时重画，改父指针 + `relayout()` 即可动画重排；`.animate.set_value` 在数字位数变少时会报错，改用 `ChangeDecimalToValue`。
+- **自动画面检查**（`cine.Lesson._audit`）：每段 `play` 结束后按几何关系查四类问题——文字出画、文字互相重叠、
+  文字被后画的不透明形状盖住、内容压字幕带——写进 `audit.json`，make.py 打印并计入 sidecar 的 `audit_issues`，目标 0 处。
+  故意的过渡帧（同参节点合并、全屏波纹）用 `self.play(..., audit=False)` 跳过；透明度 < 0.3 的文字视为装饰。
+  它查不出「排版挤但没重叠」「箭头太短」这类问题，抽帧目检仍要做。
 - `make.py`：TTS（按稿件哈希缓存）→ `timing.json` → 渲染（场景写 `marks.json` 记录各 beat 实际起点）→
-  按实际起点摆放配音 → 混流，产出成片、`subs.srt`、`sidecar.json`、`preview.png`。动画超出配音时 beat 顺延，音画不会错位。
+  按实际起点摆放配音 → 混流（TTS 每次限时 60 秒；音频比最后一句字幕短视为流中断，丢弃重试——Edge TTS 偶尔断流却不报错，汉诺塔片头曾因此只剩 2 秒），产出成片、`subs.srt`、`sidecar.json`、`preview.png`。动画超出配音时 beat 顺延，音画不会错位。
 
 新增一条片：写 `<lesson>.json` 旁白稿 + `<lesson>_scene.py`（继承 `Lesson`），登记进 `make.py` 的 `LESSONS`，
 数字放进可测试的数据模块并写对撞测试。

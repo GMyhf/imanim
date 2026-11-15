@@ -1,0 +1,25 @@
+{
+  "lesson": "dijkstra",
+  "title": "Dijkstra：带权的波纹",
+  "source": "计算概论（B）2026fall · 第12周 Dijkstra P17–P19 · OpenJudge M20106",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 170.3,
+  "speech_seconds": 159.55,
+  "beats": {
+    "title": 0.0,
+    "bfswrong": 11.4,
+    "idea": 31.63,
+    "code": 50.52,
+    "run": 71.62,
+    "result": 106.37,
+    "mountain": 122.58,
+    "traps": 145.32,
+    "recap": 157.47
+  },
+  "subtitles": 37,
+  "audit_issues": 0,
+  "size_mb": 11.59,
+  "wall_seconds": 220.5
+}

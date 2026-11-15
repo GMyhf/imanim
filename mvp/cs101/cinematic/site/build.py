@@ -1,0 +1,117 @@
+"""生成系列入口页 index.html：films.json（周次、简介、出处）+ 各片 sidecar.json（标题、时长）。"""
+import html
+import json
+from pathlib import Path
+
+HERE = Path(__file__).parent
+data = json.loads((HERE / "films.json").read_text(encoding="utf-8"))
+side = {p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in (HERE / "sidecars").glob("*/sidecar.json")}
+
+
+def mmss(s):
+    s = int(round(s))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+total = 0.0
+n_films = 0
+sections = []
+for w in data["weeks"]:
+    cards = []
+    for f in w["films"]:
+        sc = side[f["dir"]]
+        title = sc.get("title", f["title"])
+        total += sc["seconds"]
+        n_films += 1
+        cards.append(f"""
+      <article class="film" id="{f['id']}">
+        <video controls preload="none" playsinline poster="posters/{f['id']}.jpg" src="videos/{f['id']}.mp4"
+               aria-label="{html.escape(title)}"></video>
+        <div class="film-body">
+          <h3>{html.escape(title)}</h3>
+          <p>{html.escape(f['desc'])}</p>
+          <div class="meta"><span class="dur">{mmss(sc['seconds'])}</span><span class="src">讲义 {html.escape(f['src'])}</span></div>
+        </div>
+      </article>""")
+    sections.append(f"""
+    <section class="week" id="w{w['week']}">
+      <header class="week-head"><span class="wk">W{w['week']:02d}</span><h2>第 {w['week']} 周 · {html.escape(w['topic'])}</h2></header>
+      <div class="grid">{''.join(cards)}
+      </div>
+    </section>""")
+
+nav = "".join(f'<a href="#w{w["week"]}">W{w["week"]:02d}<span>{html.escape(w["topic"])}</span></a>' for w in data["weeks"])
+page = f"""<title>CS101 算法动画</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* 布局：片子的深色画布延伸成页面——按周次分节，每节一列可直接播放的短片卡；周次编号是真实课程顺序 */
+:root {{
+  --bg: #f4f5f8; --surface: #ffffff; --fg: #1b1e26; --muted: #5d6475; --line: #dde1ea;
+  --blue: #1f86a8; --yellow: #a07a00; --accent: #1f86a8;
+  --f-display: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+  --f-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}}
+@media (prefers-color-scheme: dark) {{ :root:not([data-theme="light"]) {{
+  --bg: #0f1117; --surface: #171a22; --fg: #e6e8ee; --muted: #9aa2b4; --line: #262b36;
+  --blue: #58c4dd; --yellow: #f4d345; --accent: #58c4dd; color-scheme: dark; }} }}
+:root[data-theme="dark"] {{
+  --bg: #0f1117; --surface: #171a22; --fg: #e6e8ee; --muted: #9aa2b4; --line: #262b36;
+  --blue: #58c4dd; --yellow: #f4d345; --accent: #58c4dd; color-scheme: dark; }}
+* {{ box-sizing: border-box; }}
+body {{ background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65; }}
+.wrap {{ max-width: 1120px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }}
+.hero {{ display: grid; gap: 12px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }}
+.kicker {{ font-family: var(--f-mono); font-size: 13px; letter-spacing: .06em; color: var(--muted); }}
+h1 {{ font-family: var(--f-display); font-size: clamp(34px, 6vw, 56px); line-height: 1.1; margin: 0; text-wrap: balance; }}
+h1 em {{ font-style: normal; color: var(--yellow); }}
+.lede {{ max-width: 62ch; color: var(--muted); margin: 0; }}
+.stats {{ display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--f-mono); font-size: 13px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }}
+.stats b {{ color: var(--fg); font-weight: 400; }}
+nav.weeks {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 8px; }}
+nav.weeks a {{ display: inline-flex; gap: 8px; align-items: baseline; padding: 6px 12px; border: 1px solid var(--line);
+  border-radius: 999px; color: var(--fg); text-decoration: none; font-family: var(--f-mono); font-size: 13px; }}
+nav.weeks a span {{ font-family: var(--f-body); color: var(--muted); }}
+nav.weeks a:hover, nav.weeks a:focus-visible {{ border-color: var(--accent); outline: none; }}
+.week {{ padding-top: 36px; }}
+.week-head {{ display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; }}
+.wk {{ font-family: var(--f-display); font-weight: 700; font-size: 15px; color: var(--accent); letter-spacing: .04em; }}
+.week-head h2 {{ font-size: 20px; margin: 0; font-weight: 700; text-wrap: balance; }}
+.grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 20px; }}
+.film {{ background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr; min-width: 0; }}
+.film video {{ width: 100%; aspect-ratio: 16 / 9; display: block; background: #0f1117; max-width: 100%; }}
+.film-body {{ padding: 14px 16px 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }}
+.film h3 {{ font-size: 17px; margin: 0; line-height: 1.4; }}
+.film p {{ margin: 0; font-size: 14px; color: var(--muted); }}
+.meta {{ display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--f-mono); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; }}
+.meta .dur {{ color: var(--yellow); }}
+footer {{ margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px;
+  display: grid; gap: 6px; }}
+footer code {{ font-family: var(--f-mono); font-size: 12px; }}
+@media (prefers-reduced-motion: reduce) {{ * {{ scroll-behavior: auto !important; }} }}
+html {{ scroll-behavior: smooth; }}
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="kicker">计算概论（B）· 2026 FALL · 知识点短片</div>
+    <h1>CS101 <em>算法动画</em></h1>
+    <p class="lede">每支两到四分钟，讲透一个知识点。画面里的每一步都由真实程序的执行轨迹驱动，片中数字都经过测试对照讲义原版代码核验。</p>
+    <div class="stats"><span><b>{n_films}</b> 支短片</span><span>总时长 <b>{mmss(total)}</b></span><span>1080p · 中文配音 · 画面内字幕</span></div>
+  </header>
+  <nav class="weeks" aria-label="按周次跳转">{nav}</nav>
+  {''.join(sections)}
+  <footer>
+    <span>素材依据课程仓库 2026fall-cs101 的讲义与旁白稿（P 为课件页码）。页面内为 720p 压缩版，1080p60 原片在项目仓库 <code>mvp/out/cs101_cine_*/</code>。</span>
+    <span>制作：Manim Community 0.22 渲染，Edge TTS 配音，每支片附对撞测试与自动画面检查。</span>
+  </footer>
+</div>
+"""
+(HERE / "index.html").write_text(page, encoding="utf-8")
+print(n_films, mmss(total))

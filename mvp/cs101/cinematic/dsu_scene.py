@@ -42,7 +42,10 @@ def forest_layout(parent: dict, cx=0.0, top=2.2, dx=0.95, dy=1.05, tree_gap=0.6)
         place(r, 0)
         cursor += tree_gap
     span = cursor - tree_gap - dx
-    return {k: np.array([x - span / 2 + cx, y, 0]) for k, (x, y) in pos.items()}
+    out = {k: np.array([x - span / 2 + cx, y, 0]) for k, (x, y) in pos.items()}
+    lo, hi = min(p[0] for p in out.values()), max(p[0] for p in out.values())
+    shift = max(0.0, -6.5 - lo) - max(0.0, hi - 6.5)       # 合并过程中树横向铺开时，整体夹回画面内
+    return {k: p + np.array([shift, 0, 0]) for k, p in out.items()}
 
 
 class Forest(VGroup):
@@ -397,12 +400,12 @@ class DSULesson(Lesson):
         counts = D.religion_counts()
         fo = Forest({k: k for k in range(n)}, r=0.26, cx=-1.2, top=1.6, dx=0.95, dy=0.9, tree_gap=0.0)
         cnt = VGroup(T("count", 24, C_GREY), Integer(counts[0], color=C_YELLOW).scale(1.1)).arrange(RIGHT, buff=0.3)
-        cnt.move_to([5.4, 1.6, 0])
+        cnt.move_to([5.4, 2.9, 0])
         self.play(FadeIn(fo), FadeIn(cnt), run_time=0.8)
         d = D.DSU(n)
         for (a, b), c in zip(pairs, counts[1:]):
             d.union(a, b)
-            cap = Text(f"union({a}, {b})", font=MONO, font_size=24, color=C_GREEN).move_to([5.4, 0.8, 0])
+            cap = Text(f"union({a}, {b})", font=MONO, font_size=24, color=C_GREEN).move_to([5.4, 2.3, 0])
             self.play(*fo.relayout({k: d.parent[k] for k in range(n)}, tree_gap=0.45), FadeIn(cap),
                       ChangeDecimalToValue(cnt[1], c), run_time=1.0)  # 位数变少时 .animate.set_value 会报错
             self.remove(cap)

@@ -1,0 +1,25 @@
+{
+  "lesson": "knap",
+  "title": "0/1 背包：一张表，两个方向",
+  "source": "计算概论（B）2026fall · 第11周 动态规划 P4–P8 · OpenJudge 23421、02773",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 168.82,
+  "speech_seconds": 158.11,
+  "beats": {
+    "title": 0.0,
+    "kinds": 15.67,
+    "state": 36.4,
+    "fill": 59.1,
+    "back": 78.92,
+    "roll": 96.98,
+    "wrong": 115.47,
+    "full": 134.83,
+    "recap": 155.63
+  },
+  "subtitles": 35,
+  "audit_issues": 0,
+  "size_mb": 12.21,
+  "wall_seconds": 164.7
+}

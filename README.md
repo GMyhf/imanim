@@ -143,4 +143,5 @@ texlive/字体包清单同样只是按 Debian bookworm 包名写对，未经 `do
 （2026fall 第 8 周递归 P23–P25），1080p60、Edge TTS 配音，成片在 `mvp/out/cs101_cine_fib/`；
 第二支《汉诺塔：相信更小的自己》（P26–P28）在 `mvp/out/cs101_cine_hanoi/`；
 第三支《全排列：在决策树上走一遍》（P29–P35）在 `mvp/out/cs101_cine_perm/`；
-第 9 周《并查集：让森林越查越矮》在 `mvp/out/cs101_cine_dsu/`，第 12 周《BFS：一圈一圈往外推》在 `mvp/out/cs101_cine_bfs/`。
+第 9 周《并查集：让森林越查越矮》在 `mvp/out/cs101_cine_dsu/`，第 12 周《BFS：一圈一圈往外推》在 `mvp/out/cs101_cine_bfs/`；
+另有排序（第 6 周）、区间贪心（第 10 周）、0/1 背包（第 11 周）、Dijkstra 与二分答案（第 12 周），共 10 支，片目见 `mvp/cs101/cinematic/README.md`。

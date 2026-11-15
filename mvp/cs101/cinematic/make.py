@@ -31,7 +31,12 @@ LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "hanoi": ("hanoi.json", "hanoi_scene.py", "HanoiLesson"),
            "perm": ("perm.json", "perm_scene.py", "PermLesson"),
            "dsu": ("dsu.json", "dsu_scene.py", "DSULesson"),
-           "bfs": ("bfs.json", "bfs_scene.py", "BFSLesson")}
+           "bfs": ("bfs.json", "bfs_scene.py", "BFSLesson"),
+           "knap": ("knap.json", "knap_scene.py", "KnapLesson"),
+           "sort": ("sort.json", "sort_scene.py", "SortLesson"),
+           "dijkstra": ("dijkstra.json", "dijkstra_scene.py", "DijkstraLesson"),
+           "bsearch": ("bsearch.json", "bsearch_scene.py", "BSearchLesson"),
+           "interval": ("interval.json", "interval_scene.py", "IntervalLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 
@@ -72,13 +77,22 @@ def synth(beat: dict, voice: str, rate: str, cache: Path) -> dict:
         mp3 = wav.with_suffix(".mp3")
         for attempt in range(5):
             try:
-                cues = asyncio.run(_tts(beat["narration"], voice, rate, mp3))
-                break
+                cues = asyncio.run(asyncio.wait_for(_tts(beat["narration"], voice, rate, mp3), timeout=60))
             except Exception as e:  # noqa: BLE001 网络/服务端异常类型不固定
                 if attempt == 4:
                     raise SystemExit(f"TTS 失败（{beat['id']}）：{type(e).__name__}: {e}")
                 time.sleep(3 * 2 ** attempt)
-        run([ffmpeg(), "-v", "error", "-y", "-i", str(mp3), "-ar", str(SR), "-ac", "1", "-sample_fmt", "s16", str(wav)])
+                continue
+            run([ffmpeg(), "-v", "error", "-y", "-i", str(mp3), "-ar", str(SR), "-ac", "1", "-sample_fmt", "s16", str(wav)])
+            with wave.open(str(wav)) as w:
+                got = w.getnframes() / w.getframerate()
+            if cues and got + 0.3 < cues[-1]["end"]:      # 音频流中途断了却没报错：音频比最后一句字幕短
+                wav.unlink()
+                if attempt == 4:
+                    raise SystemExit(f"TTS 音频残缺（{beat['id']}）：{got:.2f}s < 字幕结束 {cues[-1]['end']:.2f}s")
+                time.sleep(3 * 2 ** attempt)
+                continue
+            break
         mp3.unlink()
         meta.write_text(json.dumps(cues, ensure_ascii=False), encoding="utf-8")
     with wave.open(str(wav)) as w:
@@ -132,12 +146,17 @@ def main() -> int:
     if a.tts_only:
         return 0
     media = out / "media"
-    env = dict(os.environ, CINE_TIMING=str(out / "timing.json"), CINE_MARKS=str(out / "marks.json"))
+    env = dict(os.environ, CINE_TIMING=str(out / "timing.json"), CINE_MARKS=str(out / "marks.json"),
+               CINE_AUDIT=str(out / "audit.json"))
     run([sys.executable, "-m", "manim", *QUALITY[a.quality], "--disable_caching", "--media_dir", str(media),
          "-o", "silent.mp4", str(HERE / scene_file), scene_cls], env=env, cwd=HERE)
     silent = next(media.glob("**/silent.mp4"))
     marks = json.loads((out / "marks.json").read_text(encoding="utf-8"))
     lead, total = marks.pop("_lead"), marks.pop("_total")
+    audit = json.loads((out / "audit.json").read_text(encoding="utf-8"))
+    for it in audit:
+        print(f"[画面检查] {it['t']:7.2f}s {it['beat']:>9} {it['kind']}：{it['detail']}")
+    print(f"画面检查：{len(audit)} 处问题" + ("" if audit else "（通过）"))
     track = out / "track.wav"
     build_track(timing, marks, lead, total, track)
     n_subs = srt(timing, marks, lead, out / "subs.srt")
@@ -151,7 +170,7 @@ def main() -> int:
         "lesson": a.lesson, "title": script["title"], "source": script["source"],
         "voice": script["voice"], "tts": "edge-tts", "quality": a.quality,
         "seconds": round(total, 2), "speech_seconds": round(sum(t["seconds"] for t in timing), 2),
-        "beats": {k: round(v, 2) for k, v in marks.items()}, "subtitles": n_subs,
+        "beats": {k: round(v, 2) for k, v in marks.items()}, "subtitles": n_subs, "audit_issues": len(audit),
         "size_mb": round(final.stat().st_size / 2**20, 2), "wall_seconds": round(time.time() - t0, 1),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     shutil.rmtree(media, ignore_errors=True)

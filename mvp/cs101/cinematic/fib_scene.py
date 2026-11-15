@@ -224,7 +224,7 @@ class FibLesson(Lesson):
                   x_axis_config={"numbers_to_include": [5, 10, 15, 20]},
                   y_axis_config={"numbers_to_include": [5000, 10000], "decimal_number_config": {"num_decimal_places": 0}})
         ax.move_to([2.6, 0.75, 0])
-        xl = MathTex("n", color=C_GREY).next_to(ax.x_axis, RIGHT, buff=0.15)
+        xl = MathTex("n", color=C_GREY).next_to(ax.x_axis, DOWN, buff=0.45).align_to(ax.x_axis, RIGHT)
         yl = T("调用次数", 22, C_GREY).next_to(ax.y_axis, UP, buff=0.15)
         bars = VGroup()
         for n, c in enumerate(calls, 1):
@@ -242,7 +242,8 @@ class FibLesson(Lesson):
         big = DecimalNumber(0, num_decimal_places=0, group_with_commas=True, color=C_RED).scale(1.15)
         lhs = MathTex(r"\texttt{fib(40)}", ":").scale(0.95)
         tail = T("次调用", 30)
-        row = VGroup(lhs, big, tail).arrange(RIGHT, buff=0.3).move_to([2.6, -2.45, 0])
+        row = VGroup(lhs, big, tail).arrange(RIGHT, buff=0.3)
+        row.shift([-0.3 - row.get_left()[0], -2.45 - row.get_y(), 0])   # 左端固定：数字变长只往右长，不出画
         big.add_updater(lambda m: m.next_to(lhs, RIGHT, buff=0.3))
         tail.add_updater(lambda m: m.next_to(big, RIGHT, buff=0.25))
         self.play(FadeIn(lhs), FadeIn(tail), run_time=0.4)
@@ -331,7 +332,7 @@ class FibLesson(Lesson):
         old_edges = VGroup(*[edges[nd.id] for nd in live if nd.parent is not None])
         # 1) 同参节点合并：查表叶子飞到本尊身上
         self.play(*[mobs[nd.id].animate.move_to(mobs[keep[nd.n]]) for nd in hits],
-                  FadeOut(old_edges), run_time=1.6)
+                  FadeOut(old_edges), run_time=1.6, audit=False)   # 同参节点故意叠在一起，下一行即移除
         self.remove(*[mobs[nd.id] for nd in hits])
         # 2) 排成一行：n = 1..6 从左到右，依赖箭头 n-1 → n、n-2 → n
         xs = {k: -4.0 + 1.6 * (k - 1) for k in range(1, N + 1)}

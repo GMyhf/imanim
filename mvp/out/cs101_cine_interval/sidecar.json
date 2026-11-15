@@ -1,0 +1,24 @@
+{
+  "lesson": "interval",
+  "title": "区间贪心：先按右端点排序",
+  "source": "计算概论（B）2026fall · 第10周 区间问题 P4–P11 · LeetCode 56/435/452",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 169.28,
+  "speech_seconds": 159.53,
+  "beats": {
+    "title": 0.0,
+    "table": 15.72,
+    "merge": 36.35,
+    "keep": 60.35,
+    "why": 79.57,
+    "arrows": 108.73,
+    "groups": 134.22,
+    "recap": 157.68
+  },
+  "subtitles": 35,
+  "audit_issues": 0,
+  "size_mb": 10.15,
+  "wall_seconds": 182.6
+}

@@ -63,7 +63,7 @@ class BFSLesson(Lesson):
             col = layer_color(d, dmax)
             ring = Circle(0.2 + d * cell, stroke_color=WHITE, stroke_width=2).move_to(sq[c]).set_stroke(opacity=0.5)
             self.play(*[s.animate.set_fill(col, 0.75 - 0.5 * d / dmax).set_stroke(col, 1.5, 0.6)
-                        for s in layers[d]], FadeIn(ring), run_time=step)
+                        for s in layers[d]], FadeIn(ring), run_time=step, audit=False)   # 全屏波纹，下一行即移除
             self.remove(ring)
         title = T("BFS", 80).move_to([0, 0.4, 0])
         sub = T("一圈一圈往外推", 36, WHITE).next_to(title, DOWN, buff=0.25)

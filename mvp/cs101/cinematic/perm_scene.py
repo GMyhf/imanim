@@ -186,7 +186,7 @@ class PermLesson(Lesson):
                           "        path.pop()\n        used[i] = False\n", 22)
         code.move_to([-3.1, 0.15, 0])
         self.tree.save_state()
-        self.play(FadeOut(self.clabs), self.tree.animate.scale(0.5).move_to([3.6, 0.9, 0]), run_time=1.0)
+        self.play(FadeOut(self.clabs), self.tree.animate.scale(0.5).move_to([4.05, 0.9, 0]), run_time=1.0)
         self.play(FadeIn(code, shift=RIGHT * 0.3), run_time=0.8)
         ln = code.code_lines
         tags = VGroup()
@@ -194,7 +194,7 @@ class PermLesson(Lesson):
         def mark(lines, key, txt, col):
             self.wait_until(self.cue_start(key, self.now))
             hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=0.05, stroke_width=2)
-            tag = T(txt, 24, col).next_to(hl, RIGHT, buff=0.25)
+            tag = T(txt, 24, col).next_to(code, RIGHT, buff=0.25).match_y(hl)   # 放在代码窗外，不压代码区
             self.play(Create(hl), FadeIn(tag, shift=LEFT * 0.2), run_time=0.7)
             tags.add(hl, tag)
         mark([1, 2, 3], "路径长度", "叶子：收答案", C_GREEN)

@@ -42,6 +42,49 @@ def split_cue(c: dict, limit: int = 22) -> list[dict]:
             + split_cue({"start": t, "end": c["end"], "text": s[k:]}, limit))
 
 
+AUDIT_TEXT = (Text, MarkupText, Paragraph, MathTex, SingleStringMathTex, DecimalNumber)
+
+
+def _family_points(m):
+    return [x for x in m.get_family() if len(x.points)]
+
+
+def _visible(m, thresh: float = 0.05) -> bool:
+    for x in _family_points(m):
+        f = x.fill_rgbas[:, 3].max() if len(getattr(x, "fill_rgbas", [])) else 0
+        s = x.stroke_rgbas[:, 3].max() if len(getattr(x, "stroke_rgbas", [])) else 0
+        if max(f, s) > thresh:
+            return True
+    return False
+
+
+def _opaque(m) -> bool:
+    rg = getattr(m, "fill_rgbas", None)
+    return rg is not None and len(rg) and float(rg[:, 3].min()) >= 0.6 and m.width > 0.05 and m.height > 0.05
+
+
+def _bbox(m):
+    return (m.get_left()[0], m.get_bottom()[1], m.get_right()[0], m.get_top()[1])
+
+
+def _area(b):
+    return max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+
+
+def _inter(a, b):
+    return _area((max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])))
+
+
+def _label(m) -> str:
+    for attr in ("text", "tex_string"):
+        v = getattr(m, attr, None)
+        if isinstance(v, str) and v.strip():
+            return v.strip()[:30]
+    if isinstance(m, DecimalNumber):
+        return f"数字 {m.get_value():g}"
+    return f"{type(m).__name__}@({m.get_x():.1f},{m.get_y():.1f})"
+
+
 class Lesson(MovingCameraScene):
     """beat 计时 + 画面内字幕的公共骨架。"""
 
@@ -104,10 +147,78 @@ class Lesson(MovingCameraScene):
     def finish(self):
         self._pad()
         self.wait(0.8)
+        audit = os.environ.get("CINE_AUDIT")
+        if audit:
+            Path(audit).write_text(json.dumps(getattr(self, "audit_log", []), ensure_ascii=False, indent=1),
+                                   encoding="utf-8")
         out = os.environ.get("CINE_MARKS")
         if out:
             Path(out).write_text(json.dumps({**self.marks, "_lead": LEAD, "_total": self.now}, indent=1),
                                  encoding="utf-8")
+
+    # ------------------------------------------------------------ 画面自动检查
+    def play(self, *args, audit: bool = True, **kwargs):
+        """audit=False：这一段是故意的过渡（如同参节点合并、全屏波纹），结束状态不做画面检查。"""
+        super().play(*args, **kwargs)
+        if audit and os.environ.get("CINE_AUDIT"):
+            self._audit()
+
+    def _audit(self):
+        """每段动画结束后按几何关系查四类问题：文字出画、文字互相重叠、文字被后画的不透明形状盖住、内容压字幕带。
+
+        渲染顺序 = get_mobject_family_members() 的顺序（后画的盖在上面）。LaggedStart 把子对象重新加到
+        场景最上层导致的遮挡（斐波那契片的教训）就靠第三条抓出来。
+        """
+        if not hasattr(self, "audit_log"):
+            self.audit_log, self._audit_seen = [], set()
+        fam = self.get_mobject_family_members()
+        order = {id(m): i for i, m in enumerate(fam)}
+        sub_ids = {id(x) for s in self.subs for x in s.get_family()}
+        texts = []
+
+        def collect(m):
+            if id(m) in sub_ids:
+                return
+            if isinstance(m, AUDIT_TEXT):
+                if _visible(m, 0.3):                    # 透明度 < 0.3 的文字当装饰（如片头背景），不查
+                    texts.append(m)
+                return
+            for s in m.submobjects:
+                collect(s)
+        for m in self.mobjects:
+            collect(m)
+        hw, hh = config.frame_width / 2, config.frame_height / 2
+
+        def note(kind, *objs):
+            detail = " | ".join(o if isinstance(o, str) else _label(o) for o in objs)
+            key = (self.cur, kind, detail)
+            if key not in self._audit_seen:
+                self._audit_seen.add(key)
+                self.audit_log.append({"t": round(self.now, 2), "beat": self.cur, "kind": kind, "detail": detail})
+        boxes = [(t, _bbox(t)) for t in texts]
+        for t, (x0, y0, x1, y1) in boxes:
+            if x0 < -hw + 0.03 or x1 > hw - 0.03 or y0 < -hh + 0.03 or y1 > hh - 0.03:
+                note("出画", t, f"x∈[{x0:.2f},{x1:.2f}] y∈[{y0:.2f},{y1:.2f}]")
+        for i in range(len(boxes)):
+            for j in range(i + 1, len(boxes)):
+                a, b = boxes[i][1], boxes[j][1]
+                inter = _inter(a, b)
+                if inter > 0.2 * min(_area(a), _area(b)) and inter > 0.004:
+                    note("文字重叠", boxes[i][0], boxes[j][0])
+        tfam = {id(x) for t in texts for x in t.get_family()}
+        shapes = [m for m in fam if id(m) not in tfam and id(m) not in sub_ids and len(m.points) and _opaque(m)]
+        for t, tb in boxes:
+            last = max(order.get(id(x), -1) for x in t.get_family())
+            for s in shapes:
+                if order[id(s)] > last and _inter(_bbox(s), tb) > 0.6 * _area(tb):
+                    note("文字被遮挡", t)
+                    break
+        if any(_visible(s) for s in self.subs):
+            for m in self.mobjects:
+                if id(m) in sub_ids or not _visible(m):
+                    continue
+                if _bbox(m)[1] < SUB_Y + 0.3:
+                    note("压字幕带", m)
 
     def cue_times(self) -> list[dict]:
         """当前 beat 的字幕句（绝对时间），供动画按句对齐。"""

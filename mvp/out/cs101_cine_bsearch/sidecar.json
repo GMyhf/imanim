@@ -1,0 +1,24 @@
+{
+  "lesson": "bsearch",
+  "title": "二分答案：最小化最大值",
+  "source": "计算概论（B）2026fall · 第12周 二分答案 P23–P26 · OpenJudge 08210 · 04135",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 174.03,
+  "speech_seconds": 164.28,
+  "beats": {
+    "title": 0.0,
+    "pattern": 15.05,
+    "check": 37.9,
+    "binary": 63.93,
+    "plusone": 93.52,
+    "monthly": 118.77,
+    "template": 146.65,
+    "recap": 164.93
+  },
+  "subtitles": 38,
+  "audit_issues": 0,
+  "size_mb": 10.82,
+  "wall_seconds": 182.3
+}
