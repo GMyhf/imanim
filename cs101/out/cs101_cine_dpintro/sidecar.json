@@ -22,11 +22,11 @@
   "subtitles": 40,
   "audit_issues": 0,
   "endcard": 195.52,
-  "size_mb": 13.91,
-  "wall_seconds": 242.0,
   "endcard_info": {
-    "next": "0/1 背包：一张表，两个方向",
+    "next": "最大子段和：从一维到二维",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 13.92,
+  "wall_seconds": 228.1
 }

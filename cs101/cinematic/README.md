@@ -30,6 +30,13 @@
 | 浮点数：0.1 + 0.2 为什么不等于 0.3 | 2026fall 第 3 周 计算机原理 4.4 节 · 第 4 周 浮点开方偏 1 | `cs101/out/cs101_cine_float/` |
 | 矩阵：补一圈零，转一个弯 | 2026fall 第 6 周 矩阵 1.1–1.3 节 P12–P17（OpenJudge 12560、18106） | `cs101/out/cs101_cine_matrix/` |
 | 熄灯问题：只枚举第一行（例题精讲） | OpenJudge 02811（每日选作 11-02、往年机考）；同类题 02813 画家问题 | `cs101/out/cs101_cine_lights/` |
+| 回溯三形态：子集、组合、排列共用一个模板 | 2026fall 第 9 周 回溯 1.1–1.3 节 · 第 8 周 3.4 节（LeetCode 78、39；组合 LeetCode 77 的代码为按讲义补写） | `cs101/out/cs101_cine_subsets/` |
+| 马走日与数湖泊：回溯要不要撤销 | 2026fall 第 9 周 1.5–1.6 节（OpenJudge 04123、02386、05585） | `cs101/out/cs101_cine_knight/` |
+| 从递归到 DP：爬楼梯与数字三角形 | 2026fall 第 10 周 2.3–2.6 节（LeetCode 70、OpenJudge 02760；爬楼梯递归与记忆化版、三角形记忆化版为按讲义补写） | `cs101/out/cs101_cine_triangle/` |
+| 最大子段和：从一维到二维 | 2026fall 第 10 周 2.7 节 · 第 11 周 2.3–2.4 节（M02766、LeetCode 198） | `cs101/out/cs101_cine_kadane/` |
+| 背包的三个变形：拆捆、装满、多一维 | 2026fall 第 11 周 1.4–1.6 节（M01742、21458、04102、04110；Coins 代码与 0/1 不能贪心的反例为自拟） | `cs101/out/cs101_cine_knapvar/` |
+| 最长上升子序列：两种写法 | 2026fall 第 11 周 2.1 节（OpenJudge 02533、M02945、03532） | `cs101/out/cs101_cine_lis/` |
+| 网格上走：DP 还是搜索 | 2026fall 第 12 周 第 6 节（与第 2–3 节 BFS、Dijkstra 衔接） | `cs101/out/cs101_cine_grid/` |
 
 **成片 mp4 不进 git**（`.gitignore` 排除 `cs101/out/cs101_cine_*/*.mp4`），放在 GitHub Releases：
 https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
@@ -75,7 +82,7 @@ python cs101/cinematic/publish.py --course cs201 kmp --dry-run           # 打�
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 18 支）
+python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 25 支）
 python cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 

@@ -1,0 +1,32 @@
+{
+  "lesson": "lis",
+  "title": "最长上升子序列：两种写法",
+  "source": "计算概论（B）2026fall · 第11周 动态规划 2.1 节 · OpenJudge 02533、M02945、03532",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 222.32,
+  "speech_seconds": 208.32,
+  "beats": {
+    "title": 0.0,
+    "state": 21.75,
+    "fill": 39.82,
+    "cost": 67.1,
+    "piles": 87.4,
+    "bisect": 119.38,
+    "trap": 137.82,
+    "strict": 163.67,
+    "homework": 182.37,
+    "recap": 206.47
+  },
+  "subtitles": 47,
+  "audit_issues": 0,
+  "endcard": 219.22,
+  "endcard_info": {
+    "next": "LCS 与编辑距离：同一张二维表",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 14.5,
+  "wall_seconds": 283.9
+}

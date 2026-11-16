@@ -47,7 +47,14 @@ LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "lights": ("lights.json", "lights_scene.py", "LightsLesson"),
            "dpintro": ("dpintro.json", "dpintro_scene.py", "DPIntroLesson"),
            "stack": ("stack.json", "stack_scene.py", "StackLesson"),
-           "matrix": ("matrix.json", "matrix_scene.py", "MatrixLesson")}
+           "matrix": ("matrix.json", "matrix_scene.py", "MatrixLesson"),
+           "subsets": ("subsets.json", "subsets_scene.py", "SubsetsLesson"),
+           "knight": ("knight.json", "knight_scene.py", "KnightLesson"),
+           "triangle": ("triangle.json", "triangle_scene.py", "TriangleLesson"),
+           "kadane": ("kadane.json", "kadane_scene.py", "KadaneLesson"),
+           "knapvar": ("knapvar.json", "knapvar_scene.py", "KnapVarLesson"),
+           "lis": ("lis.json", "lis_scene.py", "LISLesson"),
+           "grid": ("grid.json", "grid_scene.py", "GridLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 

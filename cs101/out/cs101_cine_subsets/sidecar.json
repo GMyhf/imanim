@@ -1,0 +1,31 @@
+{
+  "lesson": "subsets",
+  "title": "回溯三形态：子集、组合、排列共用一个模板",
+  "source": "计算概论（B）2026fall · 第9周 回溯 1.1–1.3 节 · 第8周 3.4 节 · LeetCode 78 / 39",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 214.88,
+  "speech_seconds": 201.65,
+  "beats": {
+    "title": 0.0,
+    "template": 15.22,
+    "pick": 37.35,
+    "start": 52.32,
+    "three": 78.48,
+    "csum": 113.25,
+    "prune": 140.2,
+    "kinds": 171.02,
+    "recap": 191.97
+  },
+  "subtitles": 42,
+  "audit_issues": 0,
+  "endcard": 211.78,
+  "endcard_info": {
+    "next": "八皇后：回溯与剪枝",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.99,
+  "wall_seconds": 370.2
+}

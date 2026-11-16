@@ -1,0 +1,32 @@
+{
+  "lesson": "kadane",
+  "title": "最大子段和：从一维到二维",
+  "source": "计算概论（B）2026fall · 第10周 动态规划入门 2.7 · 第11周 动态规划 2.3–2.4 · OpenJudge 02766 · LeetCode 198",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 222.15,
+  "speech_seconds": 208.15,
+  "beats": {
+    "title": 0.0,
+    "state": 20.78,
+    "scan": 42.48,
+    "why": 72.63,
+    "matrix": 91.52,
+    "squash": 107.4,
+    "demo": 134.5,
+    "all": 157.83,
+    "rob": 174.22,
+    "recap": 202.53
+  },
+  "subtitles": 45,
+  "audit_issues": 0,
+  "endcard": 219.05,
+  "endcard_info": {
+    "next": "0/1 背包：一张表，两个方向",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 14.57,
+  "wall_seconds": 288.4
+}

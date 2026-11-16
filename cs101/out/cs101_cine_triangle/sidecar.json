@@ -1,0 +1,33 @@
+{
+  "lesson": "triangle",
+  "title": "从递归到 DP：爬楼梯与数字三角形",
+  "source": "计算概论（B）2026fall · 第10周 动态规划入门 讲义 2.3–2.6 · LeetCode 70 · OpenJudge 02760",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 222.1,
+  "speech_seconds": 207.17,
+  "beats": {
+    "title": 0.0,
+    "stairs": 14.88,
+    "rec": 36.93,
+    "memo": 54.77,
+    "table": 69.45,
+    "tri": 88.65,
+    "trimemo": 105.68,
+    "triup": 129.62,
+    "forward": 150.67,
+    "roll": 176.92,
+    "recap": 200.72
+  },
+  "subtitles": 39,
+  "audit_issues": 0,
+  "endcard": 219.0,
+  "endcard_info": {
+    "next": "动态规划入门：状态少了一维",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 18.11,
+  "wall_seconds": 313.1
+}

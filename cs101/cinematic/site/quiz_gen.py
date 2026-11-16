@@ -35,6 +35,13 @@ import permdata  # noqa: E402
 import queensdata  # noqa: E402
 import sortdata  # noqa: E402
 import stackdata  # noqa: E402
+import griddata  # noqa: E402
+import kadanedata  # noqa: E402
+import knapvardata  # noqa: E402
+import knightdata  # noqa: E402
+import lisdata  # noqa: E402
+import subsetsdata  # noqa: E402
+import triangledata  # noqa: E402
 
 # ---- 题目里用到的新输入（片中都没出现过）；test_quiz.py 里有同样一份，供独立重算
 INV_ARR = [3, 1, 4, 5, 2]
@@ -420,10 +427,310 @@ def q_lights():
     ]
 
 
+SUBS_CANDS, SUBS_TARGET = [3, 5, 2], 8   # 组合总和新输入（片中是 [2, 3, 6, 7]、7）；故意不按序给出
+SUBS_A, SUBS_K = [1, 2, 3, 4], 6         # 往后挑的子集树：第 SUBS_K 个收到的子集
+
+
+def q_subsets():
+    res = subsetsdata.combination_sum(SUBS_CANDS, SUBS_TARGET)
+    seqs = []                                  # 常见错误：每层都从头挑（忘了起始下标），把顺序不同的算成不同组合
+
+    def ordered(rest, path):
+        if rest == 0:
+            seqs.append(path)
+            return
+        for x in SUBS_CANDS:
+            if x <= rest:
+                ordered(rest - x, path + [x])
+    ordered(SUBS_TARGET, [])
+    unsorted = []                              # 常见错误：没排序就 break，会把后面更小的数一起剪掉
+
+    def no_sort(start, rest, path):
+        if rest == 0:
+            unsorted.append(path)
+            return
+        for i in range(start, len(SUBS_CANDS)):
+            if SUBS_CANDS[i] > rest:
+                break
+            no_sort(i, rest - SUBS_CANDS[i], path + [SUBS_CANDS[i]])
+    no_sort(0, SUBS_TARGET, [])
+    no_rep = [c for c in subsetsdata.subsets_start(SUBS_CANDS) if sum(c) == SUBS_TARGET]   # 错把 i 写成 i + 1
+    brk = len(subsetsdata.csum_tree(SUBS_CANDS, SUBS_TARGET, "break"))
+    none = len(subsetsdata.csum_tree(SUBS_CANDS, SUBS_TARGET, "none"))
+    cmp_cont = subsetsdata.csum_compares(SUBS_CANDS, SUBS_TARGET, "continue")
+    order = subsetsdata.subsets_start(SUBS_A)
+    pick = subsetsdata.subsets_pick(SUBS_A)
+    lst = lambda xs: "[" + ", ".join(map(str, xs)) + "]"  # noqa: E731
+    return [
+        Q(f"组合总和：候选数 [{seq(SUBS_CANDS)}]，每个数可重复用，和为 {SUBS_TARGET} 的组合有几个？",
+          len(res), [len(seqs), len(no_rep), len(unsorted)],
+          f"{len(res)} 个：{'、'.join(lst(c) for c in res)}。每层都从头挑会把 2+3+3 和 3+2+3 当成不同的，数出 {len(seqs)} 个；"
+          f"递归传 i + 1（不能重复用）只剩 {lst(no_rep[0])} 一个；不先排序就 break，会漏成 {len(unsorted)} 个。"),
+        Q(f"同一题按讲义写法（先排序，candidates[i] > rest 就 break），dfs 一共被调用几次（含根）？",
+          brk, [none, cmp_cont, len(res)],
+          f"剪掉的都是「走进去才发现超了」的死节点：不剪枝要 {none} 次调用，break 后只剩 {brk} 次。"
+          f"{cmp_cont} 是改用 continue 时的比较次数，节点数不变、比较更多。"),
+        Q(f"用「从起始下标往后挑、每个节点都收」的写法求 [{seq(SUBS_A)}] 的子集，第 {SUBS_K} 个收到的是？",
+          lst(order[SUBS_K - 1]), [lst(pick[SUBS_K - 1]), lst(order[SUBS_K - 2]), lst(order[SUBS_K])],
+          f"先序遍历：[ ]、[1]、[1, 2]、[1, 2, 3]、[1, 2, 3, 4] 之后退回 [1, 2] 挑 4，得到 {lst(order[SUBS_K - 1])}。"
+          f"{lst(pick[SUBS_K - 1])} 是「选或不选、先不选」那棵树的第 {SUBS_K} 个叶子。"),
+    ]
+
+
+KNIGHT_Q = (3, 4, 0, 0)                  # 3 行 4 列、从左上角出发的马走日
+KNIGHT_FORGET = (3, 3, 0, 0)             # 3×3 从角上出发、忘了回溯那一行
+LAKE_Q = ["WW..W", "...W.", "W....", ".W.WW"]
+
+
+def q_knight():
+    n, m, sx, sy = KNIGHT_Q
+    tours = knightdata.knight_tours(n, m, sx, sy)
+    forgot = knightdata.knight_trace(n, m, sx, sy, undo=False)[0]
+    fn, fm, fx, fy = KNIGHT_FORGET
+    f_calls = knightdata.knight_trace(fn, fm, fx, fy, undo=False)[1]
+    ok_calls = knightdata.knight_trace(fn, fm, fx, fy)[1]
+    lakes = knightdata.count_lakes(LAKE_Q)
+    lakes4 = len(_lakes4(LAKE_Q))
+    return [
+        Q(f"讲义的 knight_tours({n}, {m}, {sx}, {sy}) 输出几？（{n} 行 {m} 列，马从左上角出发，不重复地走遍所有格子）",
+          tours, [forgot, 0, n * m],
+          f"回溯枚举所有走法，{n}×{m} 从角上出发恰有 {tours} 种；忘了撤销标记时每格只进一次，最多走出 1 条。"),
+        Q(f"网格 {' / '.join(LAKE_Q)}（W 是水，八个方向相连的水算一个湖）有几个湖？",
+          lakes, [lakes4, knightdata.water(LAKE_Q), lakes - 1],
+          f"斜着挨着也算相连；只看上下左右会数出 {lakes4} 个；把每格水都当成一个湖（灌水后误加撤销）会数出 "
+          f"{knightdata.water(LAKE_Q)} 个。"),
+        Q(f"马走日在 {fn}×{fm} 棋盘上从角上出发，忘了写 visited[nx][ny] = False，dfs 一共被调用几次？",
+          f_calls, [fn * fm, ok_calls, 1],
+          f"不撤销时每格最多进一次，调用次数等于马从角上能跳到的格子数；{fn}×{fm} 的中心格马跳不到，"
+          f"所以是 {f_calls} 次（正确回溯版要 {ok_calls} 次，答案仍是 0）。"),
+    ]
+
+
+def _lakes4(grid):
+    """只算上下左右相连时的湖（常见错误理解，作干扰项）。"""
+    cells = {(i, j) for i, row in enumerate(grid) for j, ch in enumerate(row) if ch == "W"}
+    out = []
+    while cells:
+        st, comp = [cells.pop()], set()
+        while st:
+            x, y = st.pop()
+            comp.add((x, y))
+            for q in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if q in cells:
+                    cells.remove(q)
+                    st.append(q)
+        out.append(comp)
+    return out
+
+
+# ---- 加到 quiz_gen.py：import 区
+
+# ---- 加到新输入常量区（片中没出现过）
+STAIR_Q = 8                                  # 爬到第 8 级
+TRI_Q = [[3], [2, 8], [9, 1, 4], [7, 1, 2, 2]]
+
+
+# ---- 加到 q_dpintro 之前
+def q_triangle():
+    ways = triangledata.climb_stairs(STAIR_Q)
+    off = triangledata.climb_table(STAIR_Q - 1)[-1]            # 边界写成 dp[0] = 0、dp[1] = 1：错一位
+    best = triangledata.max_path_sum(TRI_Q)
+    j, greedy = 0, TRI_Q[0][0]                                 # 贪心：每步走到下一行较大的那个
+    for i in range(1, len(TRI_Q)):
+        j += TRI_Q[i][j + 1] > TRI_Q[i][j]
+        greedy += TRI_Q[i][j]
+    rowmax = sum(max(r) for r in TRI_Q)
+    rows = " / ".join(" ".join(map(str, r)) for r in TRI_Q)
+    i2 = len(TRI_Q) - 2
+    after = [v for i, _, _, _, v in triangledata.roll_log(TRI_Q) if i == i2]
+    after = after + TRI_Q[-1][len(after):]                     # 本轮没写到的位置保持底行原值
+    r2l = TRI_Q[-1][:]                                         # 常见错误：内层循环从右往左
+    for k in range(i2, -1, -1):
+        r2l[k] = TRI_Q[i2][k] + max(r2l[k], r2l[k + 1])
+    lst = lambda xs: "[" + ", ".join(map(str, xs)) + "]"      # noqa: E731
+    return [
+        Q(f"每次爬 1 级或 2 级，爬到第 {STAIR_Q} 级有几种爬法？（站在地面算一种：dp[0] = 1）",
+          ways, [off, 2 ** (STAIR_Q - 1), ways + off],
+          f"dp[i] = dp[i−1] + dp[i−2]，dp[0] = dp[1] = 1，一路加到 dp[{STAIR_Q}] = {ways}。"
+          f"把边界写成 dp[0] = 0 会整体错一位，得到 {off}。"),
+        Q(f"数字三角形（每步走到正下或右下）：{rows}。从顶到底的最大路径和是？",
+          best, [greedy, rowmax, best - 1],
+          f"每步挑下一行较大的那个是贪心，只得 {greedy}；{rowmax} 是每行最大值相加，但它们连不成一条路径。"
+          f"自底向上填表，顶上一格就是 {best}。"),
+        Q(f"对上一题的三角形运行一维滚动版 max_path_sum_1d：dp 先抄底行，处理完倒数第二行之后，dp 数组是？",
+          lst(after), [lst(r2l), lst(TRI_Q[-1]), lst(after[:i2 + 1])],
+          "从左往右改，改第 j 位时读的第 j+1 位还是底行旧值，所以正确；从右往左改会读到本轮刚改过的值。"
+          "数组长度不变，只是最右一位以后不再用到。"),
+    ]
+
+# ---- BUILDERS 里加一项（顺序随 films.json：interval 之后、dpintro 之前）
+#   "triangle": q_triangle,
+
+
+# ---- 合并进 site/quiz_gen.py：
+# 1) import 区加：import kadanedata  # noqa: E402
+# 2) 新输入常量（片中都没出现过）放到常量区：
+KAD_ARR = [3, -4, 5, -1, 2, -6, 4]
+KAD_MAT = [[2, -1, -4], [-3, 5, 2], [1, -2, 3]]
+ROB_H = [3, 4, 3, 1, 5]
+# 3) BUILDERS 里加 "kadane": q_kadane
+
+
+def q_kadane():
+    best = kadanedata.max_subarray(KAD_ARR)
+    last = kadanedata.kadane_trace(KAD_ARR)[0][-1]            # 错把 dp[n-1] 当答案
+    pos = sum(v for v in KAD_ARR if v > 0)                    # 忽略「连续」，正数全加
+    sub = kadanedata.max_submatrix(KAD_MAT)
+    _, st, sb, sl, sr = kadanedata.best_submatrix(KAD_MAT)
+    row_only = max(kadanedata.max_subarray(r) for r in KAD_MAT)   # 只枚举了上边 = 下边
+    top_cell = max(max(r) for r in KAD_MAT)
+    total = sum(map(sum, KAD_MAT))
+    rob = kadanedata.rob(ROB_H)
+    picks = "、".join(str(k + 1) for k in kadanedata.rob_choice(ROB_H))
+    greedy, left = 0, set(range(len(ROB_H)))                   # 贪心：每次拿剩下最大的一家，再划掉两个邻居
+    while left:
+        k = max(left, key=lambda i: (ROB_H[i], -i))
+        greedy += ROB_H[k]
+        left -= {k - 1, k, k + 1}
+    mat = " ".join("[" + ", ".join(map(str, r)) + "]" for r in KAD_MAT)
+    return [
+        Q(f"数组 {seq(KAD_ARR)} 的最大子段和（连续一段，至少一个数）是？",
+          best, [last, pos, max(KAD_ARR)],
+          f"dp[i] 是以第 i 格结尾的最大和，答案是 max(dp) = {best}，不是最后一格的 dp = {last}；"
+          f"{pos} 是把不相连的正数也加了进来。"),
+        Q(f"矩阵 {mat}（按行给出）中元素和最大的子矩阵，和是？",
+          sub, [row_only, top_cell, total],
+          f"固定上下边、按列压成一行再跑 Kadane：第 {st + 1}–{sb + 1} 行压成一行后取第 {sl + 1}–{sr + 1} 列得 {sub}。"
+          f"{row_only} 只考虑了单独一行。"),
+        Q(f"打家劫舍：钱数 {seq(ROB_H)}，不能偷相邻两家，最多偷到多少？",
+          rob, [greedy, sum(ROB_H), max(ROB_H)],
+          f"dp[i] = max(dp[i−1], dp[i−2] + v)，扫到最后是 {rob}（第 {picks} 家）。"
+          f"每次先拿最大的那家只得 {greedy}：拿下一家大的，会把两边的两家一起丢掉。"),
+    ]
+
+
+KV_SPLIT = 20                                        # 多重背包某种物品的个数
+KV_EX_W, KV_EX_V, KV_EX_CAP = [3, 4], [5, 7], 6       # 恰好装满：3 和 4 凑不出 6
+KV_FRAC, KV_FRAC_CAP = [(60, 10), (100, 20), (120, 30)], 50   # (总价值, 重量)
+
+
+def q_knapvar():
+    parts = knapvardata.binary_split(KV_SPLIT)
+    bits = [1 << i for i in range(KV_SPLIT.bit_length()) if KV_SPLIT >> i & 1]      # 误当成 20 的二进制位
+    pows = [1 << i for i in range(KV_SPLIT.bit_length())]                          # 一路翻倍、不留余数
+    exact = knapvardata.exact_fill_max(KV_EX_W, KV_EX_V, KV_EX_CAP)
+    loose = knapvardata.fill_rows(KV_EX_W, KV_EX_V, KV_EX_CAP, exact=False)[-1][KV_EX_CAP]
+    unb = knapdata.unbounded_knapsack(KV_EX_W, KV_EX_V, KV_EX_CAP)
+    frac = knapvardata.fractional_knapsack(KV_FRAC, KV_FRAC_CAP)
+    g01, _ = knapvardata.greedy_01(KV_FRAC, KV_FRAC_CAP)
+    best01 = knapvardata.knap01(KV_FRAC, KV_FRAC_CAP)
+    items = "、".join(f"({v}, {w})" for v, w in KV_FRAC)
+    return [
+        Q(f"多重背包里某种物品有 {KV_SPLIT} 个，按二进制拆分，拆成的各捆依次是？",
+          seq(parts), [seq(bits), seq(pows[:-1]), seq(pows)],
+          f"每捆翻倍 1、2、4、8，已用 15 个，剩下的 {parts[-1]} 个单独成一捆。"
+          f"{seq(bits)} 只是 {KV_SPLIT} 的二进制位，凑不出 1、2、3 这类数；一路翻到 16 又会超过 {KV_SPLIT} 个。"),
+        Q(f"0/1 背包：物品 重 {KV_EX_W[0]} 值 {KV_EX_V[0]}、重 {KV_EX_W[1]} 值 {KV_EX_V[1]}，"
+          f"要求恰好装满容量 {KV_EX_CAP}，最大价值是？（凑不出输出 −1）",
+          exact, [loose, unb, 0],
+          f"{KV_EX_W[0]} 和 {KV_EX_W[1]} 凑不出 {KV_EX_CAP}，dp[{KV_EX_CAP}] 一直是 −∞，输出 −1。"
+          f"初值误写成全 0 就成了「不超过」型，得到 {loose}；{unb} 是把同一件拿了两次。"),
+        Q(f"分数背包（可以只拿一部分）：物品 (价值, 重量) 为 {items}，容量 {KV_FRAC_CAP}，最大总价值是？",
+          f"{frac:g}", [best01, g01, sum(v for v, _ in KV_FRAC)],
+          f"单价 6、5、4，整拿前两件用掉 30，剩 20 从第三件切三分之二得 80，共 {frac:g}。"
+          f"不能切时背包 DP 最优是 {best01}，按单价整件贪心只有 {g01}。"),
+    ]
+
+
+# ---- 合并到 site/quiz_gen.py：import 区加一行
+
+# ---- 常量区（片中都没出现过）；test_quiz.py 里有同样一份，供独立重算
+LIS_ARR = [10, 9, 2, 5, 3, 7, 101, 18]   # 讲义思考题 4
+LIS_TRAP = [3, 5, 6, 1]                  # tails 最后变成 1 5 6，不是真实子序列
+LIS_EQ = [1, 3, 3, 2, 3]                 # 严格上升 3，非降 4
+
+
+def q_lis():
+    n = lisdata.lis_nlogn(LIS_ARR)
+    run = max(k for k in range(1, len(LIS_ARR) + 1)            # 常见误解：当成连续上升子串
+              for s in range(len(LIS_ARR) - k + 1)
+              if all(LIS_ARR[s + t] < LIS_ARR[s + t + 1] for t in range(k - 1)))
+    tails = lisdata.tails_trace(LIS_TRAP)[-1][3]
+    real = lisdata.is_subseq_of(tails, LIS_TRAP)
+    truth = [LIS_TRAP[i] for i in lisdata.lis_back(LIS_TRAP)]
+    yn = lambda ok: "是" if ok else "不是"  # noqa: E731
+    strict, nondec = lisdata.tails_strict_vs_nondec(LIS_EQ)
+    return [
+        Q(f"数组 {seq(LIS_ARR)} 的最长（严格）上升子序列长度是？", n, [run, n + 1, n - 2],
+          f"例如 2, 3, 7, 18。子序列不要求连续；{run} 是最长连续上升段的长度，那是子串，不是子序列。"),
+        Q(f"对 {seq(LIS_TRAP)} 跑 bisect_left 版本，结束时 tails 是什么？它是一个真实的上升子序列吗？",
+          f"[{seq(tails)}]，{yn(real)}",
+          [f"[{seq(truth)}]，是", f"[{seq(tails)}]，{yn(not real)}", f"[{seq(tails[:1])}]，是"],
+          f"最后的 1 替换了 tails[0]，但它在原数组里排在 5、6 后面。tails 只保证长度 {len(tails)} 对，"
+          f"真实的最长上升子序列是 {seq(truth)}。"),
+        Q(f"数组 {seq(LIS_EQ)}，允许相等的最长非降子序列长度是多少，tails 版本该用哪个函数？",
+          f"{nondec}，bisect_right",
+          [f"{strict}，bisect_left", f"{nondec}，bisect_left", f"{strict}，bisect_right"],
+          f"非降允许相等，相等的数要新开一摞，用 bisect_right，得 1, 3, 3, 3 长度 {nondec}；"
+          f"bisect_left 让相等的数互相替换，求的是严格上升，长度 {strict}。"),
+    ]
+
+# ---- BUILDERS 里加 "lis": q_lis（放在 "knapvar" 之后、"lcs" 之前，与片目顺序一致）
+
+
+# ---- 加到 import 区：
+
+# ---- 加到新输入常量区（片中都没出现过；test_quiz.py 里有同样一份，供独立重算）：
+GRID_RD = [[1, 2, 9], [5, 9, 1], [1, 1, 1]]                      # 只能右、下
+GRID_4 = [[1, 9, 1, 1, 1], [1, 9, 1, 9, 1], [1, 1, 1, 9, 1]]       # 四方向，最好的路要往上绕
+GRID_CNT = (4, 4)                                                 # 只能右、下的路径条数
+
+
+def _greedy_rd(g):
+    """常见错误：每步只看右边和下边哪个小就往哪走。"""
+    n, m = len(g), len(g[0])
+    i = j = 0
+    s = g[0][0]
+    while (i, j) != (n - 1, m - 1):
+        if i == n - 1 or (j < m - 1 and g[i][j + 1] <= g[i + 1][j]):
+            j += 1
+        else:
+            i += 1
+        s += g[i][j]
+    return s
+
+
+def q_grid():
+    rd = griddata.min_path_sum(GRID_RD)
+    greedy = _greedy_rd(GRID_RD)
+    four, _, _, _ = griddata.grid_dijkstra(GRID_4)
+    copy = griddata.naive_four(GRID_4)[-1][-1]                   # 照搬到四方向的 DP，等于只许右、下
+    n, m = GRID_CNT
+    cnt = griddata.count_paths(n, m)[-1][-1]
+    rows = " / ".join(" ".join(map(str, r)) for r in GRID_RD)
+    rows4 = " / ".join(" ".join(map(str, r)) for r in GRID_4)
+    return [
+        Q(f"网格（按行写）{rows}，从左上走到右下，只能向右或向下，路过的数（含起点终点）之和最小是多少？",
+          rd, [greedy, rd + 1, sum(map(sum, GRID_RD))],
+          f"dp[i][j] = min(上, 左) + 自己，按行填到右下角是 {rd}（先一路向下再向右）。"
+          f"每步只挑右、下里较小的那格，会先走到 2 再被 9 堵住，得到 {greedy}。"),
+        Q(f"网格 {rows4}，现在上下左右都能走，从左上到右下的最小路径和是多少？",
+          four, [copy, four - 1, four + 2],
+          f"最好的路在第三列向上绕过 9，路径和 {four}，用 Dijkstra 求。把 DP 按行照搬到四方向，"
+          f"还没算的格子当无穷大，往上绕的路永远用不上，得到的是只许右、下的答案 {copy}。"),
+        Q(f"{n}×{m} 的网格，从左上角走到右下角，只能向右或向下，一共有几条路径？",
+          cnt, [n * m, 2 ** (n + m - 2), griddata.count_paths(n + 1, m + 1)[-1][-1]],
+          f"第一行、第一列都是 1，其余格子 = 上面 + 左边，右下角是 {cnt}，也就是 6 步里选 3 步向下。"),
+    ]
+
+# ---- BUILDERS 里加一项："grid": q_grid
+
+
 BUILDERS = {"sort": q_sort, "stack": q_stack, "fib": q_fib, "hanoi": q_hanoi, "perm": q_perm,
             "queens": q_queens, "dsu": q_dsu, "interval": q_interval, "dpintro": q_dpintro,
             "knap": q_knap, "lcs": q_lcs, "bfs": q_bfs, "dijkstra": q_dijkstra, "bsearch": q_bsearch,
-            "binary": q_binary, "float": q_float, "matrix": q_matrix, "lights": q_lights}
+            "binary": q_binary, "float": q_float, "matrix": q_matrix, "lights": q_lights,
+            "subsets": q_subsets, "knight": q_knight, "triangle": q_triangle, "kadane": q_kadane, "knapvar": q_knapvar, "lis": q_lis, "grid": q_grid}
 
 
 def build() -> dict:

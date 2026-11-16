@@ -21,11 +21,11 @@
   "subtitles": 37,
   "audit_issues": 0,
   "endcard": 169.5,
-  "size_mb": 11.71,
-  "wall_seconds": 213.8,
   "endcard_info": {
-    "next": "二分答案：最小化最大值",
+    "next": "网格上走：DP 还是搜索",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 11.71,
+  "wall_seconds": 203.5
 }

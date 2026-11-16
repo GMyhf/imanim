@@ -1,0 +1,32 @@
+{
+  "lesson": "knapvar",
+  "title": "背包的三个变形：拆捆、装满、多一维",
+  "source": "计算概论（B）2026fall · 第11周 动态规划 讲义 1.4–1.6 · OpenJudge M01742、21458、04102、04110",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 224.67,
+  "speech_seconds": 211.2,
+  "beats": {
+    "title": 0.0,
+    "split": 12.77,
+    "why": 40.33,
+    "exact": 65.68,
+    "trap": 95.58,
+    "coins": 108.95,
+    "twodim": 131.32,
+    "frac": 159.7,
+    "greedy": 184.65,
+    "recap": 207.08
+  },
+  "subtitles": 43,
+  "audit_issues": 0,
+  "endcard": 221.57,
+  "endcard_info": {
+    "next": "最长上升子序列：两种写法",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 15.01,
+  "wall_seconds": 309.9
+}

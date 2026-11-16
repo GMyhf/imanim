@@ -20,11 +20,11 @@
   "subtitles": 35,
   "audit_issues": 0,
   "endcard": 168.48,
-  "size_mb": 10.28,
-  "wall_seconds": 218.1,
   "endcard_info": {
-    "next": "动态规划入门：状态少了一维",
+    "next": "从递归到 DP：爬楼梯与数字三角形",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 10.29,
+  "wall_seconds": 210.3
 }

@@ -21,11 +21,11 @@
   "subtitles": 38,
   "audit_issues": 0,
   "endcard": 172.28,
-  "size_mb": 13.52,
-  "wall_seconds": 248.3,
   "endcard_info": {
-    "next": "并查集：让森林越查越矮",
+    "next": "马走日与数湖泊：回溯要不要撤销",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 13.54,
+  "wall_seconds": 248.0
 }

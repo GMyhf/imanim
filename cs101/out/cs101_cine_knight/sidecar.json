@@ -1,0 +1,32 @@
+{
+  "lesson": "knight",
+  "title": "马走日与数湖泊：回溯要不要撤销",
+  "source": "计算概论（B）2026fall · 第9周 回溯 1.5–1.6 节 · OpenJudge 04123、02386、05585",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 217.5,
+  "speech_seconds": 203.52,
+  "beats": {
+    "title": 0.0,
+    "knight": 19.53,
+    "kcode": 33.88,
+    "ktour": 53.02,
+    "kforget": 77.68,
+    "lake": 104.05,
+    "lwalk": 122.43,
+    "lwrong": 142.25,
+    "why": 176.18,
+    "recap": 202.15
+  },
+  "subtitles": 44,
+  "audit_issues": 0,
+  "endcard": 214.4,
+  "endcard_info": {
+    "next": "并查集：让森林越查越矮",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.94,
+  "wall_seconds": 415.5
+}

@@ -1,0 +1,31 @@
+{
+  "lesson": "grid",
+  "title": "网格上走：DP 还是搜索",
+  "source": "计算概论（B）2026fall · 第12周 网格 DP 与搜索的分界",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 224.9,
+  "speech_seconds": 211.85,
+  "beats": {
+    "title": 0.0,
+    "table": 18.0,
+    "dp": 41.55,
+    "order": 66.2,
+    "four": 89.17,
+    "cycle": 113.1,
+    "dijkstra": 139.82,
+    "count": 174.08,
+    "recap": 205.0
+  },
+  "subtitles": 39,
+  "audit_issues": 0,
+  "endcard": 221.8,
+  "endcard_info": {
+    "next": "二分答案：最小化最大值",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 15.75,
+  "wall_seconds": 326.3
+}

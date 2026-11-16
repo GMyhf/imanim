@@ -22,11 +22,11 @@
   "subtitles": 41,
   "audit_issues": 0,
   "endcard": 218.2,
-  "size_mb": 17.12,
-  "wall_seconds": 360.9,
   "endcard_info": {
-    "next": "八皇后：回溯与剪枝",
+    "next": "回溯三形态：子集、组合、排列共用一个模板",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 17.16,
+  "wall_seconds": 296.5
 }

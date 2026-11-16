@@ -10,6 +10,7 @@ import json
 import sys
 import unittest
 from collections import deque
+from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
 
@@ -220,6 +221,207 @@ def split_best(costs, m):
     return best
 
 
+def csum_multisets(cands, target):
+    """不用回溯：枚举可重复组合（多重集），挑和为 target 的。"""
+    lo = min(cands)
+    return [c for k in range(1, target // lo + 1)
+            for c in itertools.combinations_with_replacement(sorted(cands), k) if sum(c) == target]
+
+
+def csum_calls_break(cands, target):
+    """排序后 break 的调用次数：节点 = 和不超过 target 的非降序列（前缀），含空序列。"""
+    cands = sorted(cands)
+
+    def go(start, rest):
+        return 1 + sum(go(i, rest - cands[i]) for i in range(start, len(cands)) if cands[i] <= rest)
+    return go(0, target)
+
+
+KNIGHT_JUMPS = [(a, b) for a in (-2, -1, 1, 2) for b in (-2, -1, 1, 2) if abs(a) != abs(b)]
+
+
+def knight_paths(n, m, start):
+    """不用 visited 数组：用 frozenset 枚举从 start 出发的全部不重复马步路径，返回 (调用数, 走满的条数)。"""
+    cells = {(i, j) for i in range(n) for j in range(m)}
+    calls = full = 0
+
+    def go(p, seen):
+        nonlocal calls, full
+        calls += 1
+        full += len(seen) == len(cells)
+        for dx, dy in KNIGHT_JUMPS:
+            q = (p[0] + dx, p[1] + dy)
+            if q in cells and q not in seen:
+                go(q, seen | {q})
+    go(start, frozenset([start]))
+    return calls, full
+
+
+def knight_reach(n, m, start):
+    """BFS：马从 start 能跳到的格子数（忘了撤销时每格恰好进一次）。"""
+    seen, dq = {start}, deque([start])
+    while dq:
+        x, y = dq.popleft()
+        for dx, dy in KNIGHT_JUMPS:
+            q = (x + dx, y + dy)
+            if 0 <= q[0] < n and 0 <= q[1] < m and q not in seen:
+                seen.add(q)
+                dq.append(q)
+    return len(seen)
+
+
+def lakes8(grid):
+    cells = {(i, j) for i, row in enumerate(grid) for j, ch in enumerate(row) if ch == "W"}
+    cnt = 0
+    while cells:
+        dq = deque([cells.pop()])
+        cnt += 1
+        while dq:
+            x, y = dq.popleft()
+            for dx, dy in itertools.product((-1, 0, 1), repeat=2):
+                if (x + dx, y + dy) in cells:
+                    cells.remove((x + dx, y + dy))
+                    dq.append((x + dx, y + dy))
+    return cnt
+
+
+# ---- 加到 test_quiz.py 的独立实现区
+def stair_ways(n):
+    """枚举每步走 1 还是 2 的全部序列，数和为 n 的。"""
+    return sum(1 for k in range(n + 1) for s in itertools.product((1, 2), repeat=k) if sum(s) == n)
+
+
+def tri_best_from(tri, i, j):
+    """从 (i, j) 出发到底的最大和：枚举从这一格出发的全部路径。"""
+    best = None
+    for turns in itertools.product((0, 1), repeat=len(tri) - 1 - i):
+        c, s = j, tri[i][j]
+        for r, d in enumerate(turns, i + 1):
+            c += d
+            s += tri[r][c]
+        best = s if best is None else max(best, s)
+    return best
+
+
+# ---- 加到 QuizAnswerTest 类里
+
+
+# ---- 合并进 test_quiz.py：下面三个独立实现放到「独立实现」区（不调用 kadanedata），
+#      test_kadane 方法放进测试类，与 test_knap 等并列。
+
+
+def max_seg_brute(a):
+    """枚举全部 [l, r] 区间求和。"""
+    return max(sum(a[l:r + 1]) for l in range(len(a)) for r in range(l, len(a)))
+
+
+def max_block_brute(mat):
+    """枚举上下左右四条边，逐块求和。"""
+    n, m = len(mat), len(mat[0])
+    return max(sum(mat[i][j] for i in range(t, b + 1) for j in range(l, r + 1))
+               for t in range(n) for b in range(t, n) for l in range(m) for r in range(l, m))
+
+
+def rob_brute(h):
+    """枚举全部不含相邻下标的子集。"""
+    best = 0
+    for k in range(len(h) + 1):
+        for c in itertools.combinations(range(len(h)), k):
+            if all(y - x > 1 for x, y in zip(c, c[1:])):
+                best = max(best, sum(h[i] for i in c))
+    return best
+
+
+def split_by_powers(k):
+    """1、2、4… 只要加上不超过 k 就收下，最后补余数。"""
+    out, p = [], 1
+    while sum(out) + p <= k:
+        out.append(p)
+        p *= 2
+    return out + ([k - sum(out)] if k > sum(out) else [])
+
+
+def exact_brute(w, v, cap):
+    best = -1
+    for r in range(len(w) + 1):
+        for pick in itertools.combinations(range(len(w)), r):
+            if sum(w[i] for i in pick) == cap:
+                best = max(best, sum(v[i] for i in pick))
+    return best
+
+
+def frac_best(items, cap):
+    """连续背包按单价从高到低装，用 Fraction 精确算。"""
+    total, rest = Fraction(0), Fraction(cap)
+    for val, wt in sorted(items, key=lambda it: Fraction(it[0], it[1]), reverse=True):
+        take = min(rest, wt)
+        total += Fraction(val, wt) * take
+        rest -= take
+    return total
+
+
+# ---- 合并到 test_quiz.py：独立实现（不调用 lisdata，也不用 bisect）
+def lis_brute(a, ok):
+    """枚举所有下标组合，相邻两两满足 ok 的最长长度。"""
+    for k in range(len(a), 0, -1):
+        for idx in itertools.combinations(range(len(a)), k):
+            if all(ok(a[idx[t]], a[idx[t + 1]]) for t in range(k - 1)):
+                return k
+    return 0
+
+
+def tails_linear(a):
+    """线性扫描版 tails：找第一个 ≥ v 的位置替换，没有就追加。"""
+    t = []
+    for v in a:
+        p = next((k for k, x in enumerate(t) if x >= v), len(t))
+        t[p:p + 1] = [v]
+    return t
+
+
+def is_subseq(sub, a):
+    it = iter(a)
+    return all(x in it for x in sub)
+
+
+# ---- 放进 class 里
+
+
+# ---- 加到「独立实现」区（不调用 griddata）：
+def grid_rd_brute(g):
+    """枚举所有只向右 / 向下的路径。"""
+    n, m = len(g), len(g[0])
+    best = None
+    for downs in itertools.combinations(range(n + m - 2), n - 1):
+        i = j = 0
+        s = g[0][0]
+        for k in range(n + m - 2):
+            i, j = (i + 1, j) if k in downs else (i, j + 1)
+            s += g[i][j]
+        best = s if best is None else min(best, s)
+    return best
+
+
+def grid_four_relax(g):
+    """四方向反复松弛到不再变化。"""
+    n, m = len(g), len(g[0])
+    d = [[float("inf")] * m for _ in range(n)]
+    d[0][0] = g[0][0]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(n):
+            for j in range(m):
+                for a, b in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                    if 0 <= a < n and 0 <= b < m and d[i][j] + g[a][b] < d[a][b]:
+                        d[a][b] = d[i][j] + g[a][b]
+                        changed = True
+    return d[-1][-1]
+
+
+# ---- 加到 QuizAnswerTest：
+
+
 class QuizFormatTest(unittest.TestCase):
     def test_films_and_shape(self):
         self.assertEqual(sorted(QUIZ), sorted(FILMS))
@@ -410,6 +612,55 @@ class QuizAnswerTest(unittest.TestCase):
                     rows[t][1] ^= rows[len(piv)][1]
             piv.append(col)
         self.assertEqual(right("lights", 2), str(sum(rows[k][1] for k in range(n))))
+
+    def test_subsets(self):
+        self.assertEqual(right("subsets", 0), str(len(csum_multisets(G.SUBS_CANDS, G.SUBS_TARGET))))
+        self.assertEqual(right("subsets", 1), str(csum_calls_break(G.SUBS_CANDS, G.SUBS_TARGET)))
+        # 往后挑的先序 = 按字典序比较的升序子集序列
+        subs = sorted((list(c) for k in range(len(G.SUBS_A) + 1) for c in itertools.combinations(G.SUBS_A, k)))
+        self.assertEqual(right("subsets", 2), "[" + ", ".join(map(str, subs[G.SUBS_K - 1])) + "]")
+
+    def test_knight(self):
+        n, m, sx, sy = G.KNIGHT_Q
+        self.assertEqual(right("knight", 0), str(knight_paths(n, m, (sx, sy))[1]))
+        self.assertEqual(right("knight", 1), str(lakes8(G.LAKE_Q)))
+        fn, fm, fx, fy = G.KNIGHT_FORGET
+        self.assertEqual(right("knight", 2), str(knight_reach(fn, fm, (fx, fy))))
+
+    def test_triangle(self):
+        self.assertEqual(right("triangle", 0), str(stair_ways(G.STAIR_Q)))
+        self.assertEqual(right("triangle", 1), str(tri_best_from(G.TRI_Q, 0, 0)))
+        n = len(G.TRI_Q)
+        row = [tri_best_from(G.TRI_Q, n - 2, j) for j in range(n - 1)] + [G.TRI_Q[-1][-1]]
+        self.assertEqual(right("triangle", 2), "[" + ", ".join(map(str, row)) + "]")
+
+    def test_kadane(self):
+        self.assertEqual(right("kadane", 0), str(max_seg_brute(G.KAD_ARR)))
+        self.assertEqual(right("kadane", 1), str(max_block_brute(G.KAD_MAT)))
+        self.assertEqual(right("kadane", 2), str(rob_brute(G.ROB_H)))
+
+    def test_knapvar(self):
+        parts = split_by_powers(G.KV_SPLIT)
+        reach = {0}
+        for p in parts:
+            reach |= {r + p for r in reach}
+        self.assertEqual(reach, set(range(G.KV_SPLIT + 1)))
+        self.assertEqual(right("knapvar", 0), ", ".join(map(str, parts)))
+        self.assertEqual(right("knapvar", 1), str(exact_brute(G.KV_EX_W, G.KV_EX_V, G.KV_EX_CAP)))
+        self.assertEqual(right("knapvar", 2), f"{float(frac_best(G.KV_FRAC, G.KV_FRAC_CAP)):g}")
+
+    def test_lis(self):
+        self.assertEqual(right("lis", 0), str(lis_brute(G.LIS_ARR, lambda x, y: x < y)))
+        t = tails_linear(G.LIS_TRAP)
+        self.assertEqual(len(t), lis_brute(G.LIS_TRAP, lambda x, y: x < y))
+        self.assertEqual(right("lis", 1), f"[{', '.join(map(str, t))}]，" + ("是" if is_subseq(t, G.LIS_TRAP) else "不是"))
+        self.assertTrue(right("lis", 2).startswith(f"{lis_brute(G.LIS_EQ, lambda x, y: x <= y)}，bisect_right"))
+
+    def test_grid(self):
+        self.assertEqual(right("grid", 0), str(grid_rd_brute(G.GRID_RD)))
+        self.assertEqual(right("grid", 1), str(grid_four_relax(G.GRID_4)))
+        n, m = G.GRID_CNT
+        self.assertEqual(right("grid", 2), str(len(list(itertools.combinations(range(n + m - 2), n - 1)))))
 
 
 if __name__ == "__main__":
