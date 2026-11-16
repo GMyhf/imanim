@@ -91,7 +91,7 @@ class DijkstraLesson(Lesson):
         layer.set_fill(C_BLUE, 0.06).move_to([-3.6, 0.3, 0])
         lab = T("广搜第 1 层", 22, C_BLUE).next_to(layer, DOWN, buff=0.12)
         self.play(FadeIn(layer), FadeIn(lab), run_time=0.8)
-        wrong = MathTex(str(D.bfs_hops_cost()[1]), color=C_RED).scale(0.9).next_to(nodes[1], UP, buff=0.12)
+        wrong = MathTex(str(D.bfs_hops_cost()[1]), color=C_RED).scale(0.9).next_to(nodes[1], UP, buff=0.32)   # 抬过「第 1 层」圆角框的上沿
         self.wait_until(self.cue_start("记下代价四", self.now))
         self.play(Indicate(edges[(0, 1)], color=C_RED), FadeIn(wrong, scale=1.5), run_time=1.0)
         self.wait_until(self.cue_start("可绕道", self.now))
@@ -150,7 +150,7 @@ class DijkstraLesson(Lesson):
 
         def mark(lines, key, col):
             self.wait_until(self.cue_start(key, self.now))
-            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=0.04, stroke_width=2)
+            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=(0.1, 0.03), stroke_width=2)  # 左右留足、上下收紧：相邻两块高亮不叠边
             self.play(Create(hl), run_time=0.6)
             hls.add(hl)
         mark([1, 2, 3, 4], "无穷大", C_BLUE)
@@ -226,7 +226,7 @@ class DijkstraLesson(Lesson):
     def result_beat(self):
         self.beat("result")
         dist, _ = D.dijkstra_trace()
-        box = SurroundingRectangle(self.cells, color=C_GREEN, buff=0.12)
+        box = SurroundingRectangle(self.cells, color=C_GREEN, buff=(0.12, 0.06))   # 下沿别压住格子下方的下标
         self.play(Create(box), *[Indicate(v, color=C_GREEN) for v in self.vals], run_time=1.2)
         self.wait_until(self.cue_start("第一次出堆时", self.now))
         key = T("第一次出堆，才是最短", 32, C_YELLOW).move_to([3.1, 1.6, 0])

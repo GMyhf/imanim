@@ -1,0 +1,26 @@
+{
+  "lesson": "slidemax",
+  "title": "例题精讲：滑动窗口最大值",
+  "source": "数据结构与算法（B）2026spring 第4–5.5周 线性结构 5.3–5.4 节（单调队列）· 2026fall 每日选作 0930 · LeetCode 239 · OpenJudge 26978",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 212.02,
+  "speech_seconds": 197.95,
+  "beats": {
+    "title": 0.0,
+    "read": 19.68,
+    "brute": 44.15,
+    "observe": 65.38,
+    "model": 89.1,
+    "run": 111.45,
+    "code": 142.93,
+    "cost": 161.22,
+    "recap": 181.67
+  },
+  "subtitles": 39,
+  "audit_issues": 0,
+  "endcard": 208.92,
+  "size_mb": 15.87,
+  "wall_seconds": 205.5
+}

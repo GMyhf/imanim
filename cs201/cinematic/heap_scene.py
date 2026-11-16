@@ -433,10 +433,7 @@ class HeapLesson(Lesson):
         hs = VGroup(T("堆排序", 28, C_TEAL), T("建堆 + 反复取堆顶", 24, C_GREY)).arrange(DOWN, buff=0.2)
         hs.move_to([3.4, 1.4, 0])
         self.play(FadeIn(hs, shift=LEFT * 0.2), run_time=0.8)
-        self.at("下一个故事")
-        nxt = VGroup(T("下一支", 22, C_GREY), T("Huffman 编码", 30, C_YELLOW)).arrange(DOWN, buff=0.2)
-        nxt.move_to([3.4, -0.9, 0])
-        self.play(FadeIn(nxt, shift=UP * 0.2), run_time=0.8)
+        # 「下一支」交给 cine.Lesson 的通用片尾卡，这里不再自制
         self.wait(max(0.1, self.left() - 0.2))
         src = T("数据结构与算法（B）2026fall · 第 5 周 二叉树 5.1–5.3 节 · OpenJudge 04078", 20, C_GREY)
         src.to_edge(DOWN, buff=0.2)

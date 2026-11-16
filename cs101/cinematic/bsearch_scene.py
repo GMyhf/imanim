@@ -109,7 +109,7 @@ class BSearchLesson(Lesson):
         edge = max(g for g in range(L + 1) if ok[g])
         xb = (ax.x(edge) + ax.x(edge + 1)) / 2
         line = DashedLine([xb, -2.3, 0], [xb, -0.95, 0], color=C_YELLOW, stroke_width=4)
-        lab = T("分界线", 24, C_YELLOW).next_to(line, UP, buff=0.08).shift(RIGHT * 0.6)
+        lab = T("分界线", 24, C_YELLOW).next_to(line, DOWN, buff=0.08)   # 放在线下：线上方紧挨着「答案轴」标题
         legend = VGroup(T("可行", 22, C_GREEN), T("不可行", 22, C_RED)).arrange(RIGHT, buff=0.5)
         legend.next_to(ax.cells, DOWN, buff=0.5)
         self.wait_until(self.cue_start("分界线", self.now))
@@ -127,7 +127,7 @@ class BSearchLesson(Lesson):
                                 "return True\n",
                     language="python", formatter_style="monokai", background="window", add_line_numbers=False,
                     paragraph_config={"font": MONO, "font_size": 18})
-        code.move_to([-3.6, -1.25, 0])
+        code.move_to([-3.6, -1.4, 0])   # 再低一点，别贴着石头的坐标数字
         head = VGroup(Text("feasible(gap = 4)", font=MONO, font_size=26, color=C_BLUE))
         head.move_to([2.6, -0.45, 0])
         rem = VGroup(Text("removed", font=MONO, font_size=24, color=C_GREY), Integer(0, color=C_RED).scale(0.9))
@@ -176,9 +176,10 @@ class BSearchLesson(Lesson):
         code = Text("mid = (lo + hi + 1) // 2", font=MONO, font_size=26, color=C_BLUE).move_to([0, 2.9, 0])
         self.play(FadeIn(ax), FadeIn(code), run_time=0.8)
         band = Rectangle(width=ax.x(L) - ax.x(0) + ax.w, height=ax.w * 1.25, stroke_color=C_YELLOW, stroke_width=3)
+        LH = ax.w * 0.33 + 0.2   # lo/hi 标签抬到 mid 指针之上：贴着框顶时会被指针压住
         band.move_to([(ax.x(0) + ax.x(L)) / 2, ax.y, 0])
-        lo_l = MathTex("lo", color=C_YELLOW).scale(0.6).next_to(band, UP, buff=0.1).align_to(band, LEFT)
-        hi_l = MathTex("hi", color=C_YELLOW).scale(0.6).next_to(band, UP, buff=0.1).align_to(band, RIGHT)
+        lo_l = MathTex("lo", color=C_YELLOW).scale(0.6).next_to(band, UP, buff=LH).align_to(band, LEFT)
+        hi_l = MathTex("hi", color=C_YELLOW).scale(0.6).next_to(band, UP, buff=LH).align_to(band, RIGHT)
         self.play(Create(band), FadeIn(lo_l), FadeIn(hi_l), run_time=0.7)
         ptr = Triangle(color=WHITE).set_fill(WHITE, 1).scale(0.14).rotate(PI)
         log = VGroup()
@@ -203,8 +204,8 @@ class BSearchLesson(Lesson):
             upd = MathTex(rf"\mathrm{{lo}}={nlo}" if ok else rf"\mathrm{{hi}}={nhi}", color=C_YELLOW).scale(0.6)
             upd.next_to(row, RIGHT, buff=0.35)
             self.play(Transform(band, new_band), *[ax.cell(v).animate.set_fill(C_GREY, 0.25) for v in dead if v != mid],
-                      lo_l.animate.next_to(new_band, UP, buff=0.1).align_to(new_band, LEFT),
-                      hi_l.animate.next_to(new_band, UP, buff=0.1).align_to(new_band, RIGHT).shift(RIGHT * 0.3 * (nlo == nhi)),
+                      lo_l.animate.next_to(new_band, UP, buff=LH).align_to(new_band, LEFT),
+                      hi_l.animate.next_to(new_band, UP, buff=LH).align_to(new_band, RIGHT).shift(RIGHT * 0.3 * (nlo == nhi)),
                       FadeIn(upd), run_time=0.6)
             log.add(row, upd)
         self.wait_until(self.cue_start("相遇", self.now))
@@ -240,7 +241,7 @@ class BSearchLesson(Lesson):
         ptr = Triangle(color=WHITE).set_fill(WHITE, 1).scale(0.14).rotate(PI).next_to(lp[0], UP, buff=0.1)
         state = MathTex(r"\mathrm{lo}=4,\ \mathrm{hi}=5,\ \mathrm{mid}=4", color=C_GREY).scale(0.6).move_to([-3.4, -0.5, 0])
         self.play(FadeIn(lp), FadeIn(ptr), FadeIn(state), run_time=0.6)
-        loop = Arc(radius=0.55, start_angle=PI / 2, angle=1.7 * PI, color=C_RED, stroke_width=5).move_to([-3.4, -1.55, 0])
+        loop = Arc(radius=0.55, start_angle=PI / 2, angle=1.7 * PI, color=C_RED, stroke_width=5).move_to([-3.4, -1.35, 0])   # 抬高，底部口诀行要留空
         loop.add_tip(tip_length=0.18)
         cnt = VGroup(T("第", 22, C_GREY), Integer(1, color=C_RED).scale(0.7), T("轮", 22, C_GREY)).arrange(RIGHT, buff=0.1)
         cnt.next_to(loop, RIGHT, buff=0.3)
@@ -248,7 +249,7 @@ class BSearchLesson(Lesson):
         for k, (lo, hi, mid, ok) in enumerate(trail[1:], 2):
             self.play(Rotate(loop, angle=-2 * PI, about_point=loop.get_center()), Indicate(lp[0], color=C_GREEN),
                       cnt[1].animate.set_value(k), run_time=0.7)
-        dl = T("死循环", 30, C_RED).next_to(loop, DOWN, buff=0.2)
+        dl = T("死循环", 30, C_RED).next_to(cnt, RIGHT, buff=0.35)   # 圈下方要留给底部的口诀
         self.play(FadeIn(dl, scale=1.4), run_time=0.5)
         rp = pair(3.4, 4, 5)
         rptr = ptr.copy().next_to(rp[1], UP, buff=0.1)
@@ -256,12 +257,12 @@ class BSearchLesson(Lesson):
         self.play(FadeIn(right_t), FadeIn(rp), FadeIn(rptr), run_time=0.6)
         self.play(FadeIn(rstate), run_time=0.5)
         rdone = pair(3.4, 4, 4)
-        endt = T("区间收缩，结束", 26, C_GREEN).move_to([3.4, -1.55, 0])
+        endt = T("区间收缩，结束", 26, C_GREEN).move_to([3.4, -1.35, 0])
         self.play(Transform(rp, rdone), FadeOut(rptr), FadeIn(endt), run_time=0.8)
         self.wait_until(self.cue_start("记住一句话", self.now))
         rule = VGroup(VGroup(Text("lo = mid", font=MONO, font_size=26, color=C_YELLOW), T("→ 上取整", 26)).arrange(RIGHT, buff=0.3),
                       VGroup(Text("hi = mid", font=MONO, font_size=26, color=C_YELLOW), T("→ 下取整", 26)).arrange(RIGHT, buff=0.3))
-        rule.arrange(RIGHT, buff=1.2).move_to([0, -2.55, 0])
+        rule.arrange(RIGHT, buff=1.2).move_to([0, -2.7, 0])
         self.play(FadeIn(rule[0], shift=UP * 0.2), run_time=0.6)
         self.play(FadeIn(rule[1], shift=UP * 0.2), run_time=0.6)
         self.wait(max(0.1, self.left() - 0.6))

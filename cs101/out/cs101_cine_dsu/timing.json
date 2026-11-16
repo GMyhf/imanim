@@ -104,8 +104,8 @@
  },
  {
   "id": "weight",
-  "wav": "audio/weight-7cf9f75a5e94.wav",
-  "seconds": 25.584,
+  "wav": "audio/weight-e40e201484df.wav",
+  "seconds": 25.68,
   "cues": [
    {
     "start": 0.1,
@@ -124,7 +124,7 @@
    },
    {
     "start": 19.6125,
-    "end": 25.5125,
+    "end": 25.625,
     "text": "n 个元素最多翻 log 二 n 次，所以树高不超过 log 二 n。"
    }
   ]
@@ -158,8 +158,8 @@
  },
  {
   "id": "code",
-  "wav": "audio/code-0bd21fce56fc.wav",
-  "seconds": 23.664,
+  "wav": "audio/code-284ec3011aff.wav",
+  "seconds": 23.856,
   "cues": [
    {
     "start": 0.1,
@@ -168,17 +168,17 @@
    },
    {
     "start": 1.85,
-    "end": 10.4875,
+    "end": 10.675,
     "text": "find 写成迭代两趟：第一趟找到根，第二趟把路上每个结点直接指向根，n 很大时也不会爆栈。"
    },
    {
-    "start": 10.4875,
-    "end": 18.825,
+    "start": 10.675,
+    "end": 19.0125,
     "text": "合并先各自找根，根相同就返回 False；否则把小的挂到大的下面，更新大小，集合个数减一。"
    },
    {
-    "start": 18.825,
-    "end": 23.6,
+    "start": 19.0125,
+    "end": 23.7875,
     "text": "两条改进合起来，每次操作接近常数时间。"
    }
   ]

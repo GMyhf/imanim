@@ -5,22 +5,23 @@
   "voice": "zh-CN-YunxiNeural",
   "tts": "edge-tts",
   "quality": "fullhd",
-  "seconds": 212.37,
-  "speech_seconds": 200.66,
+  "seconds": 214.95,
+  "speech_seconds": 200.95,
   "beats": {
     "title": 0.0,
     "ops": 14.73,
     "forest": 33.82,
     "chain": 54.65,
     "weight": 73.52,
-    "compress": 100.07,
-    "code": 122.65,
-    "exam": 147.27,
-    "apps": 180.23,
-    "recap": 199.75
+    "compress": 100.15,
+    "code": 122.73,
+    "exam": 147.55,
+    "apps": 180.52,
+    "recap": 200.03
   },
   "subtitles": 38,
   "audit_issues": 0,
-  "size_mb": 15.48,
-  "wall_seconds": 241.0
+  "endcard": 211.85,
+  "size_mb": 15.63,
+  "wall_seconds": 326.2
 }

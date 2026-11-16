@@ -23,8 +23,8 @@
  },
  {
   "id": "define",
-  "wav": "audio/define-c27ed39afd2a.wav",
-  "seconds": 16.272,
+  "wav": "audio/define-df61fda0c326.wav",
+  "seconds": 16.248,
   "cues": [
    {
     "start": 0.1,
@@ -33,12 +33,12 @@
    },
    {
     "start": 3.7125,
-    "end": 12.125,
+    "end": 12.1,
     "text": "状态是 dp i j：第一个串的前 i 个字符，和第二个串的前 j 个字符，最长公共子序列的长度。"
    },
    {
-    "start": 12.125,
-    "end": 16.2125,
+    "start": 12.1,
+    "end": 16.1875,
     "text": "边界是第零行和第零列，全是零。"
    }
   ]
@@ -126,7 +126,7 @@
  },
  {
   "id": "edit",
-  "wav": "audio/edit-ce3510044e1d.wav",
+  "wav": "audio/edit-8c923bb1c54c.wav",
   "seconds": 15.912,
   "cues": [
    {
@@ -141,7 +141,7 @@
    },
    {
     "start": 8.125,
-    "end": 15.8625,
+    "end": 15.85,
     "text": "边界变了：第一列是 i，表示把前 i 个字符删光；第一行是 j，表示全靠插入。"
    }
   ]
@@ -202,22 +202,22 @@
  },
  {
   "id": "same",
-  "wav": "audio/same-3f7760888bca.wav",
-  "seconds": 17.28,
+  "wav": "audio/same-697cc9d7d76e.wav",
+  "seconds": 17.184,
   "cues": [
    {
     "start": 0.1,
-    "end": 8.0125,
+    "end": 7.9125,
     "text": "两道题是同一个框架：dp i j 定义在两个前缀上，末字符相同和不同，分两种转移。"
    },
    {
-    "start": 7.9625,
-    "end": 13.3875,
+    "start": 7.8625,
+    "end": 13.2875,
     "text": "掌握了最长公共子序列，编辑距离只是转移式换了个写法。"
    },
    {
-    "start": 13.3875,
-    "end": 17.225,
+    "start": 13.2875,
+    "end": 17.125,
     "text": "intention 变成 execution，要五步。"
    }
   ]

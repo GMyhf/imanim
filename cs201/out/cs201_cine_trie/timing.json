@@ -1,22 +1,22 @@
 [
  {
   "id": "title",
-  "wav": "audio/title-4a1ace6399ad.wav",
-  "seconds": 20.328,
+  "wav": "audio/title-07f04cdef528.wav",
+  "seconds": 20.424,
   "cues": [
    {
     "start": 0.1,
-    "end": 6.2625,
+    "end": 6.3625,
     "text": "在搜索框里敲下 a、n 两个字母，下面立刻弹出 and 和 ant。"
    },
    {
-    "start": 6.2125,
-    "end": 14.675,
+    "start": 6.3125,
+    "end": 14.775,
     "text": "要回答以 an 开头的有哪些词，散列表帮不上忙，它只认完整的关键字，只能把所有单词挨个看一遍。"
    },
    {
-    "start": 14.675,
-    "end": 20.2625,
+    "start": 14.775,
+    "end": 20.3625,
     "text": "这一集讲专门干这件事的结构：字典树，也叫前缀树。"
    }
   ]
@@ -126,8 +126,8 @@
  },
  {
   "id": "prefix",
-  "wav": "audio/prefix-add835fac361.wav",
-  "seconds": 19.656,
+  "wav": "audio/prefix-997e2de1ebff.wav",
+  "seconds": 19.488,
   "cues": [
    {
     "start": 0.1,
@@ -136,17 +136,17 @@
    },
    {
     "start": 3.025,
-    "end": 10.8625,
+    "end": 10.6875,
     "text": "先沿着 a、n 走到前缀的终点，这下面的每个单词都以 an 开头：and 和 ant。"
    },
    {
-    "start": 10.8625,
-    "end": 16.075,
+    "start": 10.6875,
+    "end": 15.9,
     "text": "孩子按字母顺序深度优先往下走，得到的天然就是字典序。"
    },
    {
-    "start": 16.075,
-    "end": 19.6,
+    "start": 15.9,
+    "end": 19.425,
     "text": "前缀 d 下面，是 dad 和 do。"
    }
   ]

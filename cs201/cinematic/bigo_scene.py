@@ -154,6 +154,7 @@ class BigOLesson(Lesson):
         d2 = Dot(ax.c2p(10, run[9]), color=C_GREEN)
         l1 = MathTex(str(naive[9]), color=C_YELLOW).scale(0.6).next_to(d1, UP, buff=0.12)
         l2 = MathTex(str(run[9]), color=C_GREEN).scale(0.6).next_to(d2, RIGHT, buff=0.15).shift(UP * 0.12)
+        l2.add_background_rectangle(color=BG, opacity=0.9, buff=0.05)   # 绿线从数字中间穿过，垫一块底色
         self.play(FadeIn(d1, scale=1.5), FadeIn(d2, scale=1.5), FadeIn(l1), FadeIn(l2), run_time=0.8)
         self.at("n 等于一千")
         big_n = D.prefix_naive(list(range(1000)))[1]

@@ -63,7 +63,8 @@ def schematic(labels, colors, center, size=0.9):
     target = sq[(1, 1)].get_center()
     arrows, tags = VGroup(), VGroup()
     for key, lab, col, side in zip(((0, 0), (0, 1), (1, 0)), labels, colors, (UL, UP, LEFT)):
-        a = Arrow(sq[key].get_center(), target, buff=size * 0.32, color=col, stroke_width=4,
+        # 箭头尖停在目标格的边或角上：伸进格内会压住中间的「(i,j)」
+        a = Arrow(sq[key].get_center(), target + side * size * 0.5, buff=0, color=col, stroke_width=4,
                   max_tip_length_to_length_ratio=0.3)
         arrows.add(a)
         tags.add(T(lab, 20, col).next_to(sq[key], side, buff=0.12))
@@ -189,8 +190,10 @@ class LCSLesson(Lesson):
         self.play(FadeOut(self.legend), run_time=0.4)
         ring = SurroundingRectangle(tb.cells[path[0]], color=WHITE, buff=0.03, stroke_width=4)
         self.play(Create(ring), run_time=0.4)
-        trail = VMobject(stroke_color=C_YELLOW, stroke_width=4).set_points_as_corners(
-            [tb.cells[p].get_center() for p in path])
+        trail = VMobject(stroke_color=C_YELLOW, stroke_width=4, stroke_opacity=0.6).set_points_as_corners(
+            [tb.cells[p].get_center() for p in path]).set_z_index(1)
+        for p in path:   # 回溯线穿过格子中心，数字压在线上面才读得出
+            tb.vals[p].set_z_index(2)
         got = VGroup()
         slots = [np.array([-5.0 + 0.6 * k, 1.0, 0]) for k in range(len(picks))]
         head = T("记下的字符（倒着读）", 22, C_GREY).move_to([-4.1, 1.7, 0])
@@ -277,8 +280,10 @@ class LCSLesson(Lesson):
         tb = self.et
         path, ops, steps = L.ed_back()
         ring = SurroundingRectangle(tb.cells[path[0]], color=WHITE, buff=0.03, stroke_width=4)
-        trail = VMobject(stroke_color=C_YELLOW, stroke_width=4).set_points_as_corners(
-            [tb.cells[p].get_center() for p in path])
+        trail = VMobject(stroke_color=C_YELLOW, stroke_width=4, stroke_opacity=0.6).set_points_as_corners(
+            [tb.cells[p].get_center() for p in path]).set_z_index(1)
+        for p in path:   # 回溯线穿过格子中心，数字压在线上面才读得出
+            tb.vals[p].set_z_index(2)
         self.play(Create(ring), run_time=0.3)
         self.play(Create(trail), MoveAlongPath(ring, trail.copy()), run_time=1.6)
         words = [letter(steps[0], 36)]

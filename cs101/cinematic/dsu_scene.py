@@ -247,7 +247,7 @@ class DSULesson(Lesson):
         n = D.CHAIN_N
         fo = Forest({k: k for k in range(n)}, r=0.21, cx=0, top=0.0, dx=0.95, tree_gap=0.0)
         self.play(FadeIn(fo), run_time=0.6)
-        title = T("朴素合并", 28, C_RED).move_to([-3.6, 3.2, 0])
+        title = T("朴素合并", 28, C_RED).move_to([-3.6, 3.45, 0])   # 链顶到 2.96，标题再抬一点别贴着
         self.play(FadeIn(title), run_time=0.3)
         lay = dict(cx=-3.6, top=2.75, dy=0.74, dx=0.9, tree_gap=0.6)
         step = max(0.45, min(0.9, (self.cue_start("查最底下", self.now + 6) - self.now) / (n - 1)))
@@ -269,7 +269,7 @@ class DSULesson(Lesson):
         na, gd = D.chain_vs_weighted()
         n = D.CHAIN_N
         self.play(self.chain[3].animate.set_opacity(0), run_time=0.3)
-        title = T("按大小合并", 28, C_GREEN).move_to([3.3, 3.2, 0])
+        title = T("按大小合并", 28, C_GREEN).move_to([3.3, 3.45, 0])
         fo = Forest({k: k for k in range(n)}, r=0.27, cx=3.3, top=-0.6, dx=0.78, tree_gap=0.0)
         self.play(FadeIn(title), FadeIn(fo), run_time=0.7)
         lay = dict(cx=3.3, top=1.4, dy=1.6, dx=0.78, tree_gap=0.6)
@@ -285,18 +285,18 @@ class DSULesson(Lesson):
         bars = VGroup()
         for i, v in enumerate((1, 2, 4, 8)):
             b = Rectangle(width=0.8, height=0.45 * v, stroke_width=0).set_fill(C_GREEN, 0.3 + 0.17 * i)
-            b.move_to([-3.0 + 1.6 * i, -1.6, 0], aligned_edge=DOWN)
+            b.move_to([-3.0 + 1.6 * i, -2.0, 0], aligned_edge=DOWN)   # 整组下移：最高那根上方的「×2」别顶到标题
             bars.add(VGroup(b, MathTex(str(v)).scale(0.7).next_to(b, UP, buff=0.1),
                             T(f"深度 {i}", 22, C_GREY).next_to(b, DOWN, buff=0.15)))
         arrows = VGroup(*[CurvedArrow(bars[i][1].get_top() + UP * 0.05, bars[i + 1][1].get_top() + UP * 0.05,
                                       angle=-PI / 3, color=C_GREY, stroke_width=2, tip_length=0.12) for i in range(3)])
         x2 = VGroup(*[MathTex(r"\times 2", color=C_YELLOW).scale(0.55).next_to(a, UP, buff=0.03) for a in arrows])
-        cap = T("深度每加一，所在集合至少翻一倍", 26).move_to([0, 2.9, 0])
+        cap = T("深度每加一，所在集合至少翻一倍", 26).move_to([0, 3.25, 0])
         self.play(FadeIn(cap), LaggedStart(*[FadeIn(b, shift=UP * 0.2) for b in bars], lag_ratio=0.3), run_time=1.6)
         self.play(LaggedStart(*[AnimationGroup(Create(a), FadeIn(x)) for a, x in zip(arrows, x2)], lag_ratio=0.3),
                   run_time=1.2)
         self.wait_until(self.cue_start("最多翻", self.now))
-        res = MathTex(r"\text{height}\le \log_2 n", color=C_GREEN).scale(1.1).move_to([3.9, 1.6, 0])
+        res = MathTex(r"\text{height}\le \log_2 n", color=C_GREEN).scale(1.1).move_to([4.6, 0.4, 0])   # 放到最高柱右下，别压「8」
         self.play(Write(res), run_time=1.0)
         self.wait(max(0.1, self.left() - 0.6))
         self.play(FadeOut(VGroup(bars, arrows, x2, cap, res)), run_time=0.6)
@@ -342,7 +342,7 @@ class DSULesson(Lesson):
 
         def mark(lines, key, txt, col):
             self.wait_until(self.cue_start(key, self.now))
-            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=0.04, stroke_width=2)
+            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=(0.1, 0.03), stroke_width=2)  # 左右留足、上下收紧：相邻两块高亮不叠边
             tag = T(txt, 22, col).next_to(code, RIGHT, buff=0.3).match_y(hl)
             self.play(Create(hl), FadeIn(tag, shift=LEFT * 0.2), run_time=0.6)
             tags.add(hl, tag)

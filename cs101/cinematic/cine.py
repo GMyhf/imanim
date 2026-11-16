@@ -146,7 +146,8 @@ class Lesson(MovingCameraScene):
 
     def finish(self):
         self._pad()
-        self.wait(0.8)
+        if not self._endcard():             # 有片尾卡时它的淡出就是收尾停顿
+            self.wait(0.8)
         audit = os.environ.get("CINE_AUDIT")
         if audit:
             Path(audit).write_text(json.dumps(getattr(self, "audit_log", []), ensure_ascii=False, indent=1),
@@ -155,6 +156,47 @@ class Lesson(MovingCameraScene):
         if out:
             Path(out).write_text(json.dumps({**self.marks, "_lead": LEAD, "_total": self.now}, indent=1),
                                  encoding="utf-8")
+
+    def _endcard(self):
+        """约 3 秒静默片尾卡：「下一支：<标题>」+ 系列网址。
+
+        make.py 经 CINE_ENDCARD 传 {"next": 标题或 null, "last": 是否本系列最后一支, "url": 系列网址}；
+        没设这个变量（直接用 manim 渲染场景）就不加。起点记进 marks 的 _endcard。
+        """
+        raw = os.environ.get("CINE_ENDCARD")
+        if not raw:
+            return False
+        info = json.loads(raw)
+        self.clear_subs()
+        self.cur = "_endcard"
+        self.marks["_endcard"] = self.now
+        frame = getattr(self.camera, "frame", None)
+        rest = [m for m in self.mobjects if m is not frame]
+        if rest:
+            self.play(*[FadeOut(m) for m in rest], run_time=0.5, audit=False)
+            self.remove(*rest)
+        if frame is not None:                       # 场景里推拉过镜头的，片尾卡回到正中
+            frame.move_to(ORIGIN).set(width=config.frame_width)
+        parts = []
+        if info.get("next"):
+            head, _, tail = info["next"].partition("：")
+            parts.append(T("下一支", 28, C_GREY))
+            parts.append(T(head, 56, C_YELLOW))
+            if tail:
+                parts.append(T(tail, 34, WHITE))
+        elif info.get("last"):
+            parts.append(T("本系列完", 56, C_YELLOW))
+            parts.append(T("回到目录，挑一支再看一遍", 30, C_GREY))
+        card = VGroup(*parts).arrange(DOWN, buff=0.32).move_to([0, 0.6, 0]) if parts else VGroup()
+        url = Text(info["url"], font=MONO, font_size=30, color=C_BLUE).move_to([0, -1.9 if parts else 0, 0])
+        rule = Line([-2.2, 0, 0], [2.2, 0, 0], color=C_GREY, stroke_width=1.5).next_to(url, UP, buff=0.35)
+        for m in (card, url):
+            if m.width > config.frame_width - 1.2:
+                m.scale_to_fit_width(config.frame_width - 1.2)
+        self.play(FadeIn(card, shift=UP * 0.2), Create(rule), FadeIn(url), run_time=0.7)
+        self.wait(1.5)
+        self.play(FadeOut(VGroup(card, rule, url)), run_time=0.4, audit=False)
+        return True
 
     # ------------------------------------------------------------ 画面自动检查
     def play(self, *args, audit: bool = True, **kwargs):

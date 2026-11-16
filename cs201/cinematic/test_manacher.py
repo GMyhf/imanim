@@ -61,7 +61,7 @@ class ManacherTest(unittest.TestCase):
             self.assertEqual(M.expand_count("a" * n), CountStr.reads // 2)
 
     def test_amortized(self):
-        """失败 ≤ 每个下标一次；边界复核 ≤ 每个下标一次；越过 R 的成功比较 ≤ R 的总推进。"""
+        """失败 ≤ 每个下标一次；成功的比较都越过 R，总数 ≤ R 的总推进。"""
         rng = random.Random(9)
         cases = ["a" * 80, M.DEMO] + ["".join(rng.choice("ab") for _ in range(rng.randrange(1, 60))) for _ in range(300)]
         for s in cases:
@@ -73,11 +73,10 @@ class ManacherTest(unittest.TestCase):
                 if st["case"] == "in":
                     self.assertEqual(len(st["cmps"]), 1)         # 第一种情况：只比一次且失败
                     self.assertFalse(st["cmps"][0][2])
-                for k, (_, r, eq) in enumerate(st["cmps"]):
-                    if eq and r > st["R"]:
+                for _, r, eq in st["cmps"]:
+                    if eq:
+                        self.assertGreater(r, st["R"])                  # 初值取到 R 为止（含 R），不再复核边界
                         beyond += 1
-                    elif eq:
-                        self.assertEqual((k, r, st["case"]), (0, st["R"], "edge"))   # 唯一的例外：边界上的复核
             self.assertLessEqual(beyond, tr["steps"][-1]["R2"])
             self.assertLessEqual(tr["cmps"], 3 * n)
 
@@ -87,8 +86,8 @@ class ManacherTest(unittest.TestCase):
         self.assertEqual(len(tr["t"]), 21)
         self.assertEqual((st[7]["case"], st[7]["p"], st[7]["R2"], st[7]["C2"]), ("out", 8, 14, 7))
         self.assertEqual((st[9]["case"], st[9]["mirror"], tr["p"][5], st[9]["p"], len(st[9]["cmps"])), ("in", 5, 2, 2, 1))
-        self.assertEqual((st[11]["case"], st[11]["mirror"], tr["p"][3], st[11]["R"] - 11, st[11]["init"]),
-                         ("edge", 3, 4, 3, 3))
+        self.assertEqual((st[11]["case"], st[11]["mirror"], tr["p"][3], st[11]["R"] - 11 + 1, st[11]["init"]),
+                         ("edge", 3, 4, 4, 4))
         self.assertEqual((st[11]["p"], st[11]["R"], st[11]["R2"]), (10, 14, 20))
         self.assertEqual(tr["answer"], "bacabacab")
         self.assertEqual(max(tr["p"]), 10)
@@ -97,12 +96,12 @@ class ManacherTest(unittest.TestCase):
         self.assertEqual(len(ab["t"]), 9)
         self.assertEqual((ab["t"][4], ab["p"][4] - 1), ("#", 4))
         self.assertEqual(M.grow_table()[0][:2], (10, 55))
-        self.assertEqual(M.grow_table()[-1], (80, 3240, 316))
+        self.assertEqual(M.grow_table()[-1], (80, 3240, 159))
         self.assertEqual(2 * 10 - 1, 19)
 
     def test_narration_numbers(self):
-        for w in ("五十五次", "三千二百四十次", "三百一十六次", "二十一格", "下标七", "下标十四", "下标九", "下标五",
-                  "下标十一", "下标三", "半径四", "只剩三格", "半径十", "从十四推到二十", "长度九", "九个字符"):
+        for w in ("五十五次", "三千二百四十次", "一百五十九次", "二十一格", "下标七", "下标十四", "下标九", "下标五",
+                  "下标十一", "下标三", "半径四", "正好四格", "先取四", "半径十", "从十四推到二十", "长度九", "九个字符"):
             self.assertIn(w, NARR)
 
 

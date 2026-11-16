@@ -23,11 +23,11 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-OUT = HERE.parent.parent / "out"
+OUT = HERE.parent / "out"
 MODEL = "mlx-community/whisper-large-v3-turbo"
 
 sys.path.insert(0, str(HERE))
-from make import LESSONS, PREFIX  # noqa: E402
+from make import LESSONS, PREFIX, speakable  # noqa: E402
 
 if len(sys.argv) > 2 and sys.argv[1] == "--course":     # 别的课程：读那门课的 make.py 拿片目、目录与前缀
     import importlib.util
@@ -88,7 +88,7 @@ def check(lesson: str) -> dict:
     beats = []
     for b in script["beats"]:
         heard = transcribe(out / timing[b["id"]]["wav"])
-        ref, hyp = tokens(b["narration"]), tokens(heard)
+        ref, hyp = tokens(speakable(b["narration"])), tokens(heard)   # 对照送 TTS 的文本（读音词典之后）
         sm = difflib.SequenceMatcher(None, ref, hyp, autojunk=False)
         diffs = []
         for op, i1, i2, j1, j2 in sm.get_opcodes():

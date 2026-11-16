@@ -71,7 +71,8 @@ class SortLesson(Lesson):
         sub = MathTex(r"n^2", r"\;\longrightarrow\;", r"n\log n").scale(1.1).next_to(title, DOWN, buff=0.25)
         sub[0].set_color(C_RED)
         sub[2].set_color(C_GREEN)
-        self.play(FadeOut(q), Write(title), FadeIn(sub, shift=UP * 0.2), run_time=1.2)
+        # 排好序后右边几根柱子比副标题还高，柱子压暗当背景，标题才不跟柱子打架
+        self.play(FadeOut(q), Write(title), FadeIn(sub, shift=UP * 0.2), bars.animate.set_opacity(0.3), run_time=1.2)
         self.wait(max(0.1, self.left() - 0.6))
         self.play(FadeOut(VGroup(bars, title, sub)), run_time=0.6)
 

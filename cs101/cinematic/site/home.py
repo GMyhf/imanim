@@ -13,17 +13,17 @@ COURSES = {"cs101": ROOT / "cs101", "cs201": ROOT / "cs201"}
 
 def stats(course: Path) -> str:
     data = json.loads((course / "cinematic" / "site" / "films.json").read_text(encoding="utf-8"))
-    n, total, weeks, special = 0, 0.0, [], False
+    n, total, weeks, special = 0, 0.0, [], []
     for w in data["weeks"]:
         if "label" in w:
-            special = True
+            special.append(w["label"])         # 春季专题、例题精讲等不按周次的节
         else:
             weeks.append(w["week"])
         for f in w["films"]:
             n += 1
             total += json.loads((course / "out" / f["dir"] / "sidecar.json").read_text(encoding="utf-8"))["seconds"]
     s = int(round(total))
-    span = f"第 {min(weeks)}–{max(weeks)} 周" + ("与春季专题" if special else "")
+    span = f"第 {min(weeks)}–{max(weeks)} 周" + ("与" + "、".join(special) if special else "")
     return f"<b>{n}</b> 支 · 总时长 <b>{s // 60}:{s % 60:02d}</b> · {span}"
 
 

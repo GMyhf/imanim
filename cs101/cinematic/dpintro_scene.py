@@ -233,7 +233,7 @@ class DPIntroLesson(Lesson):
         self.play(GrowArrow(a13), GrowArrow(a18), FadeIn(t13), FadeIn(t18), run_time=1.0)
         self.wait_until(self.cue_start("朴素状态只留下", self.now))
         keep = T("只留最大", 22, C_GREEN).next_to(cells[(3, 1)][0], DOWN, buff=0.15)
-        cross = Cross(VGroup(cells[(2, 0)], t13), stroke_color=C_RED, stroke_width=5).scale(0.9)
+        cross = Cross(cells[(2, 0)], stroke_color=C_RED, stroke_width=5).scale(0.9)   # 只划掉 13，旁边的「奇」要留着能读
         self.play(FadeIn(keep), Create(cross), a13.animate.set_opacity(0.3), run_time=1.0)
         self.wait_until(self.cue_start("恰好是十三加四", self.now))
         odd_path = next(pc for pc, s in D.all_paths(D.TRI) if s % 2)

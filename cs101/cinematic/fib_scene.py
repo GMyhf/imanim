@@ -205,7 +205,7 @@ class FibLesson(Lesson):
             same = [m for nd, m in zip(self.nodes, self.mobs) if nd.n == k]
             self.play(LaggedStart(*[Circumscribe(m, Circle, color=NCOLOR[k], buff=0.08) for m in same],
                                   lag_ratio=0.15), FadeIn(row, shift=LEFT * 0.3), run_time=step)
-        term = T("重叠子问题", 36, C_YELLOW).move_to([5.6, 1.72, 0])
+        term = T("重叠子问题", 30, C_YELLOW).move_to([5.6, 1.78, 0])   # 36 号字左端会碰到右侧的 fib(4) 结点
         self.play(Write(term), run_time=1.2)
         self.tally = VGroup(tally, term)
 

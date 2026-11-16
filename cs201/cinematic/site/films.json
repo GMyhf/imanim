@@ -17,7 +17,20 @@
      "dir": "cs201_cine_bigo",
      "title": "渐进分析：只看 n 变大以后",
      "desc": "前缀和的两种写法逐条数赋值，n=1000 时 1002001 对 2002；多项式各项占比随 n 变化；大 O 取 c=2、N=110 的真实交点，大 Θ 夹在窄带里；嵌套循环未必是平方；顺序检索的最好、最坏、平均情况；n=1000 时立方要 16.7 分钟、指数要天文数字年；黄页加散列索引的时空折衷。",
-     "src": "第 1 周 ADT 与复杂度 3.1–3.3 节"
+     "src": "第 1 周 ADT 与复杂度 3.1–3.3 节",
+     "chapters": {
+      "title": "开场",
+      "count": "数基本操作",
+      "curves": "真实计数",
+      "lower": "只看最高次",
+      "bigo": "大O",
+      "theta": "大Θ",
+      "nest": "嵌套循环",
+      "cases": "最好最坏",
+      "growth": "增长率",
+      "tradeoff": "时空折衷"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202609_DSA_01_ADT_Floyd_Complexity.md#31-%E6%B8%90%E8%BF%9B%E5%88%86%E6%9E%90%E6%96%B9%E6%B3%95"
     }
    ]
   },
@@ -30,7 +43,18 @@
      "dir": "cs201_cine_linked",
      "title": "链表：三根指针的舞蹈",
      "desc": "插入时数组挪数据、链表改链接；哨兵合并两个有序链表；三指针反转逐轮掉头，以及为什么必须先存后继；快慢指针找中点；Floyd 判圈与「回表头再同步走」找环入口的路程方程。",
-     "src": "第 2 周 线性表 附录 A（LeetCode 21、206、876、141、142）"
+     "src": "第 2 周 线性表 附录 A（LeetCode 21、206、876、141、142）",
+     "chapters": {
+      "title": "开场",
+      "merge": "合并有序链表",
+      "reverse": "反转链表",
+      "revrun": "反转演示",
+      "middle": "找中点",
+      "cycle": "判环",
+      "entry": "环入口",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202609_DSA_02_Linear_List.md#%E9%99%84%E5%BD%95a-%E7%BC%96%E7%A8%8B%E7%BB%83%E4%B9%A0"
     }
    ]
   },
@@ -43,7 +67,38 @@
      "dir": "cs201_cine_infix",
      "title": "中缀转后缀：调度场算法",
      "desc": "铁路编组站比喻：数字开上输出轨道，运算符拐进侧线（栈）；五条规则逐条点亮；原书 23+(34×45)÷(5+6+7) 逐个记号转换；1−2−3 说明「不低于」为何要弹栈；后缀求值得 108，先弹出的是右操作数。",
-     "src": "第 3 周 栈与队列 1.4–1.5（OpenJudge 24591、24588）"
+     "src": "第 3 周 栈与队列 1.4–1.5（OpenJudge 24591、24588）",
+     "chapters": {
+      "title": "开场",
+      "yard": "调度场",
+      "rules": "五条规则",
+      "simple": "两个小例",
+      "run1": "原例上",
+      "run2": "原例下",
+      "assoc": "结合性",
+      "eval": "后缀求值",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202609_DSA_03_Stack_Queue.md#15-%E4%B8%AD%E7%BC%80%E8%A1%A8%E8%BE%BE%E5%BC%8F%E5%88%B0%E5%90%8E%E7%BC%80%E8%A1%A8%E8%BE%BE%E5%BC%8F%E7%9A%84%E8%BD%AC%E6%8D%A2"
+    },
+    {
+     "id": "slidemax",
+     "dir": "cs201_cine_slidemax",
+     "title": "例题精讲：滑动窗口最大值",
+     "desc": "机考高频题精讲：读题、暴力为什么超时、「新来的数淘汰前面不比它大的」、存下标的单调队列在样例上走一遍、代码两个 while、每个下标进出各一次所以是线性时间；结尾给同类题。",
+     "src": "2026spring 线性结构 5.3–5.4 · LeetCode 239 · OpenJudge 26978",
+     "chapters": {
+      "title": "开场",
+      "read": "读题",
+      "brute": "暴力为什么超时",
+      "observe": "关键观察",
+      "model": "单调队列",
+      "run": "样例走一遍",
+      "code": "代码",
+      "cost": "复杂度",
+      "recap": "回顾与同类题"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/2026spring-cs201/202603_DSA_W04-5.5_Complexity_LinearStructures.md#54-%E5%8D%95%E8%B0%83%E9%98%9F%E5%88%97"
     }
    ]
   },
@@ -56,7 +111,20 @@
      "dir": "cs201_cine_kmp",
      "title": "KMP：目标指针不回头",
      "desc": "朴素匹配为什么会让目标指针后退；用「最长相等真前后缀」表让模式一次右移多位；求这张表就是模式和自己匹配；两条指针曲线说明比较次数不超过目标长度的两倍；用表的最后一格求最小循环节。",
-     "src": "第 4 周 字符串 3.1–3.4 节 · 2026spring 第 3 周 KMP · OpenJudge 02406"
+     "src": "第 4 周 字符串 3.1–3.4 节 · 2026spring 第 3 周 KMP · OpenJudge 02406",
+     "chapters": {
+      "title": "开场",
+      "naive": "朴素匹配",
+      "waste": "浪费在哪",
+      "lps": "前后缀表",
+      "build": "建表",
+      "search": "匹配",
+      "all": "找全部",
+      "linear": "线性",
+      "period": "循环节",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202609_DSA_04_String.md#33-kmp-%E6%A8%A1%E5%BC%8F%E5%8C%B9%E9%85%8D%E7%AE%97%E6%B3%95"
     }
    ]
   },
@@ -69,28 +137,78 @@
      "dir": "cs201_cine_trav",
      "title": "二叉树周游：同一圈轮廓，三个时机",
      "desc": "一个点贴着树的轮廓绕一圈，每个结点经过三次，记录时机不同就得到前序、中序、后序；结点竖直落到地面读出来就是中序；表达式树的前缀、后缀式；层次周游靠队列；由中序加后序重建整棵树，以及为什么少了中序就不唯一。",
-     "src": "第 5 周 二叉树 2.2–2.3 节（图 5.5、5.6）· OpenJudge 24750"
+     "src": "第 5 周 二叉树 2.2–2.3 节（图 5.5、5.6）· OpenJudge 24750",
+     "chapters": {
+      "title": "开场",
+      "three": "三种次序",
+      "contour": "绕轮廓",
+      "flatten": "落到地面",
+      "code": "代码",
+      "expr": "表达式树",
+      "level": "层次周游",
+      "rebuild": "重建",
+      "unique": "唯一性",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_05_Binary_Tree.md#22-%E6%B7%B1%E5%BA%A6%E4%BC%98%E5%85%88%E5%91%A8%E6%B8%B8%E4%BA%8C%E5%8F%89%E6%A0%91"
     },
     {
      "id": "bst",
      "dir": "cs201_cine_bst",
      "title": "二叉搜索树：左小右大，再加一点平衡",
      "desc": "依次插入讲义图 5.11 的 11 个数；找 53 比较 4 次，每比一次扔掉一棵子树；中序就是升序；三种删除（两个孩子时用中序前驱顶替）；1 到 7 顺序插入退化成 7 层的链，插进 AVL 树转 4 次后只剩 3 层；LR 型要转两次。",
-     "src": "第 5 周 二叉树 第 4 节（图 5.11–5.13）· 2026spring 树讲义 AVL · OpenJudge 22275"
+     "src": "第 5 周 二叉树 第 4 节（图 5.11–5.13）· 2026spring 树讲义 AVL · OpenJudge 22275",
+     "chapters": {
+      "title": "开场",
+      "build": "建树",
+      "search": "查找",
+      "inorder": "中序升序",
+      "del1": "删叶子",
+      "del2": "删双孩子",
+      "chain": "退化成链",
+      "avl": "AVL",
+      "lr": "LR型",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_05_Binary_Tree.md#4-%E4%BA%8C%E5%8F%89%E6%90%9C%E7%B4%A2%E6%A0%91"
     },
     {
      "id": "heap",
      "dir": "cs201_cine_heap",
      "title": "堆：一棵藏在数组里的树",
      "desc": "同一份数据画成数组和完全二叉树，每次交换两边同时换位；插入 13 上浮、取走堆顶后下沉（必须换较小的孩子）、八个数自底向上建堆；在 15 个结点的满树上逐层数代价，下沉 11 对上浮 34，说明建堆为什么是线性时间。",
-     "src": "第 5 周 二叉树 5.1–5.3 节（图 5.14–5.17）· OpenJudge 04078"
+     "src": "第 5 周 二叉树 5.1–5.3 节（图 5.14–5.17）· OpenJudge 04078",
+     "chapters": {
+      "title": "开场",
+      "array": "数组即树",
+      "order": "堆序",
+      "insert": "插入上浮",
+      "remove": "取最小",
+      "build": "建堆",
+      "cost": "建堆代价",
+      "compare": "逐个插入",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_05_Binary_Tree.md#51-%E6%9C%80%E5%B0%8F%E5%A0%86"
     },
     {
      "id": "huffman",
      "dir": "cs201_cine_huffman",
      "title": "Huffman 编码：让常用的字符更短",
      "desc": "从「011 有两种读法」引出前缀码；同样四个权的三棵树，带权路径长度 30、31、29；七个字符的森林每次合并最小的两棵；左 0 右 1 读出码表，总长 195 位，等长编码要 228 位；最后沿树把一串比特译成 cafe。",
-     "src": "第 5 周 二叉树 6.1–6.2 节（图 5.18–5.20）· OpenJudge 04080"
+     "src": "第 5 周 二叉树 6.1–6.2 节（图 5.18–5.20）· OpenJudge 04080",
+     "chapters": {
+      "title": "开场",
+      "prefix": "前缀码",
+      "wpl": "带权路径",
+      "build1": "建树上",
+      "build2": "建树下",
+      "code": "读出编码",
+      "total": "总长",
+      "decode": "译码",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_05_Binary_Tree.md#61-%E5%B8%A6%E6%9D%83%E8%B7%AF%E5%BE%84%E9%95%BF%E5%BA%A6%E4%B8%8E-huffman-%E6%A0%91%E7%9A%84%E6%9E%84%E9%80%A0"
     }
    ]
   },
@@ -103,7 +221,20 @@
      "dir": "cs201_cine_forest",
      "title": "树与森林：左孩子，右兄弟",
      "desc": "孩子个数不定的树只留两个指针；讲义图 6.5 的森林经连线、切线、旋转 45° 变成二叉树（左枝父子、右枝兄弟）；先根等于前序、后根等于中序，层次次序却对不上；最后用栈从带度数的后根次序把森林原样还原。",
-     "src": "第 6 周 树 1.2、1.4、3.3 节（图 6.3–6.5、6.16）· OpenJudge 24729"
+     "src": "第 6 周 树 1.2、1.4、3.3 节（图 6.3–6.5、6.16）· OpenJudge 24729",
+     "chapters": {
+      "title": "开场",
+      "forest": "一片森林",
+      "connect": "连线",
+      "cut": "切线",
+      "rotate": "旋转",
+      "pre": "先根",
+      "post": "后根",
+      "level": "层次",
+      "degree": "度数表示",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_06_Tree.md#12-%E6%A3%AE%E6%9E%97%E4%B8%8E%E4%BA%8C%E5%8F%89%E6%A0%91%E7%9A%84%E7%AD%89%E4%BB%B7%E8%BD%AC%E6%8D%A2"
     }
    ]
   },
@@ -116,42 +247,118 @@
      "dir": "cs201_cine_topo",
      "title": "拓扑排序：先修课怎么排",
      "desc": "课程先修关系图上按真实执行轨迹跑卡恩算法（入度、队列、出队减入度）；输出摆成一行，所有边都朝右，拓扑序不唯一；加一条反向边后七门课永远卡住，顺带判环；深度优先按结束顺序倒排得到另一种拓扑序，并讲清为什么倒过来就对。",
-     "src": "第 7 周 图 4.3–4.5 节（图 7.17 课程先修关系）· sunnywhy 403"
+     "src": "第 7 周 图 4.3–4.5 节（图 7.17 课程先修关系）· sunnywhy 403",
+     "chapters": {
+      "title": "开场",
+      "dag": "课程图",
+      "indeg": "入度",
+      "code": "卡恩算法",
+      "run": "跑一遍",
+      "line": "排成一行",
+      "cycle": "有环",
+      "dfs": "深搜做法",
+      "why": "为什么对",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_07_Graph.md#43-%E6%8B%93%E6%89%91%E6%8E%92%E5%BA%8F"
     },
     {
      "id": "scc",
      "dir": "cs201_cine_scc",
      "title": "强连通分量：两遍深度优先搜索",
      "desc": "讲义 8 点 12 边的例图分成三块，缩点后必是有向无环图；第一遍深度优先记发现与结束时间，回边说明有环；每块最大结束时间 16、12、10，栈顶落在源头块；把边全部反过来，第二遍每次被困在一块里；应用：受欢迎的奶牛。",
-     "src": "第 7 周 图 4.1、4.6 节（Kosaraju）· 2026spring 图讲义 DFS · OpenJudge 02186"
+     "src": "第 7 周 图 4.1、4.6 节（Kosaraju）· 2026spring 图讲义 DFS · OpenJudge 02186",
+     "chapters": {
+      "title": "开场",
+      "graph": "示例图",
+      "condense": "缩点",
+      "dfs1": "第一遍搜索",
+      "finish": "结束时间",
+      "transpose": "反图",
+      "dfs2": "第二遍搜索",
+      "code": "代码",
+      "cows": "受欢迎的奶牛",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_07_Graph.md#46-%E5%BC%BA%E8%BF%9E%E9%80%9A%E5%88%86%E9%87%8F"
     },
     {
      "id": "aoe",
      "dir": "cs201_cine_aoe",
      "title": "关键路径：一天也拖不得的活动",
      "desc": "6 事件 8 活动的 AOE 网，最长路径定工期 8；正向按拓扑序求最早时间、反向求最迟时间；机动时间为零的活动连成关键路径；拖一天非关键活动会吃掉同一路上的机动时间；缩短非关键活动工期不变，关键活动缩两天工期只降到 7。",
-     "src": "第 7 周 图 4.7 节（AOE 网）· sunnywhy 404、406"
+     "src": "第 7 周 图 4.7 节（AOE 网）· sunnywhy 404、406",
+     "chapters": {
+      "title": "开场",
+      "net": "AOE网",
+      "longest": "最长路径",
+      "ve": "最早时间",
+      "vl": "最迟时间",
+      "slack": "机动时间",
+      "share": "机动共用",
+      "shorten": "缩短工期",
+      "code": "代码",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_07_Graph.md#47-%E5%85%B3%E9%94%AE%E8%B7%AF%E5%BE%84aoe-%E7%BD%91"
     },
     {
      "id": "floyd",
      "dir": "cs201_cine_floyd",
      "title": "Floyd：一次算出所有点对",
      "desc": "用第 1 周「股市的传言」五个经纪人：图变成相邻矩阵；一次放开一个中转点，三轮真实更新里 9 被接着用成 17（动态规划）；小反例说明中转点必须在最外层；每行取最大值选出 B3、10 个时间单位；与 n 次 Dijkstra 对比。",
-     "src": "第 1 周 2.1–2.2 节「股市的传言」· 第 7 周 图 5.2 节（图 7.20、7.21）"
+     "src": "第 1 周 2.1–2.2 节「股市的传言」· 第 7 周 图 5.2 节（图 7.20、7.21）",
+     "chapters": {
+      "title": "开场",
+      "problem": "股市传言",
+      "matrix": "相邻矩阵",
+      "idea": "中转点",
+      "code": "三重循环",
+      "run": "跑一遍",
+      "order": "循环次序",
+      "answer": "答案",
+      "compare": "复杂度",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_07_Graph.md#52-%E6%AF%8F%E5%AF%B9%E9%A1%B6%E7%82%B9%E4%B9%8B%E9%97%B4%E7%9A%84%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84floyd"
     },
     {
      "id": "bford",
      "dir": "cs201_cine_bford",
      "title": "Bellman-Ford：负权边与负环",
      "desc": "四点小图上 Dijkstra 遇负权边算错；各边统一加常数也救不了；按讲义边序逐轮松弛，第 3 轮无改动提前结束；第 k 轮已不劣于「至多 k 条边」的最短路；加一条负边形成总权 −5 的环，第 4 轮仍能松弛即判出负环；队列优化只检查 5 次边；最后对比 Dijkstra、Bellman-Ford、Floyd。",
-     "src": "第 7 周 图 5.3 节 · OpenJudge 01860"
+     "src": "第 7 周 图 5.3 节 · OpenJudge 01860",
+     "chapters": {
+      "title": "开场",
+      "wrong": "迪杰斯特拉失效",
+      "shift": "整体加权",
+      "idea": "逐轮松弛",
+      "rounds": "按轮执行",
+      "order": "边序影响",
+      "why": "为什么够",
+      "negcycle": "负环",
+      "spfa": "队列优化"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_07_Graph.md#53-%E8%B4%9F%E6%9D%83%E8%BE%B9bellman-ford"
     },
     {
      "id": "mst",
      "dir": "cs201_cine_mst",
      "title": "最小生成树：一棵树和一片森林",
      "desc": "切分性质与反证（换掉一条跨界边，总权 40 降到 38）；Prim 从 v0 一棵树长出去，跟着 distance 表逐步更新；Kruskal 按权排序、用并查集判环，中途是一片森林；两种算法选出同一组边，总权都是 38；三点反例说明最短路树不等于最小生成树。",
-     "src": "第 7 周 图 第 6 节（图 7.23–7.25、6.3 节）· OpenJudge 01258"
+     "src": "第 7 周 图 第 6 节（图 7.23–7.25、6.3 节）· OpenJudge 01258",
+     "chapters": {
+      "title": "开场",
+      "problem": "生成树",
+      "cut": "切分性质",
+      "prim": "Prim",
+      "code": "代码",
+      "kruskal": "Kruskal",
+      "same": "结果相同",
+      "spt": "最短路树",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202610_DSA_07_Graph.md#6-%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91"
     }
    ]
   },
@@ -164,14 +371,37 @@
      "dir": "cs201_cine_qsort",
      "title": "快速排序：力气花在分上",
      "desc": "讲义成对交换分割原样插桩，左右指针停靠、交换、基准归位逐步演示；递归树就是一棵二叉搜索树；有序输入退化成链（9 个数比较 44 次；1000 个约 50 万次，递归 1000 层）；随机基准把递归压到 25 层；与归并对比「力气花在分还是合」。",
-     "src": "第 8 周 排序 5.1–5.2、5.4、5.6 节"
+     "src": "第 8 周 排序 5.1–5.2、5.4、5.6 节",
+     "chapters": {
+      "title": "开场",
+      "idea": "分割思想",
+      "partition": "原地分割",
+      "tree": "递归树",
+      "cost": "代价",
+      "worst": "最坏情况",
+      "random": "随机基准",
+      "merge": "对比归并",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202611_DSA_08_sorting_algorithms.md#5-%E5%BF%AB%E9%80%9F%E6%8E%92%E5%BA%8F"
     },
     {
      "id": "radix",
      "dir": "cs201_cine_radix",
      "title": "分配排序：不比较，直接算位置",
      "desc": "三个数的判定树至少六片叶子，说明比较排序逃不开 n log n；计数排序把数记进格子再写回，稳定版用前缀和定位、从后往前放；基数排序按个、十、百位三趟分桶收集；桶若后进先出，百位那趟就把顺序整个倒过来；代价 d(n+b)，三十二位整数按字节拆只要四趟。",
-     "src": "第 8 周 排序 7.1、7.3 节 · 10.3 节 比较排序的下界"
+     "src": "第 8 周 排序 7.1、7.3 节 · 10.3 节 比较排序的下界",
+     "chapters": {
+      "title": "开场",
+      "bound": "比较下界",
+      "count": "计数排序",
+      "stable": "稳定",
+      "lsd": "基数排序",
+      "why": "为何稳定",
+      "cost": "代价",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/202611_DSA_08_sorting_algorithms.md#7-%E5%88%86%E9%85%8D%E6%8E%92%E5%BA%8F%E9%9D%9E%E6%AF%94%E8%BE%83%E6%8E%92%E5%BA%8F"
     }
    ]
   },
@@ -186,28 +416,77 @@
      "dir": "cs201_cine_hash",
      "title": "散列表：把关键字算成地址",
      "desc": "除留余数法把关键字直接算成地址；线性探测时连续占用的槽连成一块，下一个关键字落进同一块的概率是 10/11；查找走同一条路；二次探测把这一块打散；拉链法；平均比较次数随装填因子增长，所以要扩表重新散列。",
-     "src": "2026spring 散列表 1.2–1.5 节 · 练习 17968、17975 · dsa-modernization 10.3"
+     "src": "2026spring 散列表 1.2–1.5 节 · 练习 17968、17975 · dsa-modernization 10.3",
+     "chapters": {
+      "title": "开场",
+      "modfn": "除留余数",
+      "collide": "冲突",
+      "cluster": "聚集",
+      "lookup": "查找",
+      "quad": "二次探测",
+      "chain": "拉链法",
+      "load": "装填因子",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/2026spring-cs201/20250520_HashTable.md#13-%E5%A4%84%E7%90%86%E5%86%B2%E7%AA%81%E7%9A%84%E6%96%B9%E6%B3%95"
     },
     {
      "id": "trie",
      "dir": "cs201_cine_trie",
      "title": "字典树：一个字母走一步",
      "desc": "搜索框敲下 an 就弹出 and、ant，散列表做不到；六个词逐个插入，公共前缀共用；计数标记单词结尾；查 ant 不论词典多大都走三步；前缀补全天然是字典序；442 格只用了 16 格；删除时从叶子往上拆到分叉为止。",
-     "src": "2026spring 第 6–8 周 树讲义 附录 B 前缀树 · LeetCode 2452"
+     "src": "2026spring 第 6–8 周 树讲义 附录 B 前缀树 · LeetCode 2452",
+     "chapters": {
+      "title": "开场",
+      "build": "插入",
+      "mark": "结尾计数",
+      "search": "查找",
+      "cost": "代价",
+      "prefix": "前缀查询",
+      "memory": "空间",
+      "delete": "删除",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/2026spring-cs201/202604_DSA_W06-08_Tree.md#b-%E5%89%8D%E7%BC%80%E6%A0%91trie--%E5%AD%97%E5%85%B8%E6%A0%91%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90"
     },
     {
      "id": "bit",
      "dir": "cs201_cine_bit",
      "title": "树状数组：最低位的一",
      "desc": "原数组和前缀和总有一头是线性；用 x & -x 取出最低位的一，每格只管一段长度为 lowbit 的区间，叠成一棵树；查询沿 i -= lowbit 往下跳，修改沿 i += lowbit 往上跳，各走对数步；最后用离散化加从左往右扫描，数出蚂蚁越野跑的 7 次赶超。",
-     "src": "2026spring 第 2 周 树状数组 第 3 节与附录 A（LeetCode 307、OpenJudge 20018）"
+     "src": "2026spring 第 2 周 树状数组 第 3 节与附录 A（LeetCode 307、OpenJudge 20018）",
+     "chapters": {
+      "title": "开场",
+      "dilemma": "两难",
+      "lowbit": "lowbit",
+      "cover": "每格管辖",
+      "query": "查询",
+      "update": "修改",
+      "cost": "代价",
+      "ants": "蚂蚁越野跑",
+      "scan": "扫描计数",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/2026spring-cs201/202603_DSA_W02_BIT_Fenwick.md#3-%E5%8A%A8%E6%80%81%E5%89%8D%E7%BC%80%E5%92%8C%E6%A0%91%E7%8A%B6%E6%95%B0%E7%BB%84bit"
     },
     {
      "id": "manacher",
      "dir": "cs201_cine_manacher",
      "title": "Manacher：照镜子找回文",
      "desc": "中心扩展在全 a 串上平方增长；插井号让回文都变成奇数长度；维护最右边界 R 和中心 C，镜像在里面就直接抄，碰到边界从 R 往外接着比；R 只增不减，所以是线性的，八十个 a 只比 316 次。",
-     "src": "2026spring LC_top-100-liked M5 · 第 3 周讲义附录 B · LeetCode 5"
+     "src": "2026spring LC_top-100-liked M5 · 第 3 周讲义附录 B · LeetCode 5",
+     "chapters": {
+      "title": "开场",
+      "expand": "中心扩展",
+      "sharp": "插井号",
+      "mirror": "镜像",
+      "inside": "完整在内",
+      "edge": "碰到边界",
+      "run": "跑一遍",
+      "linear": "线性",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs201/blob/main/2026spring-cs201/LC_top-100-liked.md#m5-longest-palindromic-substring%E6%9C%80%E9%95%BF%E5%9B%9E%E6%96%87%E5%AD%90%E4%B8%B2"
     }
    ]
   }

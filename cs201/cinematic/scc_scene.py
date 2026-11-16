@@ -410,8 +410,13 @@ class SCCLesson(Lesson):
         ln = code.code_lines
 
         def band(i0, i1, col):
+            # 上下边放在相邻两行的行距正中：紧贴字形的 SurroundingRectangle 会压到上一行的注释和下一行的字
             g = VGroup(*ln[i0:i1 + 1])
-            return SurroundingRectangle(g, color=col, buff=0.06, stroke_width=2.5).set_fill(col, 0.1)
+            top = (g.get_top()[1] + ln[i0 - 1].get_bottom()[1]) / 2 if i0 > 0 else g.get_top()[1] + 0.06
+            bot = (g.get_bottom()[1] + ln[i1 + 1].get_top()[1]) / 2 if i1 + 1 < len(ln) else g.get_bottom()[1] - 0.06
+            left, right = g.get_left()[0] - 0.08, g.get_right()[0] + 0.08
+            return Rectangle(width=right - left, height=top - bot, color=col, stroke_width=2.5).set_fill(col, 0.1).move_to(
+                [(left + right) / 2, (top + bot) / 2, 0])
         self.wait_key("第一个在原图上走")
         b1 = band(0, 5, C_GREEN)
         self.play(Create(b1), run_time=0.6)

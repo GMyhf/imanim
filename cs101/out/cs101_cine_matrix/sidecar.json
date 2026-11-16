@@ -1,0 +1,24 @@
+{
+  "lesson": "matrix",
+  "title": "矩阵：补一圈零，转一个弯",
+  "source": "计算概论（B）2026fall · 第6周 矩阵 1.1–1.3 节 P12–P17 · OpenJudge M12560 · M18106",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 188.93,
+  "speech_seconds": 177.84,
+  "beats": {
+    "title": 0.0,
+    "trap": 15.18,
+    "pad": 42.35,
+    "life": 79.95,
+    "rotate": 111.7,
+    "spiral": 136.8,
+    "recap": 173.73
+  },
+  "subtitles": 38,
+  "audit_issues": 0,
+  "endcard": 185.83,
+  "size_mb": 11.56,
+  "wall_seconds": 214.5
+}

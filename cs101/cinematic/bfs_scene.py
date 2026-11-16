@@ -122,7 +122,8 @@ class BFSLesson(Lesson):
 
         def rule(lines, key, txt, col, k):
             self.wait_until(self.cue_start(key, self.now))
-            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=0.04, stroke_width=2)
+            # 每行单独框、留足边距：合成一个框会把中间不相干的 while 行也框进去，左边框还压着行首字母
+            hl = VGroup(*[SurroundingRectangle(ln[i], color=col, buff=(0.1, 0.03), stroke_width=2) for i in lines])
             tag = VGroup(T(txt[0], 24, col), T(txt[1], 20, C_GREY)).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
             tag.move_to([4.2, 1.6 - 1.25 * k, 0])
             self.play(Create(hl), FadeIn(tag, shift=LEFT * 0.2), run_time=0.7)
@@ -212,7 +213,9 @@ class BFSLesson(Lesson):
         self.wait_until(self.cue_start("倒着走", self.now))
         path = B.back_path(dist)
         line = VMobject(stroke_color=C_YELLOW, stroke_width=7).set_points_as_corners([sq[c].get_center() for c in path])
-        rev = line.copy().reverse_points()
+        rev = line.copy().reverse_points().set_stroke(opacity=0.6).set_z_index(1)
+        for c in path:   # 路径线从格子中心穿过，数字要压在线上面才看得清
+            M["nums"][c].set_z_index(2)
         self.play(Create(rev), *[sq[c].animate.set_stroke(C_YELLOW, 3) for c in path], run_time=2.0)
         self.wait(max(0.1, self.left() - 0.6))
         self.play(FadeOut(VGroup(M["grid"], M["hash"], M["sl"], M["gl"], *M["nums"].values(), M["ring"], M["q"],

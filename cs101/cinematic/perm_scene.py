@@ -160,11 +160,11 @@ class PermLesson(Lesson):
         self.play(FadeIn(mobs[0], scale=1.3), run_time=0.6)
         counts = P.level_counts(3)
         clabs = VGroup()
-        tex = {1: "3", 2: r"3\times 2=6", 3: r"3\times 2\times 1=6"}
+        tex = {1: "3", 2: r"3\cdot 2=6", 3: r"3\cdot 2\cdot 1=6"}   # 用点乘收窄：× 版第三行会伸出画面右缘
         for d, key in ((1, "第一层"), (2, "第二层"), (3, "第三层")):
             self.wait_until(self.cue_start(key, self.now))
             lvl = [nd for nd in nodes if nd.depth == d]
-            c = MathTex(tex[d], color=C_YELLOW).scale(0.55).move_to([6.3, mobs[lvl[0].id].get_y(), 0])
+            c = MathTex(tex[d], color=C_YELLOW).scale(0.55).move_to([6.3, mobs[lvl[0].id].get_y(), 0]).align_to([6.85, 0, 0], RIGHT)
             assert counts[d] == len(lvl)
             clabs.add(c)
             self.play(LaggedStart(*[AnimationGroup(Create(edges[nd.id]), FadeIn(elabs[nd.id]),
@@ -193,7 +193,7 @@ class PermLesson(Lesson):
 
         def mark(lines, key, txt, col):
             self.wait_until(self.cue_start(key, self.now))
-            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=0.05, stroke_width=2)
+            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=(0.1, 0.03), stroke_width=2)  # 左右留足、上下收紧：相邻两块高亮不叠边
             tag = T(txt, 24, col).next_to(code, RIGHT, buff=0.25).match_y(hl)   # 放在代码窗外，不压代码区
             self.play(Create(hl), FadeIn(tag, shift=LEFT * 0.2), run_time=0.7)
             tags.add(hl, tag)
@@ -352,10 +352,10 @@ class PermLesson(Lesson):
         rt = T("隐式回溯", 30, C_GREEN).next_to(right, UP, buff=0.3)
         self.play(FadeIn(left, shift=RIGHT * 0.2), FadeIn(lt), run_time=0.8)
         self.play(FadeIn(right, shift=LEFT * 0.2), FadeIn(rt), run_time=0.8)
-        hr = SurroundingRectangle(right.code_lines[6], color=C_GREEN, buff=0.05, stroke_width=2)
+        hr = SurroundingRectangle(right.code_lines[6], color=C_GREEN, buff=(0.08, 0.03), stroke_width=2)
         self.play(Create(hr), run_time=0.6)
         self.wait_until(self.cue_start("栈帧", self.now))
-        hl = SurroundingRectangle(VGroup(left.code_lines[6], left.code_lines[7]), color=C_RED, buff=0.05,
+        hl = SurroundingRectangle(VGroup(left.code_lines[6], left.code_lines[7]), color=C_RED, buff=(0.08, 0.03),
                                   stroke_width=2)
         ltag = T("手动撤销", 22, C_RED).next_to(left, DOWN, buff=0.25)
         rtag = T("返回时栈帧丢弃，自动恢复", 22, C_GREEN).next_to(right, DOWN, buff=0.25)

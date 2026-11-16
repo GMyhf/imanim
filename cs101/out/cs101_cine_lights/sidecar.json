@@ -1,0 +1,25 @@
+{
+  "lesson": "lights",
+  "title": "熄灯问题：只枚举第一行",
+  "source": "计算概论（B）2026fall · 例题精讲 · OpenJudge 02811 熄灯问题（每日选作 11-02 · 往年机考）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 207.98,
+  "speech_seconds": 195.91,
+  "beats": {
+    "title": 0.0,
+    "read": 17.45,
+    "model": 40.9,
+    "key": 72.43,
+    "walk": 104.47,
+    "code": 132.13,
+    "cost": 153.8,
+    "recap": 174.25
+  },
+  "subtitles": 43,
+  "audit_issues": 0,
+  "endcard": 204.88,
+  "size_mb": 15.92,
+  "wall_seconds": 256.9
+}

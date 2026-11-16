@@ -26,6 +26,10 @@
 | 八皇后：回溯与剪枝 | 2026fall 第 9 周 回溯 P5–P6、P11–P13 | `cs101/out/cs101_cine_queens/` |
 | 动态规划入门：状态少了一维 | 2026fall 第 10 周 DP 入门 P13–P24 | `cs101/out/cs101_cine_dpintro/` |
 | LCS 与编辑距离：同一张二维表 | 2026fall 第 11 周 序列 DP P20–P21 | `cs101/out/cs101_cine_lcs/` |
+| 二进制与补码：减法变成加法 | 2026fall 第 3 周 计算机原理 4.1–4.3 节 P26–P37（OpenJudge 02734） | `cs101/out/cs101_cine_binary/` |
+| 浮点数：0.1 + 0.2 为什么不等于 0.3 | 2026fall 第 3 周 计算机原理 4.4 节 · 第 4 周 浮点开方偏 1 | `cs101/out/cs101_cine_float/` |
+| 矩阵：补一圈零，转一个弯 | 2026fall 第 6 周 矩阵 1.1–1.3 节 P12–P17（OpenJudge 12560、18106） | `cs101/out/cs101_cine_matrix/` |
+| 熄灯问题：只枚举第一行（例题精讲） | OpenJudge 02811（每日选作 11-02、往年机考）；同类题 02813 画家问题 | `cs101/out/cs101_cine_lights/` |
 
 **成片 mp4 不进 git**（`.gitignore` 排除 `cs101/out/cs101_cine_*/*.mp4`），放在 GitHub Releases：
 https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
@@ -38,12 +42,22 @@ https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
 需先在中转上部署 `site/feedback_server.py`，见该文件说明），部署在
 https://infomall.zhengmao.ltd/cs101-anim/（成都中转 `/srv/cs101-anim`，Caddy `handle_path /cs101-anim/*`，换文件无需 reload；中转出口约 5 Mbps，只放 720p 版）。
 
+每张片卡还有：章节按钮（sidecar 的 `beats` 起点，标签写在 films.json 的 `chapters`，缺省显示 beat id；播放时高亮当前章节）、
+讲义链接（films.json 的 `href`，指向课程仓库 GitHub 上的讲义小节）、可折叠的旁白文字稿（读 `<id>.json`）、
+「看完测一测」（读 `site/quiz.json`，`{"<id>": [{"q", "options", "answer", "explain"}]}`，没有题就不显示）和复制链接。
+页面顶部可按关键词搜索（标题、简介、出处、文字稿）；看到 80% 的片子在本机 localStorage `anim-watched-<课程>` 记为看过，
+系列页和总入口都显示已看数；`#<id>` 深链接会滚到该片并闪一下。新增片子时记得在 films.json 补 `chapters` 与 `href`。
+
+反馈服务（`site/feedback_server.py`）除评分外还收小测结果 `POST /quiz`（只记片子、题号、对错；`--quiz quiz.json` 时按题数校验题号），
+存同目录 `quiz.jsonl`；`GET /report?token=…` 是给老师看的 HTML 汇总页（各片评分、留言、每题正确率），
+口令来自环境变量 `FEEDBACK_REPORT_TOKEN` 或 `--token`，没配就 404。命令行 `--report` 同样会打印小测正确率。
+
 ## 制作
 
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 14 支）
+python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 18 支）
 python cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 
@@ -85,6 +99,15 @@ Mac 仓库已设 `git config http.postBuffer 524288000`：一次推多支视频�
 - `make.py`：TTS（按稿件哈希缓存）→ `timing.json` → 渲染（场景写 `marks.json` 记录各 beat 实际起点）→
   按实际起点摆放配音 → 混流（TTS 每次限时 60 秒；断流校验两条：音频比最后一句字幕短，或句子时间轴拼起来覆盖不到旁白的 95%——Edge TTS 偶尔断流却不报错，
 汉诺塔片头曾只剩 2 秒，并查集「应用」段曾连音频带时间轴一起少了一整句），产出成片、`subs.srt`、`sidecar.json`、`preview.png`。动画超出配音时 beat 顺延，音画不会错位。
+- **读音词典**（`make.py` 的 `PRON`）：只改送去合成的文本，字幕仍是旁白稿原句（按「。？！」切句与 Edge 的句级时间戳逐句对应，
+  句数不一致直接报错）；缓存键用替换后的文本，改词典会自动重新合成相关段落，`asr_check.py` 也对照替换后的文本。
+  依据 2026-11 的 A/B（51 句含孤立 i/j/n 的旁白，各合成几种写法让 Whisper 回听）：句首/分句首的 n 原样常被读成「嗯」，写成 `en`；
+  句中的 n 保持原样（写成 en 或 N 反而被听成 m）；i 原样偶尔整个吞掉，写成 `eye`；j 写成 `jay`。字母被正确听出 76/87 → 82/87，
+  没有变差的句子。大写字母与「大 O」（读「欧」本就是字母名）不动。试听小样在 Mac `~/git/imanim/.local/pron/ab/`。
+- **片尾卡**（`Lesson.finish()` → `_endcard()`）：最后约 3 秒静默卡片「下一支：<标题>」+ 系列网址，下一支按本课程
+  `site/films.json` 的周次顺序取（标题以下一支旁白稿为准），最后一支显示「本系列完」，没登记进 films.json 的片只显示网址。
+  make.py 经 `CINE_ENDCARD` 传给场景，起点记进 marks 的 `_endcard` 与 sidecar 的 `endcard`；直接用 manim 渲染场景时不加。
+  各片场景不要再自制「下一支」画面。
 
 新增一条片：写 `<lesson>.json` 旁白稿 + `<lesson>_scene.py`（继承 `Lesson`），登记进 `make.py` 的 `LESSONS`，
 数字放进可测试的数据模块并写对撞测试。

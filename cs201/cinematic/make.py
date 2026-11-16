@@ -36,7 +36,8 @@ LESSONS = {"linked": ("linked.json", "linked_scene.py", "LinkedLesson"),
            "forest": ("forest.json", "forest_scene.py", "ForestLesson"),
            "trie": ("trie.json", "trie_scene.py", "TrieLesson"),
            "radix": ("radix.json", "radix_scene.py", "RadixLesson"),
-           "manacher": ("manacher.json", "manacher_scene.py", "ManacherLesson")}
+           "manacher": ("manacher.json", "manacher_scene.py", "ManacherLesson"),
+           "slidemax": ("slidemax.json", "slidemax_scene.py", "SlideMaxLesson")}
 
 _spec = importlib.util.spec_from_file_location("cine_make", HERE.parent.parent / "cs101" / "cinematic" / "make.py")
 base = importlib.util.module_from_spec(_spec)

@@ -373,7 +373,7 @@ class StackLesson(Lesson):
         self.play(Indicate(B["cnt"], color=C_YELLOW, scale_factor=1.3), Indicate(B["water"], color=WHITE), run_time=1.0)
         self.wait_until(self.cue_start("每个下标", self.now))
         lin = VGroup(T("每个下标：入栈 1 次，出栈至多 1 次", 24), MathTex(r"\le 2n \;\Rightarrow\; O(n)", color=C_GREEN))
-        lin.arrange(RIGHT, buff=0.4).move_to([-0.6, 1.35, 0])
+        lin.arrange(RIGHT, buff=0.4).move_to([-0.6, 1.35, 0]).align_to([3.5, 0, 0], RIGHT)   # 右端别贴住右边的栈框
         self.play(FadeIn(lin, shift=UP * 0.2), run_time=0.9)
         self.wait(max(0.1, self.left() - 0.6))
         self.play(FadeOut(VGroup(B["bars"], B["idx"], B["floor"], B["ptr"], B["cnt"], B["water"], st, *st.items,
@@ -390,7 +390,7 @@ class StackLesson(Lesson):
         qframe = VGroup(Line([1.4, q_y + 0.35, 0], [6.0, q_y + 0.35, 0], stroke_color=C_GREY, stroke_width=4),
                         Line([1.4, q_y - 0.35, 0], [6.0, q_y - 0.35, 0], stroke_color=C_GREY, stroke_width=4))
         qlab = T("队列：先进先出", 22, C_GREY).next_to(qframe, DOWN, buff=0.2)
-        qitems = VGroup(*[st.make(str(k + 1), cols[k], tex=True).scale(0.85).move_to([2.4 + 1.2 * k, q_y, 0])
+        qitems = VGroup(*[st.make(str(k + 1), cols[k], tex=True).scale(0.85).move_to([2.2 + 1.5 * k, q_y, 0])   # 间距 1.2 时三块边框互相压着
                           for k in range(3)])
         self.play(Create(st.frame), FadeIn(st.top_label), *[FadeIn(i) for i in st.items], run_time=0.8)
         uses = VGroup(T("括号匹配", 26, C_BLUE), T("表达式求值", 26, C_YELLOW), T("单调栈", 26, C_GREEN))

@@ -1,0 +1,25 @@
+{
+  "lesson": "binary",
+  "title": "二进制与补码：减法变成加法",
+  "source": "计算概论（B）2026fall · 第3周 计算机原理（1/2）4.1–4.3 节 P26–P37 · OpenJudge 02734",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 207.08,
+  "speech_seconds": 195.05,
+  "beats": {
+    "title": 0.0,
+    "bases": 16.87,
+    "sign": 49.65,
+    "twos": 71.43,
+    "sub": 102.85,
+    "overflow": 134.67,
+    "bitops": 160.82,
+    "recap": 188.1
+  },
+  "subtitles": 39,
+  "audit_issues": 0,
+  "endcard": 203.98,
+  "size_mb": 13.32,
+  "wall_seconds": 224.6
+}

@@ -127,13 +127,15 @@ class KnapLesson(Lesson):
         self.play(Write(rule), run_time=1.4)
         tgt = cells[(3, 4)]
         self.wait_until(self.cue_start("不拿第 i 个", self.now))
-        a1 = Arrow(cells[(2, 4)].get_center(), tgt.get_center(), buff=0.18, color=C_TEAL, stroke_width=4)
-        l1 = T("不拿", 22, C_TEAL).next_to(a1, RIGHT, buff=0.1)
+        # 竖箭头只跨一行，buff 大了只剩一个箭头尖；两个说明都放到表格右侧，别压在格线上
+        a1 = Arrow(cells[(2, 4)].get_center(), tgt.get_center(), buff=0.06, color=C_TEAL, stroke_width=4,
+                   max_tip_length_to_length_ratio=0.35)
+        l1 = T("不拿：抄上面", 20, C_TEAL).next_to(cells[(2, 4)], RIGHT, buff=0.25)
         hl = tgt.copy().set_stroke(WHITE, 3)
         self.play(Create(hl), GrowArrow(a1), FadeIn(l1), Indicate(rule[1]), run_time=1.0)
         self.wait_until(self.cue_start("往左退", self.now))
         a2 = Arrow(cells[(2, 1)].get_center(), tgt.get_center(), buff=0.25, color=C_YELLOW, stroke_width=4)
-        l2 = T("拿：左退 w，再加 v", 22, C_YELLOW).next_to(a2.get_center(), DOWN, buff=0.15)
+        l2 = T("拿：左退 w，再加 v", 20, C_YELLOW).next_to(tgt, RIGHT, buff=0.25)
         self.play(GrowArrow(a2), FadeIn(l2), Indicate(rule[3]), run_time=1.0)
         self.wait(max(0.1, self.left() - 0.6))
         self.play(FadeOut(VGroup(a1, l1, a2, l2, defn, hl)), run_time=0.6)
@@ -192,14 +194,14 @@ class KnapLesson(Lesson):
         for i, c, took in steps:
             up = cells[(i - 1, c)]
             self.play(Indicate(up, color=C_TEAL, scale_factor=1.1), run_time=0.6)
-            tag_pos = cell_pos(i, 4) + RIGHT * (CW * 0.5 + 0.55)
+            # 标签左对齐贴在表格右侧：按中心摆时，较长的「没拿第 2 件」会压到表格边线
             if took:
                 nc = c - K.WEIGHTS[i - 1]
-                tag = T(f"拿第 {i} 件", 22, ICOL[i]).move_to(tag_pos)
+                tag = T(f"拿第 {i} 件", 22, ICOL[i]).next_to(cells[(i, 4)], RIGHT, buff=0.22)
                 self.play(FadeIn(tag), self.cards[i - 1][0].animate.set_stroke(ICOL[i], 6).set_fill(ICOL[i], 0.35),
                           ring.animate.move_to(cells[(i - 1, nc)]), run_time=0.9)
             else:
-                tag = T(f"没拿第 {i} 件", 22, C_GREY).move_to(tag_pos)
+                tag = T(f"没拿第 {i} 件", 22, C_GREY).next_to(cells[(i, 4)], RIGHT, buff=0.22)
                 self.play(FadeIn(tag), self.cards[i - 1].animate.set_opacity(0.35),
                           ring.animate.move_to(cells[(i - 1, c)]), run_time=0.9)
             tags.add(tag)

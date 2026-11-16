@@ -5,7 +5,7 @@
   "voice": "zh-CN-YunxiNeural",
   "tts": "edge-tts",
   "quality": "fullhd",
-  "seconds": 198.4,
+  "seconds": 200.7,
   "speech_seconds": 189.0,
   "beats": {
     "title": 0.0,
@@ -20,6 +20,7 @@
   },
   "subtitles": 39,
   "audit_issues": 0,
-  "size_mb": 14.9,
-  "wall_seconds": 192.9
+  "endcard": 197.6,
+  "size_mb": 15.04,
+  "wall_seconds": 228.7
 }

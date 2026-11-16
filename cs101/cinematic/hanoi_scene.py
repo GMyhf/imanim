@@ -193,12 +193,12 @@ class HanoiLesson(Lesson):
         marks = VGroup()
         for i, (txt, col) in enumerate(tags):
             ln = lines[3 + i]
-            hl = SurroundingRectangle(ln, color=col, buff=0.05, stroke_width=2)
+            hl = SurroundingRectangle(ln, color=col, buff=(0.09, 0.02), stroke_width=2)   # 左右留白；上下收紧，相邻三行的框不叠边
             tag = T(txt, 24, col).next_to(code, RIGHT, buff=0.35).match_y(ln)
             self.play(Create(hl), FadeIn(tag, shift=LEFT * 0.2), run_time=0.8)
             marks.add(hl, tag)
         self.wait_until(self.cue_start("基例", self.now + 0.5) + 0.8)
-        base = SurroundingRectangle(VGroup(lines[1], lines[2]), color=C_GREY, buff=0.05, stroke_width=2)
+        base = SurroundingRectangle(VGroup(lines[1], lines[2]), color=C_GREY, buff=(0.09, 0.02), stroke_width=2)
         btag = T("基例", 24, C_GREY).next_to(code, RIGHT, buff=0.35).match_y(base)
         self.play(Create(base), FadeIn(btag), run_time=0.7)
         self.wait_until(self.cue_start("第一步和第三步", self.now))

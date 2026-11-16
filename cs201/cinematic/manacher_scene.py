@@ -286,9 +286,9 @@ class ManacherLesson(Lesson):
         L = 2 * st["C"] - st["R"]
         mL = self.mark(L, "L", C_RED)
         self.play(Create(ms), FadeIn(ml), FadeIn(mL), run_time=0.8)
-        room = Text(f"R - i = {st['R'] - 11}", font=MONO, font_size=22, color=C_RED).move_to([cx(11) + 1.2, -0.35, 0])
+        room = Text(f"R - i + 1 = {st['R'] - 11 + 1}", font=MONO, font_size=22, color=C_RED).move_to([cx(11) + 1.2, -0.35, 0])
         self.play(FadeIn(room), run_time=0.4)
-        self.at("所以先取三")
+        self.at("所以先取四")
         init = st["init"]
         sp = Rectangle(width=(2 * init - 1) * W, height=W * 0.98, stroke_color=C_YELLOW, stroke_width=3).move_to(
             [cx(11), ROW_Y, 0])
@@ -353,16 +353,13 @@ class ManacherLesson(Lesson):
         head = T("为什么是线性的：盯住 R", 30, C_YELLOW).move_to([0, 3.3, 0])
         lines = VGroup(T("失败的比较：每个下标最多一次", 24),
                        T("往外成功一次：R 右移一格", 24, C_GREEN),
-                       T("R 只增不减，最多走到末尾", 24, C_RED),
-                       T("讲义初值少取一格：边界复核，每个下标最多一次", 22, C_GREY)).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+                       T("R 只增不减，最多走到末尾", 24, C_RED)).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
         lines.move_to([-3.4, 1.0, 0])
         self.play(FadeIn(head), run_time=0.4)
         self.at("失败的比较")
         self.play(FadeIn(lines[0], shift=RIGHT * 0.2), run_time=0.5)
         self.play(FadeIn(lines[1], shift=RIGHT * 0.2), run_time=0.5)
         self.play(FadeIn(lines[2], shift=RIGHT * 0.2), run_time=0.5)
-        self.at("讲义的代码")
-        self.play(FadeIn(lines[3], shift=RIGHT * 0.2), run_time=0.5)
         self.at("八十个 a")
         rows = M.grow_table()
         base_y, top_h = -2.7, 4.6

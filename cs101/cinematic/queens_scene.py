@@ -127,7 +127,7 @@ class QueensLesson(Lesson):
 
         def mark(lines, key, txt, col):
             self.wait_until(self.cue_start(key, self.now))
-            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=0.04, stroke_width=2)
+            hl = SurroundingRectangle(VGroup(*[ln[i] for i in lines]), color=col, buff=(0.1, 0.03), stroke_width=2)  # 左右留足、上下收紧：相邻两块高亮不叠边
             tag = T(txt, 22, col).next_to(code, RIGHT, buff=0.25).match_y(hl)
             self.play(Create(hl), FadeIn(tag, shift=LEFT * 0.2), run_time=0.6)
             tags.add(hl, tag)
@@ -156,7 +156,7 @@ class QueensLesson(Lesson):
             return interpolate_color(ManimColor(pal[i]), ManimColor(pal[i + 1]), k - i)
 
         def numbers(f, lo, hi):
-            return VGroup(*[MathTex(str(f(r, c)), color=WHITE).scale(0.5).move_to(sq[(r, c)])
+            return VGroup(*[MathTex(str(f(r, c)), color=WHITE).scale(0.5).move_to(sq[(r, c)]).set_z_index(2)
                             for r in range(n) for c in range(n)]), \
                 [sq[(r, c)].animate.set_fill(interpolate_color(ManimColor(SQ_A), col_of(f(r, c), lo, hi), 0.55), 1)
                  for r in range(n) for c in range(n)]
@@ -167,7 +167,9 @@ class QueensLesson(Lesson):
         eq1 = VGroup(MathTex(r"\searrow", color=C_PURPLE).scale(1.2), MathTex(r"r - c", "=", r"\text{const}").scale(0.95))
         eq1.arrange(RIGHT, buff=0.3).move_to([3.6, 1.3, 0])
         self.wait_until(self.cue_start("从左上到右下", self.now))
-        line1 = Line(sq[(0, 0)].get_center(), sq[(7, 7)].get_center(), stroke_color=WHITE, stroke_width=4)
+        # 半透明、压在数字下面：斜线正好穿过要读的那一串常数
+        line1 = Line(sq[(0, 0)].get_center(), sq[(7, 7)].get_center(), stroke_color=WHITE, stroke_width=4,
+                     stroke_opacity=0.5).set_z_index(1)
         self.play(Create(line1), FadeIn(eq1, shift=LEFT * 0.2), run_time=1.2)
         self.wait_until(self.cue_start("行号加列号", self.now))
         nums2, fills2 = numbers(lambda r, c: r + c, 0, 2 * (n - 1))
@@ -175,7 +177,8 @@ class QueensLesson(Lesson):
         eq2 = VGroup(MathTex(r"\swarrow", color=C_TEAL).scale(1.2), MathTex(r"r + c", "=", r"\text{const}").scale(0.95))
         eq2.arrange(RIGHT, buff=0.3).next_to(eq1, DOWN, buff=0.6).align_to(eq1, LEFT)
         self.wait_until(self.cue_start("从右上到左下", self.now))
-        line2 = Line(sq[(0, 7)].get_center(), sq[(7, 0)].get_center(), stroke_color=WHITE, stroke_width=4)
+        line2 = Line(sq[(0, 7)].get_center(), sq[(7, 0)].get_center(), stroke_color=WHITE, stroke_width=4,
+                     stroke_opacity=0.5).set_z_index(1)
         self.play(Create(line2), FadeIn(eq2, shift=LEFT * 0.2), run_time=1.2)
         self.wait_until(self.cue_start("丢进集合", self.now))
         into = VGroup(Text("diag.add(row - c)", font=MONO, font_size=22, color=C_PURPLE),

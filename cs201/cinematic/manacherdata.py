@@ -54,7 +54,7 @@ class SolutionManacher:
         for i in range(n):
             if i < max_right:
                 mirror = 2 * center - i
-                p[i] = min(max_right - i, p[mirror])
+                p[i] = min(max_right - i + 1, p[mirror])  # max_right 是含在内的右端点，到它为止的半径是 max_right - i + 1
             else:
                 p[i] = 1
 
@@ -102,14 +102,14 @@ def manacher_trace(s: str) -> dict:
         st = {"i": i, "C": center, "R": max_right, "mirror": None}
         if i < max_right:
             mirror = 2 * center - i
-            p[i] = min(max_right - i, p[mirror])
+            p[i] = min(max_right - i + 1, p[mirror])
             st["mirror"] = mirror
-            st["case"] = "in" if p[mirror] <= max_right - i else "edge"   # 镜像回文严格落在 L 之内 / 顶到或越过 L
+            st["case"] = "in" if p[mirror] < max_right - i + 1 else "edge"   # 镜像回文严格落在 L 之内 / 顶到或越过 L
         else:
             p[i] = 1
             st["case"] = "out"
         st["init"] = p[i]
-        cmps = []                  # 第一次比较若落在 max_right 上（edge 情形），是讲义初值少取一格带来的复核
+        cmps = []
         while i - p[i] >= 0 and i + p[i] < n:
             eq = t[i - p[i]] == t[i + p[i]]
             cmps.append((i - p[i], i + p[i], eq))

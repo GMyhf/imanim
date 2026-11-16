@@ -1,0 +1,25 @@
+{
+  "lesson": "float",
+  "title": "浮点数：0.1 + 0.2 为什么不等于 0.3",
+  "source": "计算概论（B）2026fall · 第3周 计算机原理 4.4 节 浮点数与精度陷阱 · 第4周 浮点开方偏 1",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 215.22,
+  "speech_seconds": 203.14,
+  "beats": {
+    "title": 0.0,
+    "sci": 16.97,
+    "layout": 44.02,
+    "tenth": 70.22,
+    "sum": 107.78,
+    "gap": 137.97,
+    "compare": 168.07,
+    "recap": 198.22
+  },
+  "subtitles": 36,
+  "audit_issues": 0,
+  "endcard": 212.12,
+  "size_mb": 12.57,
+  "wall_seconds": 238.9
+}

@@ -5,8 +5,8 @@
   "voice": "zh-CN-YunxiNeural",
   "tts": "edge-tts",
   "quality": "fullhd",
-  "seconds": 196.23,
-  "speech_seconds": 187.78,
+  "seconds": 198.68,
+  "speech_seconds": 187.92,
   "beats": {
     "title": 0.0,
     "bound": 17.42,
@@ -15,10 +15,11 @@
     "lsd": 101.98,
     "why": 123.1,
     "cost": 151.45,
-    "recap": 181.08
+    "recap": 181.23
   },
   "subtitles": 36,
   "audit_issues": 0,
-  "size_mb": 14.03,
-  "wall_seconds": 190.9
+  "endcard": 195.58,
+  "size_mb": 14.16,
+  "wall_seconds": 207.7
 }

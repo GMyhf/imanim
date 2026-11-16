@@ -1,15 +1,86 @@
 {
  "weeks": [
   {
+   "week": 3,
+   "topic": "计算机原理：数的表示",
+   "films": [
+    {
+     "id": "binary",
+     "dir": "cs101_cine_binary",
+     "title": "二进制与补码：减法变成加法",
+     "desc": "除基取余与按权展开，四位一组成十六进制；原码、反码为什么有两个零；补码「取反加一」放在 256 格的圈上看；5 − 7 与 24 + (−17) 在加法器里怎么算；127 + 1 的溢出与 C++ 的 int；~6 = −7 与 n & (n−1)。",
+     "src": "W03 4.1–4.3 节 P26–P37 · OpenJudge 02734",
+     "chapters": {
+      "title": "一串位两种读法",
+      "bases": "进制与十六进制",
+      "sign": "原码与反码",
+      "twos": "补码圈",
+      "sub": "减法变加法",
+      "overflow": "溢出",
+      "bitops": "位运算",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202609_ADS_W03_Computer_Principles_1.md#4-%E6%95%B0%E6%8D%AE%E7%9A%84%E4%BA%8C%E8%BF%9B%E5%88%B6%E8%A1%A8%E7%A4%BA"
+    },
+    {
+     "id": "float",
+     "dir": "cs101_cine_float",
+     "title": "浮点数：0.1 + 0.2 为什么不等于 0.3",
+     "desc": "科学计数法与规范化；双精度 64 位（符号 1、指数 11、尾数 52）拆解 −6.5；0.1 乘二取整得到 0011 循环；在 0.3 附近放大看浮点数的格子，就近取偶；2⁵³ 之后格宽为 2，大整数开方偏 1；正确的比较方式。",
+     "src": "W03 4.4 节 · W04 浮点开方",
+     "chapters": {
+      "title": "0.1 + 0.2",
+      "sci": "科学计数法",
+      "layout": "64 位布局",
+      "tenth": "0.1 的二进制",
+      "sum": "落在哪一格",
+      "gap": "大整数开方",
+      "compare": "正确的比较",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202609_ADS_W03_Computer_Principles_1.md#44-%E6%B5%AE%E7%82%B9%E6%95%B0%E4%B8%8E%E7%B2%BE%E5%BA%A6%E9%99%B7%E9%98%B1"
+    }
+   ]
+  },
+  {
    "week": 6,
    "topic": "矩阵、排序与贪心",
    "films": [
+    {
+     "id": "matrix",
+     "dir": "cs101_cine_matrix",
+     "title": "矩阵：补一圈零，转一个弯",
+     "desc": "[[0]*n]*m 为什么三行一起变；四周补一圈零省掉越界判断，方向表一个循环走完邻居；生存游戏为什么要写进新矩阵；zip(*a[::-1]) 顺时针旋转；最后用方向表加保护圈做螺旋矩阵。",
+     "src": "P12–P17 · M12560 · M18106",
+     "chapters": {
+      "title": "开场",
+      "trap": "建表陷阱",
+      "pad": "保护圈",
+      "life": "生存游戏",
+      "rotate": "转置与旋转",
+      "spiral": "螺旋矩阵",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W06_Matrices_Sorting_Greedy.md#1-%E7%9F%A9%E9%98%B5"
+    },
     {
      "id": "sort",
      "dir": "cs101_cine_sort",
      "title": "排序：从 n² 到 n log n",
      "desc": "同一组数据上冒泡、插入、归并按真实执行轨迹演示；n² 与 n log n 的增长对比；稳定性；归并时数逆序对为什么一次加一批。",
-     "src": "P26–P34"
+     "src": "P26–P34",
+     "chapters": {
+      "title": "开场",
+      "table": "复杂度表",
+      "bubble": "冒泡",
+      "insertion": "插入",
+      "merge": "归并",
+      "growth": "增长对比",
+      "stable": "稳定性",
+      "inversion": "逆序对",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W06_Matrices_Sorting_Greedy.md#2-%E6%8E%92%E5%BA%8F"
     }
    ]
   },
@@ -22,7 +93,19 @@
      "dir": "cs101_cine_stack",
      "title": "栈：后进先出的三种用法",
      "desc": "括号匹配（含三种失败情形）；后缀表达式逐个扫描求值；单调栈求接雨水，水块逐块累加，每个下标最多进出一次所以是 O(n)。",
-     "src": "P4–P18"
+     "src": "P4–P18",
+     "chapters": {
+      "title": "开场",
+      "ops": "Python栈",
+      "paren": "括号匹配",
+      "fail": "三个易错点",
+      "postfix": "后缀表达式",
+      "evaluate": "后缀求值",
+      "mono": "单调栈",
+      "rain": "接雨水",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W07_Matrix_Queue_Stack_Greedy.md#1-%E6%A0%88stack"
     }
    ]
   },
@@ -35,21 +118,60 @@
      "dir": "cs101_cine_fib",
      "title": "斐波那契：一棵树怎样塌缩成一行",
      "desc": "调用树按真实调用顺序生长，同参数同颜色暴露重叠子问题；记忆化剪枝，再塌缩成依赖链、摊平成 dp 数组。",
-     "src": "P23–P25 · OJ 02753"
+     "src": "P23–P25 · OJ 02753",
+     "chapters": {
+      "title": "开场",
+      "define": "定义",
+      "code": "三行递归",
+      "tree": "调用树",
+      "repeat": "重叠子问题",
+      "growth": "指数增长",
+      "memo": "记忆化",
+      "collapse": "塌缩成链",
+      "table": "自底向上",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W08_Recursion.md#31-%E5%BA%8F%E6%9B%B2%E6%96%90%E6%B3%A2%E9%82%A3%E5%A5%91"
     },
     {
      "id": "hanoi",
      "dir": "cs101_cine_hanoi",
      "title": "汉诺塔：相信更小的自己",
      "desc": "把 n−1 个盘子看成一整块的三步思路；七步移动与旁白逐句同步；调用树是满二叉树，中序压平正好是程序输出；2⁶⁴−1 与 5850 亿年。",
-     "src": "P26–P28 · OJ 04147"
+     "src": "P26–P28 · OJ 04147",
+     "chapters": {
+      "title": "开场",
+      "rules": "规则",
+      "idea": "相信更小的",
+      "code": "代码",
+      "run": "三个盘子",
+      "tree": "调用树",
+      "inorder": "中序",
+      "count": "移动次数",
+      "legend": "六十四片",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W08_Recursion.md#32-%E7%AC%AC%E4%B8%80%E9%83%A8%E6%B1%89%E8%AF%BA%E5%A1%94"
     },
     {
      "id": "perm",
      "dir": "cs101_cine_perm",
      "title": "全排列：在决策树上走一遍",
      "desc": "决策树的四个对应；16 个节点的回溯全程，path、used、res 联动；不拷贝 path 得到六个空列表；O(n·n!) 与 e；显式与隐式回溯；子集。",
-     "src": "P29–P35 · OJ 02748 · LC 78"
+     "src": "P29–P35 · OJ 02748 · LC 78",
+     "chapters": {
+      "title": "开场",
+      "choose": "决策树",
+      "tree": "一二三的树",
+      "code": "代码",
+      "walk": "走一遍",
+      "copy": "拷贝的坑",
+      "count": "节点计数",
+      "implicit": "隐式回溯",
+      "subsets": "子集",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W08_Recursion.md#33-%E7%AC%AC%E4%BA%8C%E9%83%A8%E5%85%A8%E6%8E%92%E5%88%97"
     }
    ]
   },
@@ -62,14 +184,39 @@
      "dir": "cs101_cine_queens",
      "title": "八皇后：回溯与剪枝",
      "desc": "4 皇后完整回溯（cols、diag、anti 三个集合实时更新）与 17 个节点的搜索树；row−c 与 row+c 为什么能表示两族对角线；八皇后剪枝后只要 2057 个节点，92 个解铺满屏。",
-     "src": "P5–P6、P11–P13"
+     "src": "P5–P6、P11–P13",
+     "chapters": {
+      "title": "开场",
+      "rules": "规则",
+      "sets": "三个集合",
+      "diag": "对角线编号",
+      "walk": "四皇后",
+      "tree": "搜索树",
+      "count": "剪枝威力",
+      "all": "九十二解",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W09_Recursion_Backtracking_DSU.md#14-%E4%BE%8B%E5%85%AB%E7%9A%87%E5%90%8E"
     },
     {
      "id": "dsu",
      "dir": "cs101_cine_dsu",
      "title": "并查集：让森林越查越矮",
      "desc": "父指针森林与 parent 数组联动；朴素合并退化成链 vs 按大小合并只有一层；路径压缩；期中手算题逐步改数组；数连通块与判环。",
-     "src": "P16–P30 · OJ 02524"
+     "src": "P16–P30 · OJ 02524",
+     "chapters": {
+      "title": "开场",
+      "ops": "两个操作",
+      "forest": "森林存储",
+      "chain": "退化成链",
+      "weight": "按大小合并",
+      "compress": "路径压缩",
+      "code": "标准实现",
+      "exam": "期中题",
+      "apps": "应用",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W09_Recursion_Backtracking_DSU.md#2-%E5%B9%B6%E6%9F%A5%E9%9B%86disjoint-set-union-dsu"
     }
    ]
   },
@@ -82,14 +229,38 @@
      "dir": "cs101_cine_interval",
      "title": "区间贪心：先按右端点排序",
      "desc": "合并区间、最多不相交区间、引爆气球、区间分组；为什么按右端点而不是左端点或长度（反例与交换论证）。",
-     "src": "P4–P12 · LC 56 / 435 / 452"
+     "src": "P4–P12 · LC 56 / 435 / 452",
+     "chapters": {
+      "title": "开场",
+      "table": "五类问题",
+      "merge": "合并区间",
+      "keep": "无重叠区间",
+      "why": "为何按右端点",
+      "arrows": "射气球",
+      "groups": "区间分组",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W10_Intervals_DP_Intro.md#1-%E5%8C%BA%E9%97%B4%E9%97%AE%E9%A2%98"
     },
     {
      "id": "dpintro",
      "dir": "cs101_cine_dpintro",
      "title": "动态规划入门：状态少了一维",
      "desc": "「路径和必须为奇数」的数字三角形：朴素状态答成无解，补一维奇偶两栏才得 17；最优子结构是状态定义的性质；2000 组对拍朴素答错 298 组；DP 三要素。",
-     "src": "P13–P24"
+     "src": "P13–P24",
+     "chapters": {
+      "title": "开场",
+      "premise": "两个前提",
+      "paths": "奇数路径",
+      "naive": "朴素状态",
+      "where": "错在哪",
+      "property": "状态的性质",
+      "fixed": "补一维",
+      "duel": "暴力对拍",
+      "three": "三行写清",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W10_Intervals_DP_Intro.md#2-%E5%8A%A8%E6%80%81%E8%A7%84%E5%88%92%E5%85%A5%E9%97%A8"
     }
    ]
   },
@@ -102,14 +273,39 @@
      "dir": "cs101_cine_knap",
      "title": "0/1 背包：一张表填到底",
      "desc": "二维 dp 表逐格填写并画出依赖箭头；从右下角倒推出拿了第 1、3 件；一维滚动为什么必须倒序：正序会把同一件拿两次，那正好就是完全背包。",
-     "src": "P4–P8"
+     "src": "P4–P8",
+     "chapters": {
+      "title": "开场",
+      "kinds": "背包三兄弟",
+      "state": "二维状态",
+      "fill": "逐行填表",
+      "back": "回溯选择",
+      "roll": "滚动数组",
+      "wrong": "正序会怎样",
+      "full": "完全背包",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W11_DP.md#12-0-1-%E8%83%8C%E5%8C%85"
     },
     {
      "id": "lcs",
      "dir": "cs101_cine_lcs",
      "title": "LCS 与编辑距离：同一张二维表",
      "desc": "最长公共子序列逐格填表、回溯出 abcb；horse → ros 编辑距离三种操作对应三个方向，回溯出三步改写；双串 DP 的共同框架。",
-     "src": "P20–P21"
+     "src": "P20–P21",
+     "chapters": {
+      "title": "开场",
+      "define": "子序列",
+      "rule": "转移规则",
+      "fill": "填表",
+      "back": "回溯",
+      "edit": "编辑距离",
+      "edfill": "编辑距离填表",
+      "align": "三步操作",
+      "same": "同一框架",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W11_DP.md#22-%E6%9C%80%E9%95%BF%E5%85%AC%E5%85%B1%E5%AD%90%E5%BA%8F%E5%88%97lcs"
     }
    ]
   },
@@ -122,21 +318,82 @@
      "dir": "cs101_cine_bfs",
      "title": "BFS：一圈一圈往外推",
      "desc": "按层推进与「第一次到达就是最短」；模板三条铁律；迷宫 19 次出队入队全程；入队时标记的反例；多源 BFS；DFS 与 BFS 对比。",
-     "src": "P9–P21 · LC 542"
+     "src": "P9–P21 · LC 542",
+     "chapters": {
+      "title": "开场",
+      "idea": "思路",
+      "code": "模板",
+      "maze": "迷宫",
+      "path": "回溯路径",
+      "mark": "入队即标记",
+      "multi": "多源广搜",
+      "choose": "深搜还是广搜",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W12_DP_BFS.md#2-%E5%B9%BF%E5%BA%A6%E4%BC%98%E5%85%88%E6%90%9C%E7%B4%A2bfs"
     },
     {
      "id": "dijkstra",
      "dir": "cs101_cine_dijkstra",
      "title": "Dijkstra：带权的波纹",
      "desc": "BFS 在带权图上算错的反例；队列换成小根堆；出堆、松弛、过期条目逐步演示；走山路网格上按代价扩张。",
-     "src": "P17–P20"
+     "src": "P17–P20",
+     "chapters": {
+      "title": "开场",
+      "bfswrong": "广搜为何错",
+      "idea": "小根堆",
+      "code": "代码",
+      "run": "跑一遍",
+      "result": "第一次出堆",
+      "mountain": "走山路",
+      "traps": "两个坑",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W12_DP_BFS.md#3-dijkstra%E5%B8%A6%E6%9D%83%E5%9B%BE%E7%9A%84%E6%9C%80%E7%9F%AD%E8%B7%AF"
     },
     {
      "id": "bsearch",
      "dir": "cs101_cine_bsearch",
      "title": "二分答案：最小化最大值",
      "desc": "河中跳房子：可行与不可行的单调分界，贪心判定逐块演示，五轮二分；mid 少了加一为什么死循环；月度开销套同一模板。",
-     "src": "P22–P26"
+     "src": "P22–P26",
+     "chapters": {
+      "title": "开场",
+      "pattern": "最小化最大值",
+      "check": "判定函数",
+      "binary": "二分过程",
+      "plusone": "加一的坑",
+      "monthly": "月度开销",
+      "template": "三步模板",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W12_DP_BFS.md#5-%E4%BA%8C%E5%88%86%E6%9F%A5%E6%89%BE%E7%AD%94%E6%A1%88%E6%9C%80%E5%B0%8F%E5%8C%96%E6%9C%80%E5%A4%A7%E5%80%BC"
+    }
+   ]
+  },
+  {
+   "week": 98,
+   "tag": "EX",
+   "label": "例题精讲",
+   "topic": "完整做一道题",
+   "films": [
+    {
+     "id": "lights",
+     "dir": "cs101_cine_lights",
+     "title": "熄灯问题：只枚举第一行",
+     "desc": "例题精讲。5×6 的灯，按一下翻转自己和上下左右。两个观察把答案变成一张 0/1 表；关键是第一行定了，下面每行都被逼出来，枚举量从 2³⁰ 降到 2⁶。用样例完整推一遍。",
+     "src": "OpenJudge 02811 · 每日选作 11-02",
+     "chapters": {
+      "title": "开场",
+      "read": "读题",
+      "model": "建模",
+      "key": "关键观察",
+      "walk": "样例演示",
+      "code": "代码",
+      "cost": "代价与唯一性",
+      "recap": "回顾与同类题"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/ADS_problem_list_at_2026fall.md#2026fall-%E8%AE%A1%E6%A6%82algo-ds%E6%AF%8F%E6%97%A5%E9%80%89%E4%BD%9C"
     }
    ]
   }
