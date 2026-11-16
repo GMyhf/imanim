@@ -6,7 +6,7 @@
   在线观看 **https://infomall.zhengmao.ltd/cs101-anim/** ·
   1080p 成片 [Releases `cs101-anim-2026fall`](https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall) ·
   说明 [`cs101/cinematic/README.md`](cs101/cinematic/README.md)
-- **CS201**《数据结构与算法（B）》2026fall：13 支、约 48 分钟。
+- **CS201**《数据结构与算法（B）》2026fall：21 支、约 74 分钟。
   在线观看 **https://infomall.zhengmao.ltd/cs201-anim/** ·
   1080p 成片 [Releases `cs201-anim-2026fall`](https://github.com/GMyhf/imanim/releases/tag/cs201-anim-2026fall) ·
   说明 [`cs201/cinematic/README.md`](cs201/cinematic/README.md)
@@ -27,13 +27,15 @@
 
 | 周次 | 片目 |
 | --- | --- |
+| 第 1 周 | 渐进分析：只看 n 变大以后 |
 | 第 2 周 | 链表：三根指针的舞蹈 |
 | 第 3 周 | 中缀转后缀：调度场算法 |
 | 第 4 周 | KMP：目标指针不回头 |
 | 第 5 周 | 二叉树周游：同一圈轮廓，三个时机 · 二叉搜索树：左小右大，再加一点平衡 · 堆：一棵藏在数组里的树 · Huffman 编码：让常用的字符更短 |
-| 第 7 周 | 拓扑排序：先修课怎么排 · Floyd：一次算出所有点对 · 最小生成树：一棵树和一片森林 |
-| 第 8 周 | 快速排序：力气花在分上 |
-| 春季专题 | 散列表：把关键字算成地址 · 树状数组：最低位的一 |
+| 第 6 周 | 树与森林：左孩子，右兄弟 |
+| 第 7 周 | 拓扑排序：先修课怎么排 · 强连通分量：两遍深度优先搜索 · 关键路径：一天也拖不得的活动 · Floyd：一次算出所有点对 · Bellman-Ford：负权边与负环 · 最小生成树：一棵树和一片森林 |
+| 第 8 周 | 快速排序：力气花在分上 · 分配排序：不比较，直接算位置 |
+| 春季专题 | 散列表：把关键字算成地址 · 字典树：一个字母走一步 · 树状数组：最低位的一 · Manacher：照镜子找回文 |
 
 ## 怎么保证内容对
 

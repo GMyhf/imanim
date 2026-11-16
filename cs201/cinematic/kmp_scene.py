@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import math
+
 import sys
 from pathlib import Path
 
@@ -76,6 +78,18 @@ class KMPLesson(Lesson):
 
     def cue_start(self, key, default=None):
         return next((c["start"] for c in self.cue_times() if key in c["text"]), default)
+
+    def show_naive(self, nc):
+        """亮出朴素计数器并滚到五十九（FadeIn 与数字滚动不能同一段 play，数字位数会变）。"""
+        self.play(FadeIn(nc), run_time=0.3)
+        self.play(ChangeDecimalToValue(nc[1], K.LONG_NAIVE_CNT), run_time=0.6)
+
+    def say_time(self, key, default=None):
+        """念到 key 的大致时刻：在含 key 的那句字幕里按字数比例插值。"""
+        for c in self.cue_times():
+            if key in c["text"]:
+                return c["start"] + (c["end"] - c["start"]) * c["text"].index(key) / max(1, len(c["text"]))
+        return default
 
     def fade_all(self, rt=0.6):
         keep = set(map(id, self.subs))
@@ -396,11 +410,22 @@ class KMPLesson(Lesson):
         self.play(FadeIn(tt), FadeIn(pp), FadeIn(idx), FadeIn(kc), run_time=0.8)
         n = 0
         ev = K.LONG_KMP
-        total = self.dur.get("all", 20) - 4.5
-        rt = max(0.12, min(0.35, total / (len(ev) + 3) - 0.14))
+        n_cmp = K.cmp_count(ev)
+        # 旁白先说朴素的五十九次、最后说 KMP 的三十三次：扫描期间到了「朴素算法」那句就亮出朴素计数，
+        # KMP 计数器正好在念到「三十三」时停在 33
+        deadline = self.say_time("三十三", self.t0 + LEAD + self.dur.get("all", 20))
+        naive_t = self.cue_start("朴素算法", deadline)
+        nc = counter("朴素 比较", 4.4, -1.0, color=C_GREY)
+        budget = deadline - self.now - 0.5 * len(K.LONG_MATCHES) - 0.9 - 0.2
+        q = lambda t: math.ceil(t * config.frame_rate - 1e-6) / config.frame_rate   # 每段 play 按整帧计时
+        rt = 0.35
+        while rt > 0.07 and n_cmp * (q(rt) + q(0.06) + q(0.08)) > budget:
+            rt -= 0.01
         found = VGroup()
         prev = None
         for e in ev:
+            if nc not in self.mobjects and self.now >= naive_t:
+                self.show_naive(nc)
             if e[0] == "cmp":
                 _, i, j, eq = e
                 n += 1
@@ -421,10 +446,9 @@ class KMPLesson(Lesson):
                 self.play(FadeIn(br), FadeIn(bt), run_time=0.5)
                 found.add(br, bt)
         self.play(untint(prev[0]), untint(prev[1]), run_time=0.2)
-        self.wait_until(self.cue_start("KMP 找到", self.now))
-        nc = counter("朴素 比较", 4.4, -1.0, color=C_GREY)
-        self.play(FadeIn(nc), run_time=0.4)
-        self.play(ChangeDecimalToValue(nc[1], K.LONG_NAIVE_CNT), run_time=1.0)
+        if nc not in self.mobjects:
+            self.show_naive(nc)
+        self.wait_until(deadline)
         self.play(Indicate(kc[1], color=C_HI), run_time=0.7)
         self.wait(max(0.1, self.left() - 0.6))
         self.fade_all()
@@ -451,7 +475,7 @@ class KMPLesson(Lesson):
         cj = stairs(pj_).set_color(C_TEAL)
         li = T("目标指针 i", 24, C_HI).next_to(ci.get_end(), UP, buff=0.15).shift(LEFT * 0.6)
         lj = T("模式指针 j", 24, C_TEAL).move_to([-4.9, 1.9, 0])
-        self.wait_until(self.cue_start("把两个指针", self.now))
+        self.wait_until(self.cue_start("目标指针 i 只升", self.now))
         self.play(Create(ci), FadeIn(li), run_time=2.5)
         self.play(Create(cj), FadeIn(lj), run_time=3.0)
         self.wait_until(self.cue_start("所以比较次数", self.now))

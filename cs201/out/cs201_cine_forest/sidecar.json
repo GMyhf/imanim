@@ -1,0 +1,26 @@
+{
+  "lesson": "forest",
+  "title": "树与森林：左孩子，右兄弟",
+  "source": "数据结构与算法（B）2026fall · 第6周 树 1.2 节（图 6.3–6.5）、1.4 节、3.3 节（图 6.16）· OpenJudge 24729",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 182.35,
+  "speech_seconds": 171.74,
+  "beats": {
+    "title": 0.0,
+    "forest": 22.0,
+    "connect": 41.57,
+    "cut": 58.43,
+    "rotate": 73.65,
+    "pre": 93.85,
+    "post": 106.82,
+    "level": 128.52,
+    "degree": 147.12,
+    "recap": 168.65
+  },
+  "subtitles": 31,
+  "audit_issues": 0,
+  "size_mb": 13.52,
+  "wall_seconds": 129.6
+}

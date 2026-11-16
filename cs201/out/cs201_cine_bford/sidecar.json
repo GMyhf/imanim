@@ -1,0 +1,25 @@
+{
+  "lesson": "bford",
+  "title": "Bellman-Ford：负权边与负环",
+  "source": "数据结构与算法（B）2026fall · 第7周 图 5.3 节 负权边：Bellman-Ford · OpenJudge 01860",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 192.9,
+  "speech_seconds": 183.48,
+  "beats": {
+    "title": 0.0,
+    "wrong": 19.68,
+    "shift": 44.0,
+    "idea": 62.87,
+    "rounds": 80.0,
+    "order": 101.72,
+    "why": 117.65,
+    "negcycle": 139.7,
+    "spfa": 163.5
+  },
+  "subtitles": 36,
+  "audit_issues": 0,
+  "size_mb": 14.98,
+  "wall_seconds": 167.0
+}

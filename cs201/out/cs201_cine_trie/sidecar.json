@@ -1,0 +1,25 @@
+{
+  "lesson": "trie",
+  "title": "字典树：一个字母走一步",
+  "source": "数据结构与算法（B）2026spring · 第6–8周 树 附录 B 前缀树（Trie）· LeetCode 2452",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 177.87,
+  "speech_seconds": 167.81,
+  "beats": {
+    "title": 0.0,
+    "build": 21.28,
+    "mark": 44.83,
+    "search": 64.08,
+    "cost": 84.7,
+    "prefix": 101.35,
+    "memory": 121.97,
+    "delete": 141.43,
+    "recap": 161.2
+  },
+  "subtitles": 31,
+  "audit_issues": 0,
+  "size_mb": 14.56,
+  "wall_seconds": 193.4
+}

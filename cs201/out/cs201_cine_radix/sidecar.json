@@ -1,0 +1,24 @@
+{
+  "lesson": "radix",
+  "title": "分配排序：不比较，直接算位置",
+  "source": "数据结构与算法（B）2026fall · 第8周 排序 第7节 分配排序（7.1 计数排序、7.3 基数排序）· 10.3 节 比较排序的下界",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 196.23,
+  "speech_seconds": 187.78,
+  "beats": {
+    "title": 0.0,
+    "bound": 17.42,
+    "count": 45.4,
+    "stable": 71.05,
+    "lsd": 101.98,
+    "why": 123.1,
+    "cost": 151.45,
+    "recap": 181.08
+  },
+  "subtitles": 36,
+  "audit_issues": 0,
+  "size_mb": 14.03,
+  "wall_seconds": 190.9
+}

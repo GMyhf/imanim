@@ -28,7 +28,15 @@ LESSONS = {"linked": ("linked.json", "linked_scene.py", "LinkedLesson"),
            "floyd": ("floyd.json", "floyd_scene.py", "FloydLesson"),
            "mst": ("mst.json", "mst_scene.py", "MSTLesson"),
            "qsort": ("qsort.json", "qsort_scene.py", "QSortLesson"),
-           "bit": ("bit.json", "bit_scene.py", "BITLesson")}
+           "bit": ("bit.json", "bit_scene.py", "BITLesson"),
+           "scc": ("scc.json", "scc_scene.py", "SCCLesson"),
+           "aoe": ("aoe.json", "aoe_scene.py", "AOELesson"),
+           "bford": ("bford.json", "bford_scene.py", "BFordLesson"),
+           "bigo": ("bigo.json", "bigo_scene.py", "BigOLesson"),
+           "forest": ("forest.json", "forest_scene.py", "ForestLesson"),
+           "trie": ("trie.json", "trie_scene.py", "TrieLesson"),
+           "radix": ("radix.json", "radix_scene.py", "RadixLesson"),
+           "manacher": ("manacher.json", "manacher_scene.py", "ManacherLesson")}
 
 _spec = importlib.util.spec_from_file_location("cine_make", HERE.parent.parent / "cs101" / "cinematic" / "make.py")
 base = importlib.util.module_from_spec(_spec)

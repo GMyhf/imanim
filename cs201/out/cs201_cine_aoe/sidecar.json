@@ -1,0 +1,26 @@
+{
+  "lesson": "aoe",
+  "title": "关键路径：一天也拖不得的活动",
+  "source": "数据结构与算法（B）2026fall · 第7周 图 4.7 节 关键路径（AOE 网）· sunnywhy 404、406",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 198.97,
+  "speech_seconds": 188.59,
+  "beats": {
+    "title": 0.0,
+    "net": 16.8,
+    "longest": 35.07,
+    "ve": 55.1,
+    "vl": 86.58,
+    "slack": 115.02,
+    "share": 139.02,
+    "shorten": 151.0,
+    "code": 170.38,
+    "recap": 186.43
+  },
+  "subtitles": 40,
+  "audit_issues": 0,
+  "size_mb": 16.47,
+  "wall_seconds": 169.2
+}

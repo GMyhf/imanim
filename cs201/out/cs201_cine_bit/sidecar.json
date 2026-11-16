@@ -5,22 +5,22 @@
   "voice": "zh-CN-YunxiNeural",
   "tts": "edge-tts",
   "quality": "fullhd",
-  "seconds": 266.45,
-  "speech_seconds": 254.78,
+  "seconds": 234.82,
+  "speech_seconds": 223.13,
   "beats": {
     "title": 0.0,
-    "dilemma": 21.0,
-    "lowbit": 48.45,
-    "cover": 73.33,
-    "query": 95.6,
-    "update": 130.62,
-    "cost": 163.97,
-    "ants": 191.35,
-    "scan": 219.82,
-    "recap": 248.37
+    "dilemma": 15.67,
+    "lowbit": 38.18,
+    "cover": 62.28,
+    "query": 81.67,
+    "update": 113.1,
+    "cost": 140.93,
+    "ants": 165.25,
+    "scan": 189.4,
+    "recap": 216.73
   },
-  "subtitles": 50,
+  "subtitles": 46,
   "audit_issues": 0,
-  "size_mb": 16.95,
-  "wall_seconds": 244.5
+  "size_mb": 15.38,
+  "wall_seconds": 219.8
 }

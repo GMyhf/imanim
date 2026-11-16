@@ -6,7 +6,7 @@
 <meta name="description" content="北京大学计算概论（B）与数据结构与算法（B）的 3B1B 风格算法动画短片总入口。">
 <title>算法动画</title>
 <!-- 两门课算法动画的总入口，部署在 https://infomall.zhengmao.ltd/anim/（成都中转 /srv/anim/index.html）。
-     片数与总时长手写，新增片子后对照两份 films.json 与 sidecar 更新。 -->
+     片数、总时长与周次范围由 home.py 按两门课的 films.json 与 sidecar 改写（python home.py）。 -->
 <style>
 :root {
   --bg: #f4f5f8; --surface: #ffffff; --fg: #1b1e26; --muted: #5d6475; --line: #dde1ea;
@@ -58,7 +58,7 @@ footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
         <span class="code">CS101</span>
         <h2>计算概论（B）</h2>
         <p>递归、回溯、并查集、BFS、Dijkstra、二分答案、贪心与动态规划。</p>
-        <span class="stats"><b>14</b> 支 · 总时长 <b>40:48</b> · 第 6–12 周</span>
+        <span class="stats" data-course="cs101"><b>14</b> 支 · 总时长 <b>40:48</b> · 第 6–12 周</span>
         <span class="go">进入 CS101 算法动画 →</span>
       </div>
     </a>
@@ -67,8 +67,8 @@ footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line);
       <div class="body">
         <span class="code">CS201</span>
         <h2>数据结构与算法（B）</h2>
-        <p>链表、栈、KMP、二叉树与堆、Huffman、拓扑排序、最短路、最小生成树、快排、散列表与树状数组。</p>
-        <span class="stats"><b>13</b> 支 · 总时长 <b>48:21</b> · 第 2–8 周与春季专题</span>
+        <p>复杂度、链表、栈、KMP、树与堆、Huffman、拓扑排序、强连通分量、关键路径、最短路、最小生成树、快排与分配排序，以及散列、字典树、树状数组、Manacher。</p>
+        <span class="stats" data-course="cs201"><b>21</b> 支 · 总时长 <b>73:32</b> · 第 1–8 周与春季专题</span>
         <span class="go">进入 CS201 算法动画 →</span>
       </div>
     </a>

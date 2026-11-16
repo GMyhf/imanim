@@ -1,0 +1,26 @@
+{
+  "lesson": "scc",
+  "title": "强连通分量：两遍深度优先搜索",
+  "source": "数据结构与算法（B）2026fall · 第7周 图 4.1、4.6 节（Kosaraju）· 2026spring 图讲义 DFS 发现与结束时间 · OpenJudge 02186",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 231.33,
+  "speech_seconds": 220.94,
+  "beats": {
+    "title": 0.0,
+    "graph": 18.22,
+    "condense": 42.38,
+    "dfs1": 62.15,
+    "finish": 106.93,
+    "transpose": 130.05,
+    "dfs2": 145.72,
+    "code": 172.72,
+    "cows": 190.27,
+    "recap": 215.85
+  },
+  "subtitles": 44,
+  "audit_issues": 0,
+  "size_mb": 19.4,
+  "wall_seconds": 203.7
+}

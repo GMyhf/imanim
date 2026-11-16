@@ -26,7 +26,9 @@ PAGE = {   # 页面上的课程文字；films.json 的 "page" 可逐项覆盖（
     "footer": "素材依据课程仓库 2026fall-cs101 的讲义与旁白稿（P 为课件页码）。页面内为 720p 压缩版，"
               "1080p60 原片在 GitHub Releases <code>cs101-anim-2026fall</code>。",
     **data.get("page", {})}
-side = {p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in (HERE / "sidecars").glob("*/sidecar.json")}
+# 各片 sidecar：缺省直接读课程的 out/ 目录（<课程>/cinematic/site → <课程>/out），sidecars/ 下的拷贝优先（旧用法）
+side = {p.parent.name: json.loads(p.read_text(encoding="utf-8"))
+        for d in (HERE.resolve().parent.parent / "out", HERE / "sidecars") for p in d.glob("*/sidecar.json")}
 
 
 def mmss(s):
@@ -159,6 +161,8 @@ body {{ background: var(--bg); color: var(--fg); font-family: var(--f-body); fon
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }}
 .hero {{ display: grid; gap: 12px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }}
 .kicker {{ font-family: var(--f-mono); font-size: 13px; letter-spacing: .06em; color: var(--muted); }}
+.kicker a.home {{ color: var(--accent); text-decoration: none; }}
+.kicker a.home:hover, .kicker a.home:focus-visible {{ text-decoration: underline; }}
 h1 {{ font-family: var(--f-display); font-size: clamp(34px, 6vw, 56px); line-height: 1.1; margin: 0; text-wrap: balance; }}
 h1 em {{ font-style: normal; color: var(--yellow); }}
 .lede {{ max-width: 62ch; color: var(--muted); margin: 0; }}
@@ -207,7 +211,7 @@ html {{ scroll-behavior: smooth; }}
 {"</head>" + chr(10) + "<body>" if STANDALONE else ""}
 <div class="wrap">
   <header class="hero">
-    <div class="kicker">{PAGE['kicker']}</div>
+    <div class="kicker">{'<a class="home" href="../anim/">← 全部系列</a> · ' if STANDALONE else ''}{PAGE['kicker']}</div>
     <h1>{PAGE['h1']}</h1>
     <p class="lede">{PAGE['lede']}</p>
     <div class="stats"><span><b>{n_films}</b> 支短片</span><span>总时长 <b>{mmss(total)}</b></span><span>1080p · 中文配音 · 画面内字幕</span></div>
