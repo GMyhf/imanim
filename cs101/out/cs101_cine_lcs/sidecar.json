@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 154.47,
   "size_mb": 11.37,
-  "wall_seconds": 258.2
+  "wall_seconds": 258.2,
+  "endcard_info": {
+    "next": "BFS：一圈一圈往外推",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

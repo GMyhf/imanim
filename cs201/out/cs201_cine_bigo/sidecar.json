@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 199.67,
   "size_mb": 13.16,
-  "wall_seconds": 246.7
+  "wall_seconds": 246.7,
+  "endcard_info": {
+    "next": "链表：三根指针的舞蹈",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

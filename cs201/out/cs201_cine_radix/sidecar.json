@@ -21,5 +21,10 @@
   "audit_issues": 0,
   "endcard": 195.58,
   "size_mb": 14.16,
-  "wall_seconds": 207.7
+  "wall_seconds": 207.7,
+  "endcard_info": {
+    "next": "散列表：把关键字算成地址",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

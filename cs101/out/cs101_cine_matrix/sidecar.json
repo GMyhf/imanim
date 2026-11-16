@@ -20,5 +20,10 @@
   "audit_issues": 0,
   "endcard": 185.83,
   "size_mb": 11.56,
-  "wall_seconds": 214.5
+  "wall_seconds": 214.5,
+  "endcard_info": {
+    "next": "排序：从 n 平方到 n log n",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

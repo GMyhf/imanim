@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 218.2,
   "size_mb": 17.12,
-  "wall_seconds": 360.9
+  "wall_seconds": 360.9,
+  "endcard_info": {
+    "next": "八皇后：回溯与剪枝",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

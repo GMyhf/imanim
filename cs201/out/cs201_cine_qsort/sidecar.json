@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 197.6,
   "size_mb": 15.04,
-  "wall_seconds": 228.7
+  "wall_seconds": 228.7,
+  "endcard_info": {
+    "next": "分配排序：不比较，直接算位置",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

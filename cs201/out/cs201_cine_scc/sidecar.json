@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 230.53,
   "size_mb": 19.53,
-  "wall_seconds": 238.1
+  "wall_seconds": 238.1,
+  "endcard_info": {
+    "next": "关键路径：一天也拖不得的活动",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

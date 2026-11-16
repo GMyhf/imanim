@@ -10,8 +10,9 @@
 数据：每条一行 JSON 追加到 $STATE_DIRECTORY/feedback.jsonl（systemd StateDirectory，缺省 ./feedback.jsonl），
       小测记在同目录 quiz.jsonl。
 
-运行：python3 feedback_server.py --port 8109 --films fib,hanoi,... [--quiz quiz.json] [--token …]
-      （--quiz 给出时按各片题数校验题号，否则只要求 0 ≤ q < 20）
+运行：python3 feedback_server.py --port 8109 --quiz quiz.json [--token …]
+      片目缺省取 quiz.json 的键（test_quiz 保证它与 films.json 一致），新增片子只要换 quiz.json 再重启；
+      也可以用 --films fib,hanoi,... 显式给出。没有 --quiz 时题号只要求 0 ≤ q < 20。
 查看：python3 feedback_server.py --report [--data /var/lib/cs101-anim/feedback.jsonl]
 """
 from __future__ import annotations
@@ -238,6 +239,10 @@ def main() -> None:
     FILMS.extend(x for x in a.films.split(",") if x)
     if a.quiz:
         QUIZ_N.update({k: len(v) for k, v in json.loads(Path(a.quiz).read_text(encoding="utf-8")).items()})
+    if not FILMS:
+        FILMS.extend(QUIZ_N)
+    if not FILMS:
+        raise SystemExit("没有片目：给 --films，或给 --quiz 由题库的键决定")
     ThreadingHTTPServer((a.host, a.port), Handler).serve_forever()
 
 

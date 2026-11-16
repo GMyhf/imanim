@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 204.1,
   "size_mb": 15.26,
-  "wall_seconds": 254.9
+  "wall_seconds": 254.9,
+  "endcard_info": {
+    "next": "树与森林：左孩子，右兄弟",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

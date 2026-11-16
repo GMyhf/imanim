@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 198.17,
   "size_mb": 16.59,
-  "wall_seconds": 195.0
+  "wall_seconds": 195.0,
+  "endcard_info": {
+    "next": "Floyd：一次算出所有点对",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

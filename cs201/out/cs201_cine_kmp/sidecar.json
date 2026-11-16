@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 235.82,
   "size_mb": 17.76,
-  "wall_seconds": 276.2
+  "wall_seconds": 276.2,
+  "endcard_info": {
+    "next": "二叉树周游：同一圈轮廓，三个时机",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

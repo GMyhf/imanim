@@ -225,8 +225,9 @@ def main() -> int:
     if a.tts_only:
         return 0
     media = out / "media"
+    card = endcard(a.lesson)
     env = dict(os.environ, CINE_TIMING=str(out / "timing.json"), CINE_MARKS=str(out / "marks.json"),
-               CINE_AUDIT=str(out / "audit.json"), CINE_ENDCARD=json.dumps(endcard(a.lesson), ensure_ascii=False),
+               CINE_AUDIT=str(out / "audit.json"), CINE_ENDCARD=json.dumps(card, ensure_ascii=False),
                PYTHONPATH=os.pathsep.join(filter(None, [str(CINE_DIR), os.environ.get("PYTHONPATH")])))
     run([sys.executable, "-m", "manim", *QUALITY[a.quality], "--disable_caching", "--media_dir", str(media),
          "-o", "silent.mp4", str(HERE / scene_file), scene_cls], env=env, cwd=HERE)
@@ -253,6 +254,7 @@ def main() -> int:
         "seconds": round(total, 2), "speech_seconds": round(sum(t["seconds"] for t in timing), 2),
         "beats": {k: round(v, 2) for k, v in marks.items()}, "subtitles": n_subs, "audit_issues": len(audit),
         "endcard": None if endcard_at is None else round(endcard_at, 2),
+        "endcard_info": card,     # publish.py 据此发现片目顺序变了、片尾「下一支」过时的片
         "size_mb": round(final.stat().st_size / 2**20, 2), "wall_seconds": round(time.time() - t0, 1),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     shutil.rmtree(media, ignore_errors=True)

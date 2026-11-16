@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 172.28,
   "size_mb": 13.52,
-  "wall_seconds": 248.3
+  "wall_seconds": 248.3,
+  "endcard_info": {
+    "next": "并查集：让森林越查越矮",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

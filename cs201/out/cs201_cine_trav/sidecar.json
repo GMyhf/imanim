@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 213.33,
   "size_mb": 15.3,
-  "wall_seconds": 223.3
+  "wall_seconds": 223.3,
+  "endcard_info": {
+    "next": "二叉搜索树：左小右大，再加一点平衡",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

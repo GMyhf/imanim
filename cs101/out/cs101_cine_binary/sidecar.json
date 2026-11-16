@@ -21,5 +21,10 @@
   "audit_issues": 0,
   "endcard": 203.98,
   "size_mb": 13.32,
-  "wall_seconds": 224.6
+  "wall_seconds": 224.6,
+  "endcard_info": {
+    "next": "浮点数：0.1 + 0.2 为什么不等于 0.3",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

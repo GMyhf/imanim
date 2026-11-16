@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 208.92,
   "size_mb": 15.87,
-  "wall_seconds": 205.5
+  "wall_seconds": 205.5,
+  "endcard_info": {
+    "next": "KMP：目标指针不回头",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

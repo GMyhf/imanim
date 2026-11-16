@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 151.02,
   "size_mb": 10.78,
-  "wall_seconds": 215.7
+  "wall_seconds": 215.7,
+  "endcard_info": {
+    "next": "栈：后进先出的三种用法",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

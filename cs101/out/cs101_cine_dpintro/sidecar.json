@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 195.52,
   "size_mb": 13.91,
-  "wall_seconds": 242.0
+  "wall_seconds": 242.0,
+  "endcard_info": {
+    "next": "0/1 背包：一张表，两个方向",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

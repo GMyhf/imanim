@@ -62,4 +62,5 @@ python ../../../cs101/cinematic/site/home.py                                    
 ```
 
 部署位置：成都中转 `/srv/cs201-anim`（720p 视频与封面转码参数同 CS101），对外 https://infomall.zhengmao.ltd/cs201-anim/；
-反馈接口用同一个 `cs101/cinematic/site/feedback_server.py` 另起一个实例（`--films` 换成本系列 21 个 id，新增片子要同步改 systemd 单元并重启）。
+反馈接口用同一个 `cs101/cinematic/site/feedback_server.py` 另起一个实例（片目取自 `quiz-cs201.json`）。发布用
+`python cs101/cinematic/publish.py --course cs201 <id…> [--render] [--stale]`，见 [`cs101/cinematic/README.md`](../../cs101/cinematic/README.md) 的「一键发布」。

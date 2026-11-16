@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 200.48,
   "size_mb": 15.38,
-  "wall_seconds": 210.2
+  "wall_seconds": 210.2,
+  "endcard_info": {
+    "next": "堆：一棵藏在数组里的树",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

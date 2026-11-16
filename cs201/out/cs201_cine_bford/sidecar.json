@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 192.1,
   "size_mb": 15.11,
-  "wall_seconds": 205.0
+  "wall_seconds": 205.0,
+  "endcard_info": {
+    "next": "最小生成树：一棵树和一片森林",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

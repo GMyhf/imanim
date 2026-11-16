@@ -48,6 +48,24 @@ https://infomall.zhengmao.ltd/cs101-anim/（成都中转 `/srv/cs101-anim`，Cad
 页面顶部可按关键词搜索（标题、简介、出处、文字稿）；看到 80% 的片子在本机 localStorage `anim-watched-<课程>` 记为看过，
 系列页和总入口都显示已看数；`#<id>` 深链接会滚到该片并闪一下。新增片子时记得在 films.json 补 `chapters` 与 `href`。
 
+## 一键发布 `publish.py`
+
+检查、渲染、转码、Release、部署、验证一条命令走完（两门课通用，`--course cs101|cs201`）：
+
+```bash
+python cs101/cinematic/publish.py --course cs201 --check-only            # 只检查
+python cs101/cinematic/publish.py --course cs201 kmp --render            # Mac 上重渲 kmp（含配音校对）→ 转码 → Release → 部署 → 公网验证
+python cs101/cinematic/publish.py --course cs101 binary --render --stale # 新片：连带片尾「下一支」过时的相邻片一起重渲
+python cs101/cinematic/publish.py --course cs201                         # 只更新页面、题库、反馈服务（改了 films.json、quiz、build.py 之后）
+python cs101/cinematic/publish.py --course cs201 kmp --dry-run           # 打印要在 Mac、中转上执行的脚本，不真改
+```
+
+检查项：films.json 与 LESSONS 对得上；各片 sidecar 是 1080p、≤ 4 分钟、画面检查 0 处、`chapters` 键与 beats 一致；
+`quiz.json` 片目与 films.json 一致且是 `quiz_gen.py` 的最新输出；两门课单元测试；片尾卡是否过时（sidecar 的 `endcard_info`
+与按当前 films.json 算出的不同）。中转上先把旧页面、题库、服务文件备份到 `/var/backups/anim-<时间>-<课程>/`，
+只有 `feedback_server.py`、`quiz-<课程>.json` 或 systemd 单元变了才重启反馈服务。反馈服务的片目取自 quiz.json，单元里不再写 `--films`。
+跑完记得 git 提交 `<课程>/out/` 和源文件。
+
 反馈服务（`site/feedback_server.py`）除评分外还收小测结果 `POST /quiz`（只记片子、题号、对错；`--quiz quiz.json` 时按题数校验题号），
 存同目录 `quiz.jsonl`；`GET /report?token=…` 是给老师看的 HTML 汇总页（各片评分、留言、每题正确率），
 口令来自环境变量 `FEEDBACK_REPORT_TOKEN` 或 `--token`，没配就 404。命令行 `--report` 同样会打印小测正确率。

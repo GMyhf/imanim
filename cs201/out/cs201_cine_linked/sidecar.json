@@ -21,5 +21,10 @@
   "audit_issues": 0,
   "endcard": 206.45,
   "size_mb": 15.14,
-  "wall_seconds": 239.2
+  "wall_seconds": 239.2,
+  "endcard_info": {
+    "next": "中缀转后缀：调度场算法",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 162.75,
   "size_mb": 13.72,
-  "wall_seconds": 210.8
+  "wall_seconds": 210.8,
+  "endcard_info": {
+    "next": "汉诺塔：相信更小的自己",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

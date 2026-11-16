@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 234.52,
   "size_mb": 16.62,
-  "wall_seconds": 246.6
+  "wall_seconds": 246.6,
+  "endcard_info": {
+    "next": "字典树：一个字母走一步",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

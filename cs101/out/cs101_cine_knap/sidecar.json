@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 168.0,
   "size_mb": 12.35,
-  "wall_seconds": 263.8
+  "wall_seconds": 263.8,
+  "endcard_info": {
+    "next": "LCS 与编辑距离：同一张二维表",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

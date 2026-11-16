@@ -23,5 +23,10 @@
   "audit_issues": 0,
   "endcard": 200.35,
   "size_mb": 16.8,
-  "wall_seconds": 219.1
+  "wall_seconds": 219.1,
+  "endcard_info": {
+    "next": "Bellman-Ford：负权边与负环",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }

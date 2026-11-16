@@ -21,5 +21,10 @@
   "audit_issues": 0,
   "endcard": 204.88,
   "size_mb": 15.92,
-  "wall_seconds": 256.9
+  "wall_seconds": 256.9,
+  "endcard_info": {
+    "next": null,
+    "last": true,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

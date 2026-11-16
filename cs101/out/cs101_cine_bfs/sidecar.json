@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 155.0,
   "size_mb": 11.61,
-  "wall_seconds": 249.1
+  "wall_seconds": 249.1,
+  "endcard_info": {
+    "next": "Dijkstra：带权的波纹",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  }
 }

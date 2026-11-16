@@ -22,5 +22,10 @@
   "audit_issues": 0,
   "endcard": 214.93,
   "size_mb": 14.65,
-  "wall_seconds": 220.3
+  "wall_seconds": 220.3,
+  "endcard_info": {
+    "next": "Huffman 编码：让常用的字符更短",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs201-anim/"
+  }
 }
