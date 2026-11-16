@@ -2,6 +2,7 @@
 
 python build.py               # Artifact 版（发布时外层自动补 HTML 骨架，用 Google Fonts）
 python build.py --standalone [--feedback]  # 独立部署版；--feedback 加每支片的反馈栏（需中转上的 feedback_server.py）
+python build.py --site ../../../cs201/cinematic/site --standalone   # 别的课程：读该目录的 films.json 与 sidecars/，产物也写在那里
                               # 独立部署版（完整 HTML 骨架、只用系统字体：国内访问不了 Google Fonts），
                               # 部署在 https://infomall.zhengmao.ltd/cs101-anim/（成都中转 /srv/cs101-anim）
 """
@@ -14,7 +15,17 @@ STANDALONE = "--standalone" in sys.argv
 FEEDBACK = STANDALONE and "--feedback" in sys.argv     # 反馈栏要求中转上已部署 feedback_server.py
 
 HERE = Path(__file__).parent
+if "--site" in sys.argv:
+    HERE = Path(sys.argv[sys.argv.index("--site") + 1])
 data = json.loads((HERE / "films.json").read_text(encoding="utf-8"))
+PAGE = {   # 页面上的课程文字；films.json 的 "page" 可逐项覆盖（缺省是 CS101）
+    "title": "CS101 算法动画", "h1": "CS101 <em>算法动画</em>",
+    "description": "计算概论（B）2026fall 算法动画短片，按周次排列，可在页面内直接播放。",
+    "kicker": "计算概论（B）· 2026 FALL · 知识点短片",
+    "lede": "每支两到四分钟，讲透一个知识点。画面里的每一步都由真实程序的执行轨迹驱动，片中数字都经过测试对照讲义原版代码核验。",
+    "footer": "素材依据课程仓库 2026fall-cs101 的讲义与旁白稿（P 为课件页码）。页面内为 720p 压缩版，"
+              "1080p60 原片在 GitHub Releases <code>cs101-anim-2026fall</code>。",
+    **data.get("page", {})}
 side = {p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in (HERE / "sidecars").glob("*/sidecar.json")}
 
 
@@ -36,6 +47,11 @@ def feedback(fid):
               <textarea id="c-{fid}" maxlength="500" rows="2" placeholder="哪里没看懂、哪里太快……"></textarea></details>
             <span class="fb-msg" aria-live="polite"></span>
           </div>"""
+
+
+def wtag(w):
+    """周次标签：缺省 W06；春季专题等可在 films.json 里用 "tag" 自定。"""
+    return html.escape(w.get("tag", f"W{w['week']:02d}"))
 
 
 total = 0.0
@@ -60,12 +76,12 @@ for w in data["weeks"]:
       </article>""")
     sections.append(f"""
     <section class="week" id="w{w['week']}">
-      <header class="week-head"><span class="wk">W{w['week']:02d}</span><h2>第 {w['week']} 周 · {html.escape(w['topic'])}</h2></header>
+      <header class="week-head"><span class="wk">{wtag(w)}</span><h2>{html.escape(w.get('label', f"第 {w['week']} 周"))} · {html.escape(w['topic'])}</h2></header>
       <div class="grid">{''.join(cards)}
       </div>
     </section>""")
 
-nav = "".join(f'<a href="#w{w["week"]}">W{w["week"]:02d}<span>{html.escape(w["topic"])}</span></a>' for w in data["weeks"])
+nav = "".join(f'<a href="#w{w["week"]}">{wtag(w)}<span>{html.escape(w["topic"])}</span></a>' for w in data["weeks"])
 FB_SCRIPT = """<script>
 (function () {
   var NAMES = {ok: "看懂了", hard: "有点难", fast: "节奏太快", slow: "节奏太慢"};
@@ -109,15 +125,15 @@ FB_SCRIPT = """<script>
 </script>
 """
 
-head = ("""<!doctype html>
+head = (f"""<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="计算概论（B）2026fall 算法动画短片，按周次排列，可在页面内直接播放。">
-<title>CS101 算法动画</title>
-<style>html,body{margin:0}</style>
-""" if STANDALONE else """<title>CS101 算法动画</title>
+<meta name="description" content="{PAGE['description']}">
+<title>{PAGE['title']}</title>
+<style>html,body{{margin:0}}</style>
+""" if STANDALONE else f"""<title>{PAGE['title']}</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400&display=swap">
@@ -184,21 +200,22 @@ nav.weeks a:hover, nav.weeks a:focus-visible {{ border-color: var(--accent); out
 footer {{ margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px;
   display: grid; gap: 6px; }}
 footer code {{ font-family: var(--f-mono); font-size: 12px; }}
+footer a {{ color: var(--accent); }}
 @media (prefers-reduced-motion: reduce) {{ * {{ scroll-behavior: auto !important; }} }}
 html {{ scroll-behavior: smooth; }}
 </style>
 {"</head>" + chr(10) + "<body>" if STANDALONE else ""}
 <div class="wrap">
   <header class="hero">
-    <div class="kicker">计算概论（B）· 2026 FALL · 知识点短片</div>
-    <h1>CS101 <em>算法动画</em></h1>
-    <p class="lede">每支两到四分钟，讲透一个知识点。画面里的每一步都由真实程序的执行轨迹驱动，片中数字都经过测试对照讲义原版代码核验。</p>
+    <div class="kicker">{PAGE['kicker']}</div>
+    <h1>{PAGE['h1']}</h1>
+    <p class="lede">{PAGE['lede']}</p>
     <div class="stats"><span><b>{n_films}</b> 支短片</span><span>总时长 <b>{mmss(total)}</b></span><span>1080p · 中文配音 · 画面内字幕</span></div>
   </header>
   <nav class="weeks" aria-label="按周次跳转">{nav}</nav>
   {''.join(sections)}
   <footer>
-    <span>素材依据课程仓库 2026fall-cs101 的讲义与旁白稿（P 为课件页码）。页面内为 720p 压缩版，1080p60 原片在项目仓库 <code>cs101/out/cs101_cine_*/</code>。</span>
+    <span>{PAGE['footer']}</span>
     <span>制作：Manim Community 0.22 渲染，Edge TTS 配音，每支片附对撞测试与自动画面检查。</span>
   </footer>
 </div>

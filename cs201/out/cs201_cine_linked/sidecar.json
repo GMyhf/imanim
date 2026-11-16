@@ -1,0 +1,24 @@
+{
+  "lesson": "linked",
+  "title": "链表：三根指针的舞蹈",
+  "source": "数据结构与算法（B）2026fall · 第2周 线性表 附录A · LeetCode 21、206、876、141、142",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 207.25,
+  "speech_seconds": 197.5,
+  "beats": {
+    "title": 0.0,
+    "merge": 23.5,
+    "reverse": 60.33,
+    "revrun": 82.1,
+    "middle": 101.47,
+    "cycle": 126.25,
+    "entry": 149.67,
+    "recap": 180.22
+  },
+  "subtitles": 36,
+  "audit_issues": 0,
+  "size_mb": 15.0,
+  "wall_seconds": 201.0
+}

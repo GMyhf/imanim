@@ -1,0 +1,26 @@
+{
+  "lesson": "bit",
+  "title": "树状数组：最低位的一",
+  "source": "数据结构与算法（B）2026spring · 第2周 树状数组 第3节与附录A · LeetCode 307 · OpenJudge 20018",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 266.45,
+  "speech_seconds": 254.78,
+  "beats": {
+    "title": 0.0,
+    "dilemma": 21.0,
+    "lowbit": 48.45,
+    "cover": 73.33,
+    "query": 95.6,
+    "update": 130.62,
+    "cost": 163.97,
+    "ants": 191.35,
+    "scan": 219.82,
+    "recap": 248.37
+  },
+  "subtitles": 50,
+  "audit_issues": 0,
+  "size_mb": 16.95,
+  "wall_seconds": 244.5
+}

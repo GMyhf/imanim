@@ -1,0 +1,26 @@
+{
+  "lesson": "topo",
+  "title": "拓扑排序：先修课怎么排",
+  "source": "数据结构与算法（B）2026fall · 第7周 图 4.3–4.5 节（图 7.17 课程先修关系）· sunnywhy 403 先导课程",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 236.4,
+  "speech_seconds": 224.52,
+  "beats": {
+    "title": 0.0,
+    "dag": 13.43,
+    "indeg": 40.07,
+    "code": 56.63,
+    "run": 78.03,
+    "line": 115.12,
+    "cycle": 132.4,
+    "dfs": 159.92,
+    "why": 192.38,
+    "recap": 218.03
+  },
+  "subtitles": 50,
+  "audit_issues": 0,
+  "size_mb": 22.52,
+  "wall_seconds": 254.8
+}

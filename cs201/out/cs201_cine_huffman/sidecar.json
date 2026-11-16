@@ -1,0 +1,25 @@
+{
+  "lesson": "huffman",
+  "title": "Huffman 编码：让常用的字符更短",
+  "source": "数据结构与算法（B）2026fall · 第5周 二叉树 6.1–6.2 节 · OpenJudge 04080",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 204.9,
+  "speech_seconds": 194.18,
+  "beats": {
+    "title": 0.0,
+    "prefix": 18.17,
+    "wpl": 45.7,
+    "build1": 70.3,
+    "build2": 95.08,
+    "code": 113.9,
+    "total": 129.55,
+    "decode": 155.8,
+    "recap": 178.45
+  },
+  "subtitles": 32,
+  "audit_issues": 0,
+  "size_mb": 15.13,
+  "wall_seconds": 222.2
+}

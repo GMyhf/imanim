@@ -1,0 +1,25 @@
+{
+  "lesson": "heap",
+  "title": "堆：一棵藏在数组里的树",
+  "source": "数据结构与算法（B）2026fall · 第5周 二叉树 5.1–5.3 节 · OpenJudge 04078",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 215.7,
+  "speech_seconds": 204.96,
+  "beats": {
+    "title": 0.0,
+    "array": 16.82,
+    "order": 41.35,
+    "insert": 60.72,
+    "remove": 85.58,
+    "build": 114.32,
+    "cost": 141.98,
+    "compare": 170.9,
+    "recap": 194.45
+  },
+  "subtitles": 45,
+  "audit_issues": 0,
+  "size_mb": 14.58,
+  "wall_seconds": 189.0
+}

@@ -1,0 +1,25 @@
+{
+  "lesson": "mst",
+  "title": "最小生成树：一棵树和一片森林",
+  "source": "数据结构与算法（B）2026fall · 第7周 图 6 节 最小生成树（图 7.23–7.25）· OpenJudge 01258",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 235.42,
+  "speech_seconds": 225.98,
+  "beats": {
+    "title": 0.0,
+    "problem": 14.93,
+    "cut": 32.0,
+    "prim": 60.15,
+    "code": 93.6,
+    "kruskal": 119.78,
+    "same": 160.8,
+    "spt": 187.58,
+    "recap": 220.15
+  },
+  "subtitles": 51,
+  "audit_issues": 0,
+  "size_mb": 18.36,
+  "wall_seconds": 243.8
+}

@@ -13,3 +13,10 @@ cs101/out/*/render.log
 
 # CS101 3B1B 系列成片放 GitHub Releases（cs101-anim-2026fall），不进 git；目录里的 sidecar/timing/audit 等仍提交
 cs101/out/cs101_cine_*/*.mp4
+cs201/out/*/audio/
+cs201/out/*/track.wav
+cs201/out/*/render.log
+# CS201 系列成片同样放 GitHub Releases（cs201-anim-2026fall）
+cs201/out/cs201_cine_*/*.mp4
+cs201/cinematic/site/sidecars/
+cs201/cinematic/site/index*.html

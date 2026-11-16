@@ -1,0 +1,26 @@
+{
+  "lesson": "floyd",
+  "title": "Floyd：一次算出所有点对",
+  "source": "数据结构与算法（B）2026fall · 第1周 问题求解「股市的传言」· 第7周 图 5.2 节 Floyd（图 7.20、7.21）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 201.15,
+  "speech_seconds": 189.48,
+  "beats": {
+    "title": 0.0,
+    "problem": 16.05,
+    "matrix": 41.37,
+    "idea": 57.9,
+    "code": 78.27,
+    "run": 91.95,
+    "order": 122.32,
+    "answer": 148.78,
+    "compare": 173.23,
+    "recap": 188.28
+  },
+  "subtitles": 40,
+  "audit_issues": 0,
+  "size_mb": 16.68,
+  "wall_seconds": 187.9
+}

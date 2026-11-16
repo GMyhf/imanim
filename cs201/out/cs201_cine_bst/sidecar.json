@@ -1,0 +1,26 @@
+{
+  "lesson": "bst",
+  "title": "二叉搜索树：左小右大，再加一点平衡",
+  "source": "数据结构与算法（B）2026fall · 第5周 二叉树 第4节（图5.11–5.13）· 2026spring 树 8.2 节 AVL · 晴问 9.5",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 201.28,
+  "speech_seconds": 190.7,
+  "beats": {
+    "title": 0.0,
+    "build": 17.47,
+    "search": 39.12,
+    "inorder": 61.43,
+    "del1": 76.77,
+    "del2": 91.82,
+    "chain": 120.8,
+    "avl": 136.68,
+    "lr": 165.17,
+    "recap": 182.23
+  },
+  "subtitles": 34,
+  "audit_issues": 0,
+  "size_mb": 15.25,
+  "wall_seconds": 180.8
+}

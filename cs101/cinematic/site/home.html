@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="北京大学计算概论（B）与数据结构与算法（B）的 3B1B 风格算法动画短片总入口。">
+<title>算法动画</title>
+<!-- 两门课算法动画的总入口，部署在 https://infomall.zhengmao.ltd/anim/（成都中转 /srv/anim/index.html）。
+     片数与总时长手写，新增片子后对照两份 films.json 与 sidecar 更新。 -->
+<style>
+:root {
+  --bg: #f4f5f8; --surface: #ffffff; --fg: #1b1e26; --muted: #5d6475; --line: #dde1ea;
+  --accent: #1f86a8; --yellow: #a07a00;
+  --f-body: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1117; --surface: #171a22; --fg: #e6e8ee; --muted: #9aa2b4; --line: #262b36;
+  --accent: #58c4dd; --yellow: #f4d345; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1117; --surface: #171a22; --fg: #e6e8ee; --muted: #9aa2b4; --line: #262b36;
+  --accent: #58c4dd; --yellow: #f4d345; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.65; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 48px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.kicker { font-family: var(--f-mono); font-size: 13px; letter-spacing: .06em; color: var(--muted); }
+h1 { font-size: clamp(34px, 6vw, 54px); line-height: 1.1; margin: 10px 0 12px; }
+h1 em { font-style: normal; color: var(--yellow); }
+.lede { max-width: 60ch; color: var(--muted); margin: 0 0 32px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 24px; }
+a.series { display: grid; grid-template-rows: auto 1fr; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden; color: inherit; text-decoration: none; min-width: 0;
+  transition: border-color .15s, transform .15s; }
+a.series:hover, a.series:focus-visible { border-color: var(--accent); outline: none; transform: translateY(-2px); }
+a.series img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #0f1117; }
+.body { padding: 16px 18px 18px; display: grid; gap: 8px; align-content: start; }
+.code { font-family: var(--f-mono); font-size: 13px; color: var(--accent); letter-spacing: .04em; }
+h2 { margin: 0; font-size: 22px; line-height: 1.3; }
+.body p { margin: 0; color: var(--muted); font-size: 14px; }
+.stats { font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--fg); font-weight: 400; }
+.go { color: var(--accent); font-size: 14px; }
+footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { a.series { transition: none; } a.series:hover { transform: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">北京大学 · 2026 FALL · 知识点短片</div>
+  <h1>算法<em>动画</em></h1>
+  <p class="lede">两门课的知识点短片，每支三到四分钟讲透一个算法或数据结构。画面里的每一步都由真实程序的执行轨迹驱动，片中数字都经过测试对照讲义原版代码核验。</p>
+  <div class="grid">
+    <a class="series" href="../cs101-anim/">
+      <img src="../cs101-anim/posters/fib.jpg" alt="CS101 系列封面：斐波那契调用树" loading="lazy">
+      <div class="body">
+        <span class="code">CS101</span>
+        <h2>计算概论（B）</h2>
+        <p>递归、回溯、并查集、BFS、Dijkstra、二分答案、贪心与动态规划。</p>
+        <span class="stats"><b>14</b> 支 · 总时长 <b>40:48</b> · 第 6–12 周</span>
+        <span class="go">进入 CS101 算法动画 →</span>
+      </div>
+    </a>
+    <a class="series" href="../cs201-anim/">
+      <img src="../cs201-anim/posters/huffman.jpg" alt="CS201 系列封面：Huffman 树" loading="lazy">
+      <div class="body">
+        <span class="code">CS201</span>
+        <h2>数据结构与算法（B）</h2>
+        <p>链表、栈、KMP、二叉树与堆、Huffman、拓扑排序、最短路、最小生成树、快排、散列表与树状数组。</p>
+        <span class="stats"><b>13</b> 支 · 总时长 <b>48:21</b> · 第 2–8 周与春季专题</span>
+        <span class="go">进入 CS201 算法动画 →</span>
+      </div>
+    </a>
+  </div>
+  <footer>Manim Community 0.22 渲染，Edge TTS 配音。每支片下方可以留反馈：看懂了、有点难、节奏快慢。</footer>
+</div>
+</body>
+</html>

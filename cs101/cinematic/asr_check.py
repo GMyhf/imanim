@@ -3,11 +3,12 @@
 用法（Mac Studio，仓库根；需要 mlx-whisper、pypinyin、cn2an）：
   python cs101/cinematic/asr_check.py                 # 所有已出片的 lesson
   python cs101/cinematic/asr_check.py fib hanoi       # 指定 lesson
+  python cs101/cinematic/asr_check.py --course cs201 kmp   # 别的课程（读 cs201/cinematic/make.py 的片目）
 
 比对口径：两边先用 cn2an 把中文数字统一成阿拉伯数字（「一八八三」「六十四」写法不同不算错），
 再把汉字转成不带声调的拼音、英文转小写，按「音节/单词」序列做 difflib 比对——同音不同字不算错，
 念错的字（多音字念错、英文读错）、漏读、断流才会出现在差异里。转写结果缓存在各片 audio/ 下。
-结果写 cs101/out/cs101_cine_<id>/asr.json。只报三类值得复听的差异：漏读/断流（连续 ≥3 个音节没听到，或整段听到的
+结果写 <课程>/out/<前缀><id>/asr.json。只报三类值得复听的差异：漏读/断流（连续 ≥3 个音节没听到，或整段听到的
 不足八成）、读音不符（两边都是汉字且 ≥2 个音节对不上）、英文词被听成中文；纯数字/纯英文拼写差异（「1 1」听成「11」、
 lo 写成 low）不报。
 注意 Whisper 本身也会听错，报告是「值得复听的位置」，不是定论。
@@ -26,7 +27,16 @@ OUT = HERE.parent.parent / "out"
 MODEL = "mlx-community/whisper-large-v3-turbo"
 
 sys.path.insert(0, str(HERE))
-from make import LESSONS  # noqa: E402
+from make import LESSONS, PREFIX  # noqa: E402
+
+if len(sys.argv) > 2 and sys.argv[1] == "--course":     # 别的课程：读那门课的 make.py 拿片目、目录与前缀
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location(
+        f"{sys.argv[2]}_make", HERE.parent.parent / sys.argv[2] / "cinematic" / "make.py")
+    _m = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_m)
+    HERE, OUT, LESSONS, PREFIX = _m.HERE, _m.OUT, _m.LESSONS, _m.PREFIX
+    del sys.argv[1:3]
 
 
 def tokens(text: str) -> list[str]:
@@ -73,7 +83,7 @@ def transcribe(wav: Path) -> str:
 
 def check(lesson: str) -> dict:
     script = json.loads((HERE / LESSONS[lesson][0]).read_text(encoding="utf-8"))
-    out = OUT / f"cs101_cine_{lesson}"
+    out = OUT / f"{PREFIX}{lesson}"
     timing = {t["id"]: t for t in json.loads((out / "timing.json").read_text(encoding="utf-8"))}
     beats = []
     for b in script["beats"]:
@@ -100,7 +110,7 @@ def check(lesson: str) -> dict:
 
 
 def main() -> int:
-    names = sys.argv[1:] or [k for k in LESSONS if (OUT / f"cs101_cine_{k}" / "timing.json").exists()]
+    names = sys.argv[1:] or [k for k in LESSONS if (OUT / f"{PREFIX}{k}" / "timing.json").exists()]
     for name in names:
         rep = check(name)
         print(f"== {name}  最低相似度 {rep['min_ratio']:.3f}  待复听 {len(rep['flagged'])} 段")

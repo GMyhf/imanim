@@ -1,13 +1,17 @@
-# imanim · CS101 算法动画短片
+# imanim · CS101 / CS201 算法动画短片
 
-用 [Manim](https://www.manim.community/)（ManimCE 0.22.0）为《计算概论（B）》2026fall 制作的 3B1B 风格算法讲解短片：
-共 14 支、约 41 分钟，1080p60，中文配音、画面内字幕。
+用 [Manim](https://www.manim.community/)（ManimCE 0.22.0）制作的 3B1B 风格算法讲解短片，1080p60，中文配音、画面内字幕。两门课的总入口：**https://infomall.zhengmao.ltd/anim/**（页面源文件 `cs101/cinematic/site/home.html`）。
 
-- **在线观看**（按周次排列，页面内播放 720p 版）：**https://infomall.zhengmao.ltd/cs101-anim/**
-- **1080p60 成片下载**：[GitHub Releases `cs101-anim-2026fall`](https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall)
-- **制作说明、逐支依据、代码结构**：[`cs101/cinematic/README.md`](cs101/cinematic/README.md)
+- **CS101**《计算概论（B）》2026fall：14 支、约 41 分钟。
+  在线观看 **https://infomall.zhengmao.ltd/cs101-anim/** ·
+  1080p 成片 [Releases `cs101-anim-2026fall`](https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall) ·
+  说明 [`cs101/cinematic/README.md`](cs101/cinematic/README.md)
+- **CS201**《数据结构与算法（B）》2026fall：13 支、约 48 分钟。
+  在线观看 **https://infomall.zhengmao.ltd/cs201-anim/** ·
+  1080p 成片 [Releases `cs201-anim-2026fall`](https://github.com/GMyhf/imanim/releases/tag/cs201-anim-2026fall) ·
+  说明 [`cs201/cinematic/README.md`](cs201/cinematic/README.md)
 
-## 片目
+## CS101 片目
 
 | 周次 | 片目 |
 | --- | --- |
@@ -18,6 +22,18 @@
 | 第 10 周 | 区间贪心：先按右端点排序 · 动态规划入门：状态少了一维 |
 | 第 11 周 | 0/1 背包：一张表，两个方向 · LCS 与编辑距离：同一张二维表 |
 | 第 12 周 | BFS：一圈一圈往外推 · Dijkstra：带权的波纹 · 二分答案：最小化最大值 |
+
+## CS201 片目
+
+| 周次 | 片目 |
+| --- | --- |
+| 第 2 周 | 链表：三根指针的舞蹈 |
+| 第 3 周 | 中缀转后缀：调度场算法 |
+| 第 4 周 | KMP：目标指针不回头 |
+| 第 5 周 | 二叉树周游：同一圈轮廓，三个时机 · 二叉搜索树：左小右大，再加一点平衡 · 堆：一棵藏在数组里的树 · Huffman 编码：让常用的字符更短 |
+| 第 7 周 | 拓扑排序：先修课怎么排 · Floyd：一次算出所有点对 · 最小生成树：一棵树和一片森林 |
+| 第 8 周 | 快速排序：力气花在分上 |
+| 春季专题 | 散列表：把关键字算成地址 · 树状数组：最低位的一 |
 
 ## 怎么保证内容对
 
@@ -36,6 +52,8 @@ export PATH=$PWD/.venv/bin:$PATH
 python cs101/cinematic/make.py --lesson fib --quality draft   # 480p15 预览
 python cs101/cinematic/make.py --lesson fib                   # 1080p60 成片
 (cd cs101/cinematic && python -m unittest test_*.py)          # 数字对撞测试
+python cs201/cinematic/make.py --lesson kmp                   # CS201 同一套流程
+(cd cs201/cinematic && PYTHONPATH=../../cs101/cinematic python -m unittest test_*.py)
 ```
 
 Linux 编译 pycairo 需要先装 `libcairo2-dev libpango1.0-dev`；macOS 用 `brew install cairo pango pkgconf`。
@@ -49,6 +67,8 @@ Linux 编译 pycairo 需要先装 `libcairo2-dev libpango1.0-dev`；macOS 用 `b
 ```
 cs101/cinematic/   3B1B 风格系列（本仓库主体）
 cs101/out/         各片的 sidecar、字幕、画面检查与配音校对结果（mp4 在 Releases）
+cs201/cinematic/   CS201 系列：只放各片四个文件，复用 cs101/cinematic 的 make.py、cine.py、入口页生成器
+cs201/out/         同上，CS201 各片产物
 cs101/sample.py    早期 CS101 样片（栈与队列、搜索、动态规划），macOS 系统语音配音，已被上面的系列取代
 chengxiang/        本项目的前身「澄象」：数理化知识点讲解视频的自动管线
 ```

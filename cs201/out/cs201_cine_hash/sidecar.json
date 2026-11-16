@@ -1,0 +1,25 @@
+{
+  "lesson": "hash",
+  "title": "散列表：把关键字算成地址",
+  "source": "数据结构与算法（B）2026spring · 散列表 1.2–1.5 节 · 练习 17968、17975 · dsa-modernization 第10章 10.3",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 235.32,
+  "speech_seconds": 225.91,
+  "beats": {
+    "title": 0.0,
+    "modfn": 19.6,
+    "collide": 43.45,
+    "cluster": 75.27,
+    "lookup": 101.45,
+    "quad": 124.82,
+    "chain": 155.97,
+    "load": 180.67,
+    "recap": 210.4
+  },
+  "subtitles": 34,
+  "audit_issues": 0,
+  "size_mb": 16.5,
+  "wall_seconds": 197.3
+}

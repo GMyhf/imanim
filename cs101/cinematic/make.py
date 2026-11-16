@@ -26,6 +26,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parent / "out"                  # cs101/out
+PREFIX = "cs101_cine_"                     # 产物目录名前缀；cs201/cinematic/make.py 复用本脚本时改写 HERE/OUT/LESSONS/PREFIX
+CINE_DIR = Path(__file__).resolve().parent  # cine.py 所在目录，渲染时放进 PYTHONPATH，别的课程的场景也能 import cine
 SR = 24000
 LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "hanoi": ("hanoi.json", "hanoi_scene.py", "HanoiLesson"),
@@ -148,7 +150,7 @@ def main() -> int:
     a = ap.parse_args()
     script_name, scene_file, scene_cls = LESSONS[a.lesson]
     script = json.loads((HERE / script_name).read_text(encoding="utf-8"))
-    out = (a.out or OUT / f"cs101_cine_{a.lesson}").resolve()
+    out = (a.out or OUT / f"{PREFIX}{a.lesson}").resolve()
     out.mkdir(parents=True, exist_ok=True)
     cache = out / "audio"
     cache.mkdir(exist_ok=True)
@@ -160,7 +162,8 @@ def main() -> int:
         return 0
     media = out / "media"
     env = dict(os.environ, CINE_TIMING=str(out / "timing.json"), CINE_MARKS=str(out / "marks.json"),
-               CINE_AUDIT=str(out / "audit.json"))
+               CINE_AUDIT=str(out / "audit.json"),
+               PYTHONPATH=os.pathsep.join(filter(None, [str(CINE_DIR), os.environ.get("PYTHONPATH")])))
     run([sys.executable, "-m", "manim", *QUALITY[a.quality], "--disable_caching", "--media_dir", str(media),
          "-o", "silent.mp4", str(HERE / scene_file), scene_cls], env=env, cwd=HERE)
     silent = next(media.glob("**/silent.mp4"))
