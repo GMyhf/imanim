@@ -27,7 +27,7 @@ CS101 3B1B 风格片（`cs101/cinematic/`，Edge TTS 配音，详见该目录 RE
 
 CS201 系列（`cs201/cinematic/`，22 支，入口页 https://infomall.zhengmao.ltd/cs201-anim/）复用同一套：`python cs201/cinematic/make.py --lesson <id>` 只是壳，改写 cs101 `make.py` 的 `HERE/OUT/LESSONS/PREFIX` 后调用它，`cine.py` 经 `PYTHONPATH` 传给 manim；测试 `(cd cs201/cinematic && PYTHONPATH=../../cs101/cinematic python -m unittest test_*.py)`；配音校对 `asr_check.py --course cs201 <id>`；入口页 `cs101/cinematic/site/build.py --site cs201/cinematic/site`；成片放 Releases `cs201-anim-2026fall`。公式要 TinyTeX 的 latex + dvisvgm，跑前把 `$HOME/.TinyTeX/bin/x86_64-linux` 加进 PATH。
 
-渲染主力是 Mac Studio（`ssh hfyan@100.76.69.33`，仓库 `~/git/imanim`，M1 Ultra 20 核，可多支 make.py 并行）：`export PATH=$PWD/.venv/bin:/opt/homebrew/bin:/Library/TeX/texbin:$PATH` 后同样命令。常用做法是本机写代码、rsync `cs101/cinematic/` 过去渲染，在 Mac 上提交推送（已设 `http.postBuffer`，否则推几十 MB 视频会 HTTP 400 且只显示 `Everything up-to-date`），再回本机 pull。
+渲染主力是 Mac Studio（`ssh hfyan@100.76.69.33`，仓库 `~/git/imanim`，M1 Ultra 20 核，可多支 make.py 并行，16 支同时渲染最快：实测 16 支 1080p 片并发 16 用 6.6 分钟、并发 8 用 10.8 分钟，publish.py 缺省 `--jobs 16`）：`export PATH=$PWD/.venv/bin:/opt/homebrew/bin:/Library/TeX/texbin:$PATH` 后同样命令。常用做法是本机写代码、rsync `cs101/cinematic/` 过去渲染，在 Mac 上提交推送（已设 `http.postBuffer`，否则推几十 MB 视频会 HTTP 400 且只显示 `Everything up-to-date`），再回本机 pull。
 
 本机（Linux）环境：虚拟环境在仓库根 `.venv/`（从 `chengxiang/mvp` 跑时是 `../../.venv`）（`uv venv .venv && uv pip install --python .venv/bin/python 'manim==0.22.0'`，pycairo 编译需要 `libcairo2-dev libpango1.0-dev`）。ffmpeg 在 `~/.local/bin`，跑之前设 `PATH=$PWD/../../.venv/bin:$PATH MVP_FFMPEG_DIR=$HOME/.local/bin`。`run.py` 即使加 `--no-narration` 也会读 TTS 密钥；没有密钥时设 `QX_TTS_ENGINE=edge`（见下）即可完整出片。
 
