@@ -1,0 +1,31 @@
+{
+  "lesson": "statebfs",
+  "title": "状态不只是坐标：带状态 BFS 与多源 BFS",
+  "source": "计算概论（B）2026fall · 第12周 BFS 2.4–2.6 节 · OpenJudge 04115、M12029",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 215.2,
+  "speech_seconds": 202.06,
+  "beats": {
+    "title": 0.0,
+    "problem": 14.07,
+    "naive": 34.4,
+    "wrong": 51.17,
+    "layers": 78.38,
+    "code": 112.25,
+    "multi": 140.3,
+    "flood": 165.78,
+    "recap": 193.6
+  },
+  "subtitles": 43,
+  "audit_issues": 0,
+  "endcard": 212.1,
+  "endcard_info": {
+    "next": "Dijkstra：带权的波纹",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.46,
+  "wall_seconds": 347.7
+}

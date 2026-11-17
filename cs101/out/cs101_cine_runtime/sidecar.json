@@ -1,0 +1,30 @@
+{
+  "lesson": "runtime",
+  "title": "程序是怎么跑起来的：字节码、内存与缓存",
+  "source": "计算概论（B）2026fall · 第13周 计算机原理（2/2）1.1–1.2、3.2–3.3、4.2 节",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 211.67,
+  "speech_seconds": 198.29,
+  "beats": {
+    "title": 0.0,
+    "compile": 20.47,
+    "bytecode": 48.73,
+    "ladder": 78.2,
+    "cache": 105.15,
+    "python": 139.4,
+    "buffer": 166.03,
+    "recap": 194.52
+  },
+  "subtitles": 33,
+  "audit_issues": 0,
+  "endcard": 208.57,
+  "endcard_info": {
+    "next": "熄灯问题：只枚举第一行",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 18.5,
+  "wall_seconds": 365.2
+}

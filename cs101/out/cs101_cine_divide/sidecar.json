@@ -1,0 +1,34 @@
+{
+  "lesson": "divide",
+  "title": "分治，递归的另一种用法：快速幂与最大公约数",
+  "source": "计算概论（B）2026fall · 第8周 递归 第4节 分治 · OpenJudge 03248",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 223.12,
+  "speech_seconds": 206.95,
+  "beats": {
+    "title": 0.0,
+    "naive": 17.47,
+    "code": 39.55,
+    "chain": 57.35,
+    "binary": 79.57,
+    "twice": 100.42,
+    "gcd": 115.78,
+    "rect": 135.5,
+    "why": 157.5,
+    "halving": 175.45,
+    "contrast": 193.62,
+    "recap": 210.6
+  },
+  "subtitles": 42,
+  "audit_issues": 0,
+  "endcard": 220.02,
+  "endcard_info": {
+    "next": "回溯三形态：子集、组合、排列共用一个模板",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 14.84,
+  "wall_seconds": 325.3
+}

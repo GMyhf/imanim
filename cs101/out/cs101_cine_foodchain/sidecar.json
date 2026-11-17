@@ -1,0 +1,32 @@
+{
+  "lesson": "foodchain",
+  "title": "食物链：把关系也存进并查集",
+  "source": "计算概论（B）2026fall · 第9周 并查集 2.6 节 · OpenJudge 01182",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 213.6,
+  "speech_seconds": 199.61,
+  "beats": {
+    "title": 0.0,
+    "why": 19.92,
+    "domains": 37.12,
+    "same": 61.05,
+    "eat": 77.7,
+    "check": 99.35,
+    "run1": 118.82,
+    "run2": 147.55,
+    "missing": 174.0,
+    "recap": 197.63
+  },
+  "subtitles": 46,
+  "audit_issues": 0,
+  "endcard": 210.5,
+  "endcard_info": {
+    "next": "区间贪心：先按右端点排序",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.25,
+  "wall_seconds": 307.2
+}

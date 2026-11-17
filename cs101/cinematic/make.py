@@ -54,7 +54,15 @@ LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "kadane": ("kadane.json", "kadane_scene.py", "KadaneLesson"),
            "knapvar": ("knapvar.json", "knapvar_scene.py", "KnapVarLesson"),
            "lis": ("lis.json", "lis_scene.py", "LISLesson"),
-           "grid": ("grid.json", "grid_scene.py", "GridLesson")}
+           "grid": ("grid.json", "grid_scene.py", "GridLesson"),
+           "complexity": ("complexity.json", "complexity_scene.py", "ComplexityLesson"),
+           "divide": ("divide.json", "divide_scene.py", "DivideLesson"),
+           "foodchain": ("foodchain.json", "foodchain_scene.py", "FoodChainLesson"),
+           "statebfs": ("statebfs.json", "statebfs_scene.py", "StateBFSLesson"),
+           "runtime": ("runtime.json", "runtime_scene.py", "RuntimeLesson"),
+           "deadline": ("deadline.json", "deadline_scene.py", "DeadlineLesson"),
+           "shopping": ("shopping.json", "shopping_scene.py", "ShoppingLesson"),
+           "partition": ("partition.json", "partition_scene.py", "PartitionLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 

@@ -285,7 +285,6 @@ def lakes8(grid):
     return cnt
 
 
-# ---- 加到 test_quiz.py 的独立实现区
 def stair_ways(n):
     """枚举每步走 1 还是 2 的全部序列，数和为 n 的。"""
     return sum(1 for k in range(n + 1) for s in itertools.product((1, 2), repeat=k) if sum(s) == n)
@@ -301,13 +300,6 @@ def tri_best_from(tri, i, j):
             s += tri[r][c]
         best = s if best is None else max(best, s)
     return best
-
-
-# ---- 加到 QuizAnswerTest 类里
-
-
-# ---- 合并进 test_quiz.py：下面三个独立实现放到「独立实现」区（不调用 kadanedata），
-#      test_kadane 方法放进测试类，与 test_knap 等并列。
 
 
 def max_seg_brute(a):
@@ -360,7 +352,6 @@ def frac_best(items, cap):
     return total
 
 
-# ---- 合并到 test_quiz.py：独立实现（不调用 lisdata，也不用 bisect）
 def lis_brute(a, ok):
     """枚举所有下标组合，相邻两两满足 ok 的最长长度。"""
     for k in range(len(a), 0, -1):
@@ -384,10 +375,6 @@ def is_subseq(sub, a):
     return all(x in it for x in sub)
 
 
-# ---- 放进 class 里
-
-
-# ---- 加到「独立实现」区（不调用 griddata）：
 def grid_rd_brute(g):
     """枚举所有只向右 / 向下的路径。"""
     n, m = len(g), len(g[0])
@@ -419,7 +406,208 @@ def grid_four_relax(g):
     return d[-1][-1]
 
 
-# ---- 加到 QuizAnswerTest：
+def cx_loop_runs(n):
+    """直接数：for i in range(n): for j in range(i, n)。"""
+    return sum(1 for i in range(n) for j in range(i, n))
+
+
+def cx_marks_formula(limit):
+    """每个素数 p ≤ √limit 从 p² 划到 limit：⌊(limit − p²)/p⌋ + 1 次；素数用试除独立求。"""
+    ps = [p for p in range(2, int(limit ** 0.5) + 1) if all(p % d for d in range(2, p))]
+    return sum((limit - p * p) // p + 1 for p in ps)
+
+
+def divide_mults(b):
+    """讲义 fast_pow 的乘法次数，另写成自底向上逐位扫：每位平方一次，位为 1 再乘一次。"""
+    m = 0
+    while b:
+        m += 1 + (b & 1)
+        b >>= 1
+    return m
+
+
+def divide_squares(w, h):
+    """长方形切正方形，另写成一刀一块的减法：返回 (最后边长, 块数)。"""
+    cnt = side = 0
+    while w and h:
+        side = min(w, h)
+        cnt += 1
+        if w >= h:
+            w -= h
+        else:
+            h -= w
+    return side, cnt
+
+
+@lru_cache(maxsize=None)
+def divide_twice_calls(b):
+    return 1 if b == 0 else 1 + 2 * divide_twice_calls(b // 2)
+
+
+def food_brute_lies(n, stmts):
+    """维护已接受的真话；每来一句，穷举涉及动物的物种 0/1/2，能同时满足才算真话。x 吃 y ⇔ s[x] − s[y] ≡ 1。"""
+    ok, lies = [], 0
+    for kind, x, y in stmts:
+        if not (1 <= x <= n and 1 <= y <= n) or (kind == 2 and x == y):
+            lies += 1
+            continue
+        cand = ok + [(kind, x, y)]
+        who = sorted({a for _, a, _ in cand} | {b for _, _, b in cand})
+        pos = {a: i for i, a in enumerate(who)}
+        if any(all((s[pos[a]] - s[pos[b]]) % 3 == (0 if t == 1 else 1) for t, a, b in cand)
+               for s in itertools.product(range(3), repeat=len(who))):
+            ok.append((kind, x, y))
+        else:
+            lies += 1
+    return lies
+
+
+def food_classes(n, stmts):
+    """真话确定下来的「等价类 × 三类」：按真话把动物连成若干块，每块对应 3 个集合，没提到的动物各占 3 个。"""
+    par = list(range(n + 1))
+
+    def find(x):
+        while par[x] != x:
+            x = par[x]
+        return x
+    for _, x, y in stmts:
+        par[find(x)] = find(y)
+    return 3 * len({find(a) for a in range(1, n + 1)})
+
+
+def sb_naruto_relax(grid, T):
+    """在（行、列、剩余查克拉）状态上反复松弛到稳定，取佐助各层的最小步数。"""
+    n, m = len(grid), len(grid[0])
+    cells = [(i, j) for i in range(n) for j in range(m)]
+    s = next(c for c in cells if grid[c[0]][c[1]] == '@')
+    g = next(c for c in cells if grid[c[0]][c[1]] == '+')
+    inf = float("inf")
+    d = {(i, j, t): inf for i, j in cells for t in range(T + 1)}
+    d[(*s, T)] = 0
+    changed = True
+    while changed:
+        changed = False
+        for (x, y, t), v in list(d.items()):
+            for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if v < inf and 0 <= a < n and 0 <= b < m:
+                    nt = t - (grid[a][b] == '#')
+                    if nt >= 0 and d[(a, b, nt)] > v + 1:
+                        d[(a, b, nt)] = v + 1
+                        changed = True
+    best = min(d[(*g, t)] for t in range(T + 1))
+    return -1 if best == inf else best
+
+
+def sb_flood_by_source(h, sources):
+    """每个放水点单独用栈灌一遍，各格取最高水位；返回被淹格数。"""
+    n, m = len(h), len(h[0])
+    wet = set()
+    for sx, sy in sources:
+        lv, st, seen = h[sx][sy], [(sx, sy)], {(sx, sy)}
+        while st:
+            x, y = st.pop()
+            wet.add((x, y))
+            for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= a < n and 0 <= b < m and (a, b) not in seen and h[a][b] < lv:
+                    seen.add((a, b))
+                    st.append((a, b))
+    return len(wet)
+
+
+def rt_loop_body_count(n):
+    """独立方法：sys.settrace 单步数讲义循环在 n 与 0 下执行的字节码条数之差（即循环体共执行几条）。"""
+    src = "s = 0\nfor i in range(n):\n    s += i\n"
+
+    def run(m):
+        code = compile(src, "<q>", "exec")
+        cnt = [0]
+
+        def tr(frame, ev, arg):
+            frame.f_trace_opcodes = True
+            if ev == "opcode" and frame.f_code is code:
+                cnt[0] += 1
+            return tr
+        sys.settrace(tr)
+        try:
+            exec(code, {"n": m})
+        finally:
+            sys.settrace(None)
+        return cnt[0]
+    return run(n) - run(0)
+
+
+def rt_col_misses(n, line, ways):
+    """独立方法：按列访问顺序 + 记最近使用时刻的 LRU。"""
+    last, miss = {}, 0
+    for t, (i, j) in enumerate((i, j) for j in range(n) for i in range(n)):
+        key = (i, j // line)
+        if key not in last:
+            miss += 1
+            if len(last) == ways:
+                del last[min(last, key=last.get)]
+        last[key] = t
+    return miss
+
+
+def rt_block_writes(n, buf):
+    """独立方法：总字节数按缓冲区大小向上取整。"""
+    nbytes = sum(len(str(i * i)) + 1 for i in range(n))
+    return -(-nbytes // buf)
+
+
+def deadline_best(tasks):
+    """枚举全部子集，按截止排序逐个检查能否全部按时；不经堆。"""
+    for k in range(len(tasks), -1, -1):
+        for sub in itertools.combinations(tasks, k):
+            t, ok = 0, True
+            for c, d in sorted(sub, key=lambda x: x[1]):
+                t += c
+                ok = ok and t <= d
+            if ok:
+                return k
+    return 0
+
+
+def deadline_drops(tasks):
+    """自己写的大根堆反悔：用排好序的列表代替 heapq，返回依次扔掉的耗时。"""
+    kept, total, out = [], 0, []
+    for c, d in sorted(tasks, key=lambda x: x[1]):
+        kept.append(c)
+        total += c
+        if total > d:
+            kept.sort()
+            out.append(kept.pop())
+            total -= out[-1]
+    return out
+
+
+def shop_cover_bits(bag, x):
+    """位运算子集和：第 v 位为 1 表示能凑出 v；检查 1..x 全为 1。"""
+    bits = 1
+    for c in bag:
+        bits |= bits << c
+    full = (1 << (x + 1)) - 2
+    return bits & full == full
+
+
+def shop_min_brute(x, coins):
+    """枚数从小到大枚举全部多重组合；最小面值大于 1 时 1 凑不出，直接无解。"""
+    if min(coins) > 1:
+        return -1
+    for k in itertools.count(1):
+        if any(shop_cover_bits(b, x) for b in itertools.combinations_with_replacement(sorted(set(coins)), k)):
+            return k
+
+
+def partition_brute(n, k):
+    """穷举非降 k 元组（不调用 partitiondata）。"""
+    return sum(1 for c in itertools.combinations_with_replacement(range(1, n + 1), k) if sum(c) == n)
+
+
+def partition_first_parts(n, k):
+    """根节点第一份能取哪些值：存在一个以 x 开头、各份 ≥ x 的非降分法。"""
+    return [x for x in range(1, n + 1)
+            if any(c[0] == x for c in itertools.combinations_with_replacement(range(1, n + 1), k) if sum(c) == n)]
 
 
 class QuizFormatTest(unittest.TestCase):
@@ -546,7 +734,6 @@ class QuizAnswerTest(unittest.TestCase):
         self.assertEqual(right("bsearch", 0), str(river_best(*G.RIVER)))
         self.assertEqual(right("bsearch", 1), str(split_best(G.MONTH, G.MONTH_M)))
 
-    # ---- 新片：独立实现（不调用 binarydata / floatdata / matrixdata / lightsdata）
     def test_binary(self):
         v = G.BIN_BITS - 256 if G.BIN_BITS >= 128 else G.BIN_BITS
         self.assertEqual(right("binary", 0), str(v).replace("-", "−"))
@@ -661,6 +848,68 @@ class QuizAnswerTest(unittest.TestCase):
         self.assertEqual(right("grid", 1), str(grid_four_relax(G.GRID_4)))
         n, m = G.GRID_CNT
         self.assertEqual(right("grid", 2), str(len(list(itertools.combinations(range(n + m - 2), n - 1)))))
+
+    def test_complexity(self):
+        self.assertEqual(right("complexity", 0), str(cx_loop_runs(G.CX_LOOP_N)))
+        n = G.CX_LIMIT_N
+        lg = len(bin(n)) - 3 + 1                      # ⌈log₂ n⌉ 的整数上界，独立于 math.log2
+        ops = {"O(n²)": n * n, "O(n√n)": n * int(n ** 0.5 + 1), "O(n log² n)": n * lg * lg, "O(n log n)": n * lg}
+        over = [k for k, v in ops.items() if v > 10 ** 8]
+        self.assertEqual(over, ["O(n²)"])
+        self.assertEqual(right("complexity", 1), "、".join(over))
+        self.assertEqual(set(QUIZ["complexity"][1]["options"]), set(ops))
+        self.assertEqual(right("complexity", 2), str(cx_marks_formula(G.CX_SIEVE_N)))
+
+    def test_divide(self):
+        self.assertEqual(right("divide", 0), str(divide_mults(G.DIV_POW_B)))
+        side, cnt = divide_squares(*G.DIV_RECT)
+        self.assertEqual(side, max(d for d in range(1, min(G.DIV_RECT) + 1)
+                                   if all(x % d == 0 for x in G.DIV_RECT)))
+        self.assertEqual(right("divide", 1), f"边长 {side}，共 {cnt} 块")
+        self.assertEqual(right("divide", 2), str(divide_twice_calls(G.DIV_TWICE_B)))
+
+    def test_foodchain(self):
+        self.assertEqual(right("foodchain", 0), str(food_brute_lies(G.FOOD_Q_N, G.FOOD_Q)))
+        extra = food_brute_lies(3, G.FOOD_INFER + [G.FOOD_INFER_Q]) - food_brute_lies(3, G.FOOD_INFER)
+        self.assertEqual(right("foodchain", 1), "假话" if extra else "真话")
+        self.assertEqual(food_brute_lies(4, G.FOOD_SETS), 0)              # 题面说都是真话
+        self.assertEqual(right("foodchain", 2), str(food_classes(4, G.FOOD_SETS)))
+
+    def test_statebfs(self):
+        self.assertEqual(right("statebfs", 0), str(sb_naruto_relax(G.SB_GRID, G.SB_T)))
+        n, m, t = G.SB_SIZE
+        self.assertEqual(right("statebfs", 1), str(len(list(itertools.product(range(n), range(m), range(t + 1))))))
+        self.assertEqual(right("statebfs", 2), str(sb_flood_by_source(G.SB_FL_H, G.SB_FL_SRC)))
+
+    def test_runtime(self):
+        self.assertEqual(right("runtime", 0), str(rt_loop_body_count(G.RT_LOOP_N)))
+        self.assertEqual(right("runtime", 1), str(rt_col_misses(*G.RT_CACHE)))
+        self.assertEqual(right("runtime", 2), str(rt_block_writes(G.RT_PRINT_N, G.RT_BUF)))
+
+    def test_deadline(self):
+        self.assertEqual(right("deadline", 0), str(deadline_best(G.DL_TASKS)))
+        self.assertEqual(right("deadline", 1), "已选任务（含新来的）里耗时最长的")
+        drops = deadline_drops(G.DL_TASKS)
+        self.assertEqual(len(G.DL_TASKS) - len(drops), deadline_best(G.DL_TASKS))
+        self.assertEqual(right("deadline", 2), ", ".join(map(str, drops)))
+
+    def test_shopping(self):
+        self.assertEqual(right("shopping", 0), str(shop_min_brute(G.SHOP_X, G.SHOP_COINS)))
+        hole = next(v for v in itertools.count(1) if not shop_cover_bits(G.SHOP_BAG, v))
+        self.assertEqual(right("shopping", 1), str(hole))
+        neg = [(x, c) for x, c in G.SHOP_CANDS if shop_min_brute(x, c) == -1]
+        self.assertEqual(len(neg), 1)
+        x, c = neg[0]
+        self.assertEqual(right("shopping", 2), f"X = {x}，面值 {' '.join(map(str, c))}")
+
+    def test_partition(self):
+        n, k = G.PART_Q1
+        self.assertEqual(right("partition", 0), str(partition_brute(n, k)))
+        xs = partition_first_parts(*G.PART_ROOT)
+        self.assertEqual(xs, list(range(xs[0], xs[-1] + 1)))
+        self.assertEqual(right("partition", 1), f"{xs[0]} 到 {xs[-1]}")
+        self.assertTrue(right("partition", 2).startswith("深搜"))
+        self.assertIn(f"只有 {partition_brute(*G.PART_LIST)} 种", QUIZ["partition"][2]["explain"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,31 @@
+{
+  "lesson": "shopping",
+  "title": "购物：覆盖连续金额的贪心",
+  "source": "计算概论（B）2026fall · 例题精讲 · OpenJudge M29896 购物（2025-11-06 模拟机考）· W10–11 讲义 6 覆盖连续区间 · W16 讲义 5 节 T5",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 214.2,
+  "speech_seconds": 201.17,
+  "beats": {
+    "title": 0.0,
+    "read": 18.53,
+    "reach": 38.05,
+    "walk": 65.82,
+    "why": 96.05,
+    "echo": 122.78,
+    "code": 145.75,
+    "brute": 168.0,
+    "recap": 193.7
+  },
+  "subtitles": 40,
+  "audit_issues": 0,
+  "endcard": 211.1,
+  "endcard_info": {
+    "next": "数的划分：深搜与动态规划",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 15.06,
+  "wall_seconds": 349.6
+}

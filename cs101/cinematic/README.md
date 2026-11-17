@@ -37,6 +37,14 @@
 | 背包的三个变形：拆捆、装满、多一维 | 2026fall 第 11 周 1.4–1.6 节（M01742、21458、04102、04110；Coins 代码与 0/1 不能贪心的反例为自拟） | `cs101/out/cs101_cine_knapvar/` |
 | 最长上升子序列：两种写法 | 2026fall 第 11 周 2.1 节（OpenJudge 02533、M02945、03532） | `cs101/out/cs101_cine_lis/` |
 | 网格上走：DP 还是搜索 | 2026fall 第 12 周 第 6 节（与第 2–3 节 BFS、Dijkstra 衔接） | `cs101/out/cs101_cine_grid/` |
+| 这段代码够快吗：从数据范围倒推算法 | 2026fall 第 4 周 2.2、3.1–3.5、4.4 节（试除法计数为补写） | `cs101/out/cs101_cine_complexity/` |
+| 分治，递归的另一种用法：快速幂与最大公约数 | 2026fall 第 8 周 第 4 节（OpenJudge 03248；连乘计数、两次调用的反例与长方形切正方形为补写） | `cs101/out/cs101_cine_divide/` |
+| 食物链：把关系也存进并查集 | 2026fall 第 9 周 2.6 节（OpenJudge 01182，扩展域写法） | `cs101/out/cs101_cine_foodchain/` |
+| 状态不只是坐标：带状态 BFS 与多源 BFS | 2026fall 第 12 周 2.4–2.6 节（OpenJudge 04115、M12029；只记坐标的错误写法与超级源点写法为自拟对照） | `cs101/out/cs101_cine_statebfs/` |
+| 程序是怎么跑起来的：字节码、内存与缓存 | 2026fall 第 13 周 1–4 节（缓存行模拟器与输出缓冲为自拟示意） | `cs101/out/cs101_cine_runtime/` |
+| 最多能按时完成几个任务：排序加反悔（例题精讲） | 2026fall 第 13 周 5.3 节综合例题（主例与错误贪心为自拟） | `cs101/out/cs101_cine_deadline/` |
+| 购物：覆盖连续金额的贪心（例题精讲） | OpenJudge M29896（2025-11-06 模拟机考）· 2025fall 第 10–11 周讲义 | `cs101/out/cs101_cine_shopping/` |
+| 数的划分：深搜与动态规划（例题精讲） | OpenJudge M28906（2025-11-06 模拟机考）· 第 16 周讲义第 5 节（DP 递推与对拍为自拟） | `cs101/out/cs101_cine_partition/` |
 
 **成片 mp4 不进 git**（`.gitignore` 排除 `cs101/out/cs101_cine_*/*.mp4`），放在 GitHub Releases：
 https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
@@ -50,7 +58,7 @@ https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
 https://infomall.zhengmao.ltd/cs101-anim/（成都中转 `/srv/cs101-anim`，Caddy `handle_path /cs101-anim/*`，换文件无需 reload；中转出口约 5 Mbps，只放 720p 版）。
 
 每张片卡还有：章节按钮（sidecar 的 `beats` 起点，标签写在 films.json 的 `chapters`，缺省显示 beat id；播放时高亮当前章节）、
-讲义链接（films.json 的 `href`，指向课程仓库 GitHub 上的讲义小节）、可折叠的旁白文字稿（读 `<id>.json`）、
+讲义链接（films.json 的 `href`，指向课程仓库 GitHub 上的讲义小节）、可折叠的旁白文字稿（读 `<id>.json`，按 `subs.srt` 逐句标时间：播放时高亮当前句、点句子跳过去）、倍速选择（0.75–2×，localStorage `anim-rate`）、
 「看完测一测」（读 `site/quiz.json`，`{"<id>": [{"q", "options", "answer", "explain"}]}`，没有题就不显示）和复制链接。
 页面顶部可按关键词搜索（标题、简介、出处、文字稿）；看到 80% 的片子在本机 localStorage `anim-watched-<课程>` 记为看过，
 系列页和总入口都显示已看数；`#<id>` 深链接会滚到该片并闪一下。新增片子时记得在 films.json 补 `chapters` 与 `href`。
@@ -82,7 +90,7 @@ python cs101/cinematic/publish.py --course cs201 kmp --dry-run           # 打�
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 25 支）
+python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 33 支）
 python cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 

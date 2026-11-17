@@ -23,10 +23,10 @@
   "audit_issues": 0,
   "endcard": 218.2,
   "endcard_info": {
-    "next": "回溯三形态：子集、组合、排列共用一个模板",
+    "next": "分治，递归的另一种用法：快速幂与最大公约数",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
   },
-  "size_mb": 17.16,
-  "wall_seconds": 296.5
+  "size_mb": 17.18,
+  "wall_seconds": 321.4
 }

@@ -20,11 +20,11 @@
   "subtitles": 36,
   "audit_issues": 0,
   "endcard": 212.12,
-  "size_mb": 12.57,
-  "wall_seconds": 238.9,
   "endcard_info": {
-    "next": "矩阵：补一圈零，转一个弯",
+    "next": "这段代码够快吗：从数据范围倒推算法",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 12.61,
+  "wall_seconds": 313.3
 }

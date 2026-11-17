@@ -21,11 +21,11 @@
   "subtitles": 30,
   "audit_issues": 0,
   "endcard": 155.0,
-  "size_mb": 11.61,
-  "wall_seconds": 249.1,
   "endcard_info": {
-    "next": "Dijkstra：带权的波纹",
+    "next": "状态不只是坐标：带状态 BFS 与多源 BFS",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 11.64,
+  "wall_seconds": 215.7
 }

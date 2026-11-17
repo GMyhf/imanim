@@ -10,6 +10,8 @@ python quiz_gen.py        # 写 site/quiz.json；选项顺序用固定种子打�
 from __future__ import annotations
 
 import json
+import math
+from collections import deque
 import random
 import sys
 from pathlib import Path
@@ -20,30 +22,37 @@ sys.path.insert(0, str(HERE.parent))
 import bfsdata  # noqa: E402
 import binarydata  # noqa: E402
 import bsearchdata  # noqa: E402
+import complexitydata  # noqa: E402
+import deadlinedata  # noqa: E402
 import dijkstradata  # noqa: E402
+import dividedata  # noqa: E402
 import dpintrodata  # noqa: E402
 import dsudata  # noqa: E402
 import fibdata  # noqa: E402
 import floatdata  # noqa: E402
+import foodchaindata  # noqa: E402
+import griddata  # noqa: E402
 import hanoidata  # noqa: E402
 import intervaldata  # noqa: E402
-import knapdata  # noqa: E402
-import lcsdata  # noqa: E402
-import lightsdata  # noqa: E402
-import matrixdata  # noqa: E402
-import permdata  # noqa: E402
-import queensdata  # noqa: E402
-import sortdata  # noqa: E402
-import stackdata  # noqa: E402
-import griddata  # noqa: E402
 import kadanedata  # noqa: E402
+import knapdata  # noqa: E402
 import knapvardata  # noqa: E402
 import knightdata  # noqa: E402
+import lcsdata  # noqa: E402
+import lightsdata  # noqa: E402
 import lisdata  # noqa: E402
+import matrixdata  # noqa: E402
+import partitiondata  # noqa: E402
+import permdata  # noqa: E402
+import queensdata  # noqa: E402
+import runtimedata  # noqa: E402
+import shoppingdata  # noqa: E402
+import sortdata  # noqa: E402
+import stackdata  # noqa: E402
+import statebfsdata  # noqa: E402
 import subsetsdata  # noqa: E402
 import triangledata  # noqa: E402
 
-# ---- 题目里用到的新输入（片中都没出现过）；test_quiz.py 里有同样一份，供独立重算
 INV_ARR = [3, 1, 4, 5, 2]
 MERGE_L, MERGE_R = [1, 4, 6], [2, 3, 5]
 POSTFIX = ["4", "2", "5", "*", "+", "6", "-"]
@@ -523,14 +532,10 @@ def _lakes4(grid):
     return out
 
 
-# ---- 加到 quiz_gen.py：import 区
-
-# ---- 加到新输入常量区（片中没出现过）
 STAIR_Q = 8                                  # 爬到第 8 级
 TRI_Q = [[3], [2, 8], [9, 1, 4], [7, 1, 2, 2]]
 
 
-# ---- 加到 q_dpintro 之前
 def q_triangle():
     ways = triangledata.climb_stairs(STAIR_Q)
     off = triangledata.climb_table(STAIR_Q - 1)[-1]            # 边界写成 dp[0] = 0、dp[1] = 1：错一位
@@ -563,11 +568,7 @@ def q_triangle():
           "数组长度不变，只是最右一位以后不再用到。"),
     ]
 
-# ---- BUILDERS 里加一项（顺序随 films.json：interval 之后、dpintro 之前）
-#   "triangle": q_triangle,
 
-
-# ---- 合并进 site/quiz_gen.py：
 # 1) import 区加：import kadanedata  # noqa: E402
 # 2) 新输入常量（片中都没出现过）放到常量区：
 KAD_ARR = [3, -4, 5, -1, 2, -6, 4]
@@ -642,9 +643,6 @@ def q_knapvar():
     ]
 
 
-# ---- 合并到 site/quiz_gen.py：import 区加一行
-
-# ---- 常量区（片中都没出现过）；test_quiz.py 里有同样一份，供独立重算
 LIS_ARR = [10, 9, 2, 5, 3, 7, 101, 18]   # 讲义思考题 4
 LIS_TRAP = [3, 5, 6, 1]                  # tails 最后变成 1 5 6，不是真实子序列
 LIS_EQ = [1, 3, 3, 2, 3]                 # 严格上升 3，非降 4
@@ -675,12 +673,7 @@ def q_lis():
           f"bisect_left 让相等的数互相替换，求的是严格上升，长度 {strict}。"),
     ]
 
-# ---- BUILDERS 里加 "lis": q_lis（放在 "knapvar" 之后、"lcs" 之前，与片目顺序一致）
 
-
-# ---- 加到 import 区：
-
-# ---- 加到新输入常量区（片中都没出现过；test_quiz.py 里有同样一份，供独立重算）：
 GRID_RD = [[1, 2, 9], [5, 9, 1], [1, 1, 1]]                      # 只能右、下
 GRID_4 = [[1, 9, 1, 1, 1], [1, 9, 1, 9, 1], [1, 1, 1, 9, 1]]       # 四方向，最好的路要往上绕
 GRID_CNT = (4, 4)                                                 # 只能右、下的路径条数
@@ -723,14 +716,338 @@ def q_grid():
           f"第一行、第一列都是 1，其余格子 = 上面 + 左边，右下角是 {cnt}，也就是 6 步里选 3 步向下。"),
     ]
 
-# ---- BUILDERS 里加一项："grid": q_grid
+
+CX_LOOP_N = 12                                    # for i in range(n): for j in range(i, n) 的 n
+CX_LIMIT_N = 10 ** 5                              # 讲义思考题 3：n = 10⁵、时限 1 秒
+CX_CANDS = [("O(n²)", lambda n: n * n), ("O(n√n)", lambda n: n * math.sqrt(n)),
+            ("O(n log² n)", lambda n: n * math.log2(n) ** 2), ("O(n log n)", lambda n: n * math.log2(n))]
+CX_SIEVE_N = 50                                   # sieve(50) 的内层赋值次数
+
+
+def _cx_sci(v):
+    """2.76e7 → 2.8×10⁷。"""
+    m, e = f"{v:.1e}".split("e")
+    return f"{m}×10" + str(int(e)).translate(str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻"))
+
+
+def _cx_marks_from_2i(limit):
+    """常见误解：内层从 2*i 而不是 i*i 开始划，赋值次数（作干扰项）。"""
+    is_prime = [True] * (limit + 1)
+    c, i = 0, 2
+    while i * i <= limit:
+        if is_prime[i]:
+            for j in range(2 * i, limit + 1, i):
+                is_prime[j] = False
+                c += 1
+        i += 1
+    return c
+
+
+def q_complexity():
+    n = CX_LOOP_N
+    runs = complexitydata.triangle_count(n)
+    budget = complexitydata.OPS_PER_SEC[1]
+    over = [name for name, f in CX_CANDS if f(CX_LIMIT_N) > budget]
+    ok = [name for name, f in CX_CANDS if f(CX_LIMIT_N) <= budget]
+    marks = complexitydata.sieve_marks(CX_SIEVE_N)
+    primes = complexitydata.primes_upto(CX_SIEVE_N)
+    composites = CX_SIEVE_N - 1 - len(primes)
+    from2i = _cx_marks_from_2i(CX_SIEVE_N)
+    return [
+        Q(f"n = {n} 时，for i in range(n): for j in range(i, n): 里的循环体一共执行几次？",
+          runs, [n * n, n * (n - 1) // 2, n * n // 2],
+          f"第 i 行执行 n − i 次，{n} + {n - 1} + … + 1 = n(n+1)/2 = {runs}。{n * n} 是 j 从 0 开始的正方形，"
+          f"{n * (n - 1) // 2} 是 range(i + 1, n) 的次数。三者都是 O(n²)。"),
+        Q(f"n = 10⁵、时限 1 秒（按每秒约 10⁸ 次基本操作），下面哪一个复杂度会超时？",
+          "、".join(over), ok[:3],
+          "代入 n = 10⁵：" + "；".join(f"{name[2:-1]} ≈ {_cx_sci(f(CX_LIMIT_N))}" for name, f in CX_CANDS)
+          + f"。只有 {'、'.join(over)} 超过每秒 10⁸ 次，其余都在预算内。"),
+        Q(f"讲义的 sieve({CX_SIEVE_N}) 里，内层 is_prime[j] = False 一共执行几次？",
+          marks, [composites, from2i, len(primes)],
+          f"i = 2、3、5、7 各从 i² 划到 {CX_SIEVE_N}：合计 {marks} 次，比合数个数 {composites} 多，"
+          f"因为像 12 这样的数会被 2 和 3 各划一次；若从 2i 开始划要 {from2i} 次。{len(primes)} 是素数个数。"),
+    ]
+
+
+DIV_POW_B = 13                   # 讲义 fast_pow 算 a^13 的乘法次数
+DIV_RECT = (91, 35)              # 长方形反复切最大的正方形
+DIV_TWICE_B = 6                  # half 写成两次调用时的调用次数
+
+
+def q_divide():
+    b = DIV_POW_B
+    mults = dividedata.pow_mults(b)
+    w, h = DIV_RECT
+    sq = dividedata.squares(w, h)
+    g, n_sq = sq[-1][0], sum(k for _, k in sq)
+    steps = len(dividedata.gcd_trace(w, h)) - 1               # 常见误解：切的块数 = 取模的步数
+    tb = DIV_TWICE_B
+    _, calls, _ = dividedata.twice_counts(2, tb)
+    once = dividedata.pow_calls(tb)
+    return [
+        Q(f"用讲义的 fast_pow(a, {b}) 计算 a 的 {b} 次方（不取模），一共做几次乘法？",
+          mults, [b, b.bit_length(), b - 1],
+          f"{b} 的二进制是 {bin(b)[2:]}，共 {b.bit_length()} 位、{bin(b).count('1')} 个 1：每层平方一次，"
+          f"最低位是 1 的层再乘一次 a，{b.bit_length()} + {bin(b).count('1')} = {mults}。连乘要 {b} 次。"),
+        Q(f"{w}×{h} 的长方形，反复切下尽量大的正方形直到切完。最后一块正方形的边长和正方形总块数是？",
+          f"边长 {g}，共 {n_sq} 块", [f"边长 {g}，共 {steps} 块", f"边长 {sq[-2][0]}，共 {n_sq} 块",
+                                    f"边长 {h}，共 {w // h} 块"],
+          f"依次切下 " + "、".join(f"{k} 块边长 {s}" for s, k in sq) + f"，最后的边长就是 gcd({w}, {h}) = {g}。"
+          f"取模只做 {steps} 次，但一次取模可能切下好几块。"),
+        Q(f"把 half 省掉，写成 res = fast_pow(a, b // 2) * fast_pow(a, b // 2)。算 a 的 {tb} 次方，"
+          f"fast_pow 一共被调用几次（含 b = 0 那次）？",
+          calls, [once, 2 ** tb.bit_length() - 1, tb],
+          f"每层分出两个孩子，单链变成满二叉树：指数 {tb} 有 {tb.bit_length()} 位，树有 {tb.bit_length() + 1} 层，"
+          f"2^{tb.bit_length() + 1} − 1 = {calls} 个节点；原来的写法只调用 {once} 次。"),
+    ]
+
+
+FOOD_Q_N = 4
+FOOD_Q = [(2, 3, 4), (2, 5, 1), (2, 4, 1), (1, 3, 2), (2, 4, 2), (1, 1, 2), (1, 1, 3)]   # (1 同类 / 2 吃, x, y)
+FOOD_INFER = [(2, 1, 2), (2, 3, 1)]          # 都是真话；接着问「2 吃 3」
+FOOD_INFER_Q = (2, 2, 3)
+FOOD_SETS = [(2, 1, 2), (1, 3, 4), (2, 2, 3)]  # n = 4 时 12 个结点分成几个集合
+
+
+def _food_say(s):
+    kind, x, y = s
+    return f"{x} 和 {y} 同类" if kind == 1 else f"{x} 吃 {y}"
+
+
+def q_foodchain():
+    n = FOOD_Q_N
+    lies = foodchaindata.food_chain(n, FOOD_Q)
+    two = foodchaindata.lies_of(n, FOOD_Q, third=False)                  # 常见错误：「x 吃 y」只连前两对
+    inside = [s for s in FOOD_Q if 1 <= s[1] <= n and 1 <= s[2] <= n]
+    norange = foodchaindata.food_chain(n, inside)                        # 常见错误：忘了越界也算假话
+    extra = foodchaindata.food_chain(3, FOOD_INFER + [FOOD_INFER_Q]) - foodchaindata.food_chain(3, FOOD_INFER)
+    verdict = "假话" if extra else "真话"
+    log = foodchaindata.food_chain_trace(4, FOOD_SETS, animals=[])
+    log2 = foodchaindata.food_chain_trace(4, FOOD_SETS, third=False, animals=[])
+    sets, sets2 = log[-1]["count"], log2[-1]["count"]
+    says = "、".join(_food_say(s) for s in FOOD_Q)
+    bad = foodchaindata.lie_lines(n, FOOD_Q)                             # 第几句是假话（第一条是越界那句）
+    return [
+        Q(f"食物链，n = {n}，依次 {len(FOOD_Q)} 句话：{says}。一共几句假话？",
+          lies, [two, norange, lies + 1],
+          f"5 超出范围，算一句；之后 {'、'.join(_food_say(FOOD_Q[k - 1]) for k in bad[1:])}都与前面的真话矛盾，共 {lies} 句。"
+          f"「x 吃 y」只连前两对会漏掉矛盾，只数出 {two} 句；忘了越界算假话则得 {norange}。"),
+        Q(f"已知「{_food_say(FOOD_INFER[0])}」「{_food_say(FOOD_INFER[1])}」都是真话，接下来有人说「{_food_say(FOOD_INFER_Q)}」，它是？",
+          verdict, ["真话" if extra else "假话", "无法判断，按真话算", "无法判断，按假话算"],
+          "三类成环：1 吃 2，3 吃 1，那么 2 吃的正是 3 这一类。扩展域里，「1 吃 2」的第三对把 1 的天敌域和 2 的猎物域连上，"
+          "「3 吃 1」又把 3 并进 1 的天敌域；查 2 与 3、2 与 3 的猎物域都不连通，所以是真话，不必等谁直接说过 2 和 3 的关系。"),
+        Q(f"n = 4，依次说了 {'、'.join(_food_say(s) for s in FOOD_SETS)}（都是真话）。扩展域并查集的 12 个结点此时分成几个集合？",
+          sets, [sets2, 4, 12 - 2 * len(FOOD_SETS)],
+          f"每句真话的三对合并都成功，12 − 9 = {sets}，正好对应三类动物。少连第三对会剩 {sets2} 个，环没接上。"),
+    ]
+
+
+SB_GRID, SB_T = ["@.##.", "#..#+", ".....", "....."], 1     # 只按坐标记会得 7，真答案 5
+SB_SIZE = (100, 100, 5)                                       # 行、列、初始查克拉
+SB_FL_H = [[1, 7, 3, 7], [7, 1, 2, 2], [5, 4, 6, 5]]          # 水淹七军：两个放水点
+SB_FL_SRC = [(0, 0), (2, 3)]
+
+
+def _sb_flood_count(h, src, le=False, follow=False):
+    """常见误解的灌水：le=True 把「严格低于水位」写成「不高于」；follow=True 以为水位随地形下降（只往比当前格低处流）。"""
+    n, m = len(h), len(h[0])
+    w = [[-1] * m for _ in range(n)]
+    q = deque()
+    for x, y in src:
+        if w[x][y] < h[x][y]:
+            w[x][y] = h[x][y]
+            q.append((x, y))
+    while q:
+        x, y = q.popleft()
+        lv = h[x][y] if follow else w[x][y]
+        for a, b in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= a < n and 0 <= b < m):
+                continue
+            low = h[a][b] <= lv if le else h[a][b] < lv
+            fresh = w[a][b] < 0 if follow else w[a][b] < lv
+            if low and fresh:
+                w[a][b] = lv
+                q.append((a, b))
+    return sum(v >= 0 for r in w for v in r)
+
+
+def q_statebfs():
+    ans = statebfsdata.naruto(SB_GRID, SB_T)
+    coord = statebfsdata.naruto_coord(SB_GRID, SB_T)[0]
+    rows = " / ".join(SB_GRID)
+    n, m, t = SB_SIZE
+    states = statebfsdata.n_states(["." * m] * n, t)
+    _, water, _ = statebfsdata.flood_trace(SB_FL_H, SB_FL_SRC, SB_FL_SRC[0])
+    wet = sum(v >= 0 for r in water for v in r)
+    only = sum(v >= 0 for r in statebfsdata.flood_trace(SB_FL_H, SB_FL_SRC[1:], SB_FL_SRC[1])[1] for v in r)
+    hs = " / ".join(" ".join(map(str, r)) for r in SB_FL_H)
+    srcs = "、".join(f"({x}, {y})" for x, y in SB_FL_SRC)
+    return [
+        Q(f"鸣人和佐助：地图（按行写，@ 鸣人、+ 佐助、# 手下）{rows}，查克拉 {SB_T}，打掉一个手下花 1 点。最短几步追上佐助？",
+          ans, [coord, -1, ans + 1],
+          f"状态记成（行、列、剩余查克拉），行列从 0 起：先右再下走到 (1, 2)，留着查克拉打掉 (1, 3) 的手下，{ans} 步。"
+          f"visited 只记坐标时，(1, 1)、(1, 2) 先被打掉 (1, 0) 手下、查克拉用光的那一支占住，"
+          f"后到的留有查克拉也进不去，只能绕下面，得 {coord}。"),
+        Q(f"地图 {n} 行 {m} 列、初始查克拉 {t}，visited 按（行、列、剩余查克拉）记，最多有多少个不同的状态？",
+          states, [n * m, n * m * t, n * m * 2 ** t],
+          f"剩余查克拉可以是 0 到 {t}，共 {t + 1} 种，每格就有 {t + 1} 层：{n} × {m} × {t + 1} = {states}。"),
+        Q(f"水淹七军：高度（按行写）{hs}，放水点 {srcs}（行列从 0 起），水位等于放水点高度，只流向高度严格低于水位的相邻格。"
+          "最后一共有几格被淹（含放水点）？",
+          wet, [_sb_flood_count(SB_FL_H, SB_FL_SRC, follow=True), _sb_flood_count(SB_FL_H, SB_FL_SRC, le=True), only],
+          f"两个放水点一起入队：左上角高 1，水位 1 哪儿也流不去；右下角水位 5，淹到所有高度小于 5、连得通的格子，"
+          f"共 {wet} 格。水位不随地形下降（那样只剩 {_sb_flood_count(SB_FL_H, SB_FL_SRC, follow=True)} 格）；"
+          f"等高的格子不淹（写成 ≤ 会得 {_sb_flood_count(SB_FL_H, SB_FL_SRC, le=True)}）。"),
+    ]
+
+
+# 1) import 区加：import runtimedata  # noqa: E402
+# 2) 新输入常量（片中都没出现过）放到常量区：
+RT_LOOP_N = 1000                         # 循环 1000 圈（片中是三百万）
+RT_CACHE = (6, 2, 8)                     # 6×6 矩阵、缓存行装 2 个数、缓存放得下 8 个缓存行（片中 8×8、4、4）
+RT_PRINT_N, RT_BUF = 6000, 8192          # print 0²…5999² 到文件、8 KB 缓冲（片中一万行）
+# 3) BUILDERS 里加 "runtime": q_runtime（顺序随 films.json：bsearch 之后、lights 之前）
+
+
+def q_runtime():
+    per, _ = runtimedata.loop_formula()
+    body = per * RT_LOOP_N                                            # 只算循环体
+    n, line, ways = RT_CACHE
+    col = runtimedata.misses(runtimedata.col_major(n), line=line, ways=ways)
+    row = runtimedata.misses(runtimedata.row_major(n), line=line, ways=ways)
+    calls, nbytes = runtimedata.syscalls(runtimedata.squares_print, False, RT_PRINT_N, RT_BUF)
+    term, _ = runtimedata.syscalls(runtimedata.squares_print, True, RT_PRINT_N, RT_BUF)
+    return [
+        Q(f"for i in range(n): s += i 每转一圈执行 {per} 条字节码。n = {RT_LOOP_N} 时，循环体一共执行多少条字节码？",
+          body, [RT_LOOP_N, 2 * RT_LOOP_N, per],
+          f"每圈 {per} 条（取下一个数、存 i、读 s、读 i、相加、存回 s、跳回），{RT_LOOP_N} 圈就是 {body} 条；"
+          f"一行源码不等于一条字节码。"),
+        Q(f"{n}×{n} 的矩阵按行连续存放，一个缓存行装 {line} 个数，缓存（LRU）放得下 {ways} 个缓存行。"
+          f"按列遍历全部 {n * n} 个数，缺失几次？",
+          col, [n * n, n, n * n // line // 2],
+          f"每 {line} 列落在同一批 {n} 个缓存行里，缓存放得下 {ways} 个，扫后一列时全部命中；"
+          f"每 {line} 列缺失 {n} 次，共 {col} 次，和按行（{row} 次）一样。按列全缺失，只在缓存装不下一列涉及的缓存行时发生。"),
+        Q(f"把 0²、1²……{RT_PRINT_N - 1}² 逐行 print，重定向到文件，缓冲区 {RT_BUF} 字节（攒满才写）。"
+          f"一共写出 {nbytes} 字节，底层 write 系统调用几次？",
+          calls, [term, nbytes // RT_BUF, 1],
+          f"攒满 {RT_BUF} 字节写一次，最后不满的一块在结束时再写一次：⌈{nbytes}/{RT_BUF}⌉ = {calls}。"
+          f"输出到终端时按行刷新，才是每行一次、共 {term} 次。"),
+    ]
+
+
+DL_TASKS = [(4, 7), (2, 8), (3, 9), (4, 10), (5, 5)]     # (耗时, 截止)，故意不按截止给出
+
+
+def q_deadline():
+    best = deadlinedata.max_tasks(DL_TASKS)
+    skip = deadlinedata.skip_greedy(DL_TASKS)[0]                      # 常见错误：超时就跳过新任务，不反悔
+    srt = sorted(DL_TASKS, key=lambda t: t[1])
+    drops = [s["dropped"] for s in deadlinedata.trace(DL_TASKS) if s["dropped"] is not None]
+    skipped = [c for (c, _), ok in zip(srt, deadlinedata.skip_greedy(DL_TASKS)[1]) if not ok]   # 扔新来的
+    tasks = "、".join(f"({c}, {d})" for c, d in DL_TASKS)
+    return [
+        Q(f"任务按 (耗时, 截止) 给出：{tasks}。一次做一个、不能中断，最多能按时完成几个？",
+          best, [skip, len(DL_TASKS), best + 1],
+          f"按截止排序后依次加入，超时就扔掉已选里耗时最长的，最后剩 {best} 个。"
+          f"超时就跳过新任务、不反悔，会一直留着耗时 {srt[0][0]} 的任务，只完成 {skip} 个。"),
+        Q("按截止时间加入任务后总时长超过了当前截止时间，应该扔掉哪一个？",
+          "已选任务（含新来的）里耗时最长的", ["新来的这一个", "截止时间最早的那个", "耗时最短的那个"],
+          "扔谁数量都只少一个，扔最长的剩下的总时长最少，给后面的任务留的空间最多；"
+          "最长的不比新来的短，扔完总时长不超过上一步，所以一个 if 就够。"),
+        Q(f"对同一组任务 {tasks} 跑讲义的大根堆解法，处理冲突时依次扔掉的任务耗时是？",
+          seq(drops), [seq(skipped), seq(drops[:1]), seq(drops[::-1])],
+          f"排好序是 {'、'.join(f'({c}, {d})' for c, d in srt)}。第一次超时扔掉堆顶 {drops[0]}，"
+          f"最后一个任务加入时再扔堆顶 {drops[-1]}。{seq(skipped)} 是每次扔新来的那个，那是不反悔的错误做法。"),
+    ]
+
+
+# 1) import 区加：import shoppingdata  # noqa: E402
+# 2) 新输入常量（片中都没出现过）放到常量区；test_quiz.py 里有同样一份，供独立重算
+SHOP_X, SHOP_COINS = 30, [1, 5, 10, 25]                  # 最少带几枚
+SHOP_BAG = [1, 2, 4, 9]                                  # 带着这几枚，凑不出的最小金额
+SHOP_CANDS = [(5, [2, 3]), (100, [1]), (3, [1, 100]), (7, [1, 8, 9])]   # 哪组输入输出 -1
+# 3) BUILDERS 里加 "shopping": q_shopping（放在 "lights" 之后，与片目顺序一致）
+
+
+def _shop_in(x, coins):
+    return f"X = {x}，面值 {' '.join(map(str, coins))}"
+
+
+def q_shopping():
+    ans = int(shoppingdata.run_io(shoppingdata.solve_w16, shoppingdata.fmt_in(SHOP_X, SHOP_COINS)))
+    picks = "、".join(str(c) for _, _, c, _ in shoppingdata.greedy_trace(SHOP_X, SHOP_COINS))
+    change = 0                                               # 误当成找零：只凑上限 X 用的最少枚数（贪心找零）
+    left = SHOP_X
+    for c in sorted(SHOP_COINS, reverse=True):
+        change += left // c
+        left %= c
+    bits = SHOP_X.bit_length()                               # 误以为 1、2、4…… 二进制位数就够，不看有哪些面值
+    each = len(SHOP_COINS)                                   # 误以为每种带一枚
+    reach = shoppingdata.prefix_reach(SHOP_BAG)
+    hole = reach[-1] + 1 if reach else 1
+    brk = SHOP_BAG[len(reach)]                               # 断档的那一枚
+    neg = [(x, c) for x, c in SHOP_CANDS
+           if shoppingdata.run_io(shoppingdata.solve_w16, shoppingdata.fmt_in(x, c)) == "-1"]
+    assert len(neg) == 1
+    rest = [(x, c) for x, c in SHOP_CANDS if (x, c) != neg[0]]
+    outs = "；".join(f"{_shop_in(x, c)} 输出 {shoppingdata.run_io(shoppingdata.solve_w16, shoppingdata.fmt_in(x, c))}"
+                    for x, c in rest)
+    return [
+        Q(f"购物：面值 {seq(SHOP_COINS)}，每种无限多，要让 1 到 {SHOP_X} 的每个金额都能用带着的硬币凑出，最少带几枚？",
+          ans, [change, bits, each],
+          f"reach 从 0 起，每步挑不超过 reach+1 的最大面值：依次带 {picks}，共 {ans} 枚。"
+          f"{change} 是只凑 {SHOP_X} 的找零枚数；{bits} 是二进制位数，可这里没有 2、4、8 这些面值；每种各带一枚连 2 都凑不出。"),
+        Q(f"手上带着 {seq(SHOP_BAG)} 四枚硬币（每枚最多用一次），凑不出的最小正整数金额是？",
+          hole, [sum(SHOP_BAG) + 1, brk, 2 ** len(SHOP_BAG)],
+          f"按面值从小到大，reach 依次是 {seq(reach)}；下一枚 {brk} 大于 reach+1 = {hole}，"
+          f"所以 {hole} 凑不出。{sum(SHOP_BAG) + 1} 是总和加一，只在每枚都接得上时才对。"),
+        Q("下面哪组输入，讲义代码会输出 −1？",
+          _shop_in(*neg[0]), [_shop_in(x, c) for x, c in rest],
+          f"无解只有一种情况：没有面值 1，reach+1 = 1 时没有一枚接得上。其余三组都有 1：{outs}。"),
+    ]
+
+
+# 1) import 区加：import partitiondata  # noqa: E402
+# 2) 新输入常量（片中都没出现过：片里用的是 7 分 3 份、7 分 2 份、200 分 6 份）放到常量区：
+PART_Q1 = (8, 3)                 # 8 分 3 份
+PART_ROOT = (10, 3)              # dfs(10, 3, 1) 第一层
+PART_LIST = (20, 6)              # 要求逐个输出分法时的数据范围
+# 3) BUILDERS 里加 "partition": q_partition（放在 "shopping" 之后，与片目顺序一致）
+
+
+def q_partition():
+    n, k = PART_Q1
+    ans = partitiondata.dp_count(n, k)
+    ordered = len(partitiondata.compositions(n, k))                       # 常见误解：把顺序也算上
+    allow0 = sum(partitiondata.dp_count(n, j) for j in range(1, k + 1))   # 常见误解：允许有空份
+    only1 = partitiondata.dp_count(n - 1, k - 1)                          # 漏了「每份都 >= 2」那一类
+    rn, rk = PART_ROOT
+    tree = partitiondata.dfs_tree(rn, rk)
+    xs = [tree[c]["x"] for c in tree[0]["kids"]]
+    span = lambda a, b: f"{a} 到 {b}"  # noqa: E731
+    ln, lk = PART_LIST
+    total = partitiondata.dp_count(ln, lk)
+    return [
+        Q(f"把 {n} 分成 {k} 份（每份不能为空，不考虑顺序），一共有几种分法？", ans, [ordered, allow0, only1],
+          f"有一份是 1 的拿掉它，是 {n - 1} 分 {k - 1} 份，{only1} 种；每份都 ≥ 2 的每份减 1，是 {n - k} 分 {k} 份，"
+          f"{partitiondata.dp_count(n - k, k)} 种，合计 {ans}。{ordered} 把顺序也算了进去，{allow0} 是允许有空份。"),
+        Q(f"讲义的 dfs(rem, left, low) 求 {rn} 分 {rk} 份，根节点 dfs({rn}, {rk}, 1) 里第一份 x 依次试哪些值？",
+          span(xs[0], xs[-1]), [span(1, rn), span(1, rn - (rk - 1)), span(1, rn // 2)],
+          f"后面每一份都不小于 x，{rk} 份加起来至少是 {rk}x，所以 x ≤ {rn} // {rk} = {xs[-1]}。"
+          f"试到 {rn - (rk - 1)} 只保证了后面每份至少 1，没用上「非降」这个条件。"),
+        Q(f"题目改成：按字典序输出把 n 分成 k 份的每一种分法（n ≤ {ln}，k ≤ {lk}）。最合适的写法是？",
+          "深搜，按非降顺序逐个输出",
+          ["dp[i][j] 递推，只填一张表", "给深搜加 lru_cache，直接输出缓存", "贪心，每份尽量平均"],
+          f"要列出每一种，输出量就等于方案数，只能一个一个地搜出来；{ln} 分 {lk} 份也只有 {total} 种，深搜很快。"
+          f"DP 和记忆化只算个数，缓存里存的是数字，不是分法。"),
+    ]
 
 
 BUILDERS = {"sort": q_sort, "stack": q_stack, "fib": q_fib, "hanoi": q_hanoi, "perm": q_perm,
             "queens": q_queens, "dsu": q_dsu, "interval": q_interval, "dpintro": q_dpintro,
             "knap": q_knap, "lcs": q_lcs, "bfs": q_bfs, "dijkstra": q_dijkstra, "bsearch": q_bsearch,
             "binary": q_binary, "float": q_float, "matrix": q_matrix, "lights": q_lights,
-            "subsets": q_subsets, "knight": q_knight, "triangle": q_triangle, "kadane": q_kadane, "knapvar": q_knapvar, "lis": q_lis, "grid": q_grid}
+            "subsets": q_subsets, "knight": q_knight, "triangle": q_triangle, "kadane": q_kadane, "knapvar": q_knapvar, "lis": q_lis, "grid": q_grid,
+            "complexity": q_complexity, "divide": q_divide, "foodchain": q_foodchain, "statebfs": q_statebfs, "runtime": q_runtime, "deadline": q_deadline, "shopping": q_shopping, "partition": q_partition}
 
 
 def build() -> dict:

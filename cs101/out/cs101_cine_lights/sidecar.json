@@ -20,11 +20,11 @@
   "subtitles": 43,
   "audit_issues": 0,
   "endcard": 204.88,
-  "size_mb": 15.92,
-  "wall_seconds": 256.9,
   "endcard_info": {
-    "next": null,
-    "last": true,
+    "next": "最多能按时完成几个任务：排序加反悔",
+    "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 15.96,
+  "wall_seconds": 314.4
 }

@@ -22,11 +22,11 @@
   "subtitles": 38,
   "audit_issues": 0,
   "endcard": 211.85,
-  "size_mb": 15.63,
-  "wall_seconds": 326.2,
   "endcard_info": {
-    "next": "区间贪心：先按右端点排序",
+    "next": "食物链：把关系也存进并查集",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 15.63,
+  "wall_seconds": 341.6
 }

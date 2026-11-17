@@ -20,11 +20,11 @@
   "subtitles": 38,
   "audit_issues": 0,
   "endcard": 173.23,
-  "size_mb": 10.96,
-  "wall_seconds": 296.3,
   "endcard_info": {
-    "next": "熄灯问题：只枚举第一行",
+    "next": "程序是怎么跑起来的：字节码、内存与缓存",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
-  }
+  },
+  "size_mb": 11.0,
+  "wall_seconds": 239.3
 }

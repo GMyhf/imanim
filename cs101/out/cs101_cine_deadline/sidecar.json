@@ -1,0 +1,31 @@
+{
+  "lesson": "deadline",
+  "title": "最多能按时完成几个任务：排序加反悔",
+  "source": "计算概论（B）2026fall · 例题精讲 · 第13周 阶段综合练习 5.3 节「一道综合例题的完整拆解」",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 222.57,
+  "speech_seconds": 209.57,
+  "beats": {
+    "title": 0.0,
+    "read": 15.75,
+    "sortkey": 35.02,
+    "walk": 55.7,
+    "why": 96.4,
+    "code": 122.82,
+    "trap": 147.32,
+    "check": 177.17,
+    "recap": 198.95
+  },
+  "subtitles": 53,
+  "audit_issues": 0,
+  "endcard": 219.47,
+  "endcard_info": {
+    "next": "购物：覆盖连续金额的贪心",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.96,
+  "wall_seconds": 372.1
+}

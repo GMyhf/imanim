@@ -1,0 +1,33 @@
+{
+  "lesson": "partition",
+  "title": "数的划分：深搜与动态规划",
+  "source": "计算概论（B）2026fall · 例题精讲 · OpenJudge 28906 数的划分（2025-11-06 模拟机考 · 第16周讲义 T4）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 222.25,
+  "speech_seconds": 207.31,
+  "beats": {
+    "title": 0.0,
+    "read": 14.75,
+    "dup": 36.88,
+    "tree": 57.68,
+    "prune": 82.85,
+    "memo": 99.55,
+    "split": 119.2,
+    "table": 141.4,
+    "check": 161.68,
+    "choose": 178.63,
+    "recap": 201.27
+  },
+  "subtitles": 46,
+  "audit_issues": 0,
+  "endcard": 219.15,
+  "endcard_info": {
+    "next": null,
+    "last": true,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 15.57,
+  "wall_seconds": 391.9
+}

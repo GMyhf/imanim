@@ -43,6 +43,31 @@
    ]
   },
   {
+   "week": 4,
+   "topic": "Python 基础与算法分析",
+   "films": [
+    {
+     "id": "complexity",
+     "dir": "cs101_cine_complexity",
+     "title": "这段代码够快吗：从数据范围倒推算法",
+     "desc": "数两重循环的执行次数，n(n+1)/2 仍是 n²；n = 10⁶ 时各级别在对数轴上差多少；评测机每秒 10⁷–10⁸ 次，从 n 的范围倒推可用的复杂度；内存同样要估；循环里的 x in lst 把 O(n) 藏进一行，list 与 set 差三个数量级；埃氏筛与试除法比次数。",
+     "src": "W04 2.2、3.1–3.5、4.4 节 · 试除法（含计数）为补写",
+     "chapters": {
+      "title": "能过吗",
+      "count": "数两重循环",
+      "levels": "常见级别",
+      "budget": "从数据范围倒推",
+      "space": "空间也要估",
+      "hidden": "list in 与 set in",
+      "sieve": "埃氏筛",
+      "versus": "试除对筛法",
+      "recap": "考场顺序"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202609_ADS_W04_Python_Basics_Algorithm_Analysis.md#3-%E7%AE%97%E6%B3%95%E5%88%86%E6%9E%90%E8%BF%99%E6%AE%B5%E4%BB%A3%E7%A0%81%E5%A4%9F%E5%BF%AB%E5%90%97"
+    }
+   ]
+  },
+  {
    "week": 6,
    "topic": "矩阵、排序与贪心",
    "films": [
@@ -172,6 +197,28 @@
       "recap": "小结"
      },
      "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W08_Recursion.md#33-%E7%AC%AC%E4%BA%8C%E9%83%A8%E5%85%A8%E6%8E%92%E5%88%97"
+    },
+    {
+     "id": "divide",
+     "dir": "cs101_cine_divide",
+     "title": "分治，递归的另一种用法：快速幂与最大公约数",
+     "desc": "汉诺塔、全排列的调用树越分越宽，快速幂与辗转相除只是一条链；二的十次方顺着调用链往回乘，六次乘法对连乘十次，指数的二进制位数就是层数，十亿只要四十三次；把 half 写成两次调用，链又变回 31 个节点的二叉树；75×27 的长方形切正方形演示辗转相除，余数小于一半，每两步至少减半。",
+     "src": "W08 第 4 节 4.1、4.3 · OJ 03248 · 连乘计数、两次调用的反例与长方形切正方形为补写，75×27 为自拟例子",
+     "chapters": {
+      "title": "开场",
+      "naive": "连乘与对半",
+      "code": "代码",
+      "chain": "调用链",
+      "binary": "二进制",
+      "twice": "两次调用的坑",
+      "gcd": "辗转相除",
+      "rect": "切正方形",
+      "why": "为什么对",
+      "halving": "两步减半",
+      "contrast": "分支与单链",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W08_Recursion.md#4-%E5%88%86%E6%B2%BB%E9%80%92%E5%BD%92%E7%9A%84%E5%8F%A6%E4%B8%80%E7%A7%8D%E7%94%A8%E6%B3%95"
     }
    ]
   },
@@ -256,6 +303,26 @@
       "recap": "小结"
      },
      "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W09_Recursion_Backtracking_DSU.md#2-%E5%B9%B6%E6%9F%A5%E9%9B%86disjoint-set-union-dsu"
+    },
+    {
+     "id": "foodchain",
+     "dir": "cs101_cine_foodchain",
+     "title": "食物链：把关系也存进并查集",
+     "desc": "A 吃 B、B 吃 C、C 吃 A：每个动物拆成同类域、猎物域、天敌域三个结点，同一集合 = 同一类动物。「同类」三域一一对应连三对，「x 吃 y」连 (x+n, y)、(x, y+2n)、(x+2n, y+n) 三对；判假话各查两对。讲义样例七句话逐句演示，三句假话；删掉第三对再跑，总数碰巧还是三，却把第五句放过、把第六句判错。",
+     "src": "W09 2.6 节 · OJ 01182 · 插桩版 food_chain_trace 与「少连第三对」对照为补写",
+     "chapters": {
+      "title": "开场",
+      "why": "关系不是同伙",
+      "domains": "拆成三个域",
+      "same": "同类连三对",
+      "eat": "吃也连三对",
+      "check": "讲义代码",
+      "run1": "样例前三句",
+      "run2": "样例后四句",
+      "missing": "少连第三对",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202610_ADS_W09_Recursion_Backtracking_DSU.md#26-%E5%B8%A6%E6%9D%83%E5%B9%B6%E6%9F%A5%E9%9B%8601182-%E9%A3%9F%E7%89%A9%E9%93%BE"
     }
    ]
   },
@@ -453,6 +520,25 @@
      "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W12_DP_BFS.md#2-%E5%B9%BF%E5%BA%A6%E4%BC%98%E5%85%88%E6%90%9C%E7%B4%A2bfs"
     },
     {
+     "id": "statebfs",
+     "dir": "cs101_cine_statebfs",
+     "title": "状态不只是坐标：带状态 BFS 与多源 BFS",
+     "desc": "鸣人和佐助：visited 只按坐标记，讲义两组样例 5、7 都能过；3×5、1 点查克拉的反例里，打掉手下的路第 2 步占住中间格、查克拉用光，留着查克拉的路第 4 步被挡在门外，只找到 8 步，真答案 6 步。状态记成（行、列、剩余查克拉），画成叠起来的两层网格：走空地留在本层、打手下掉一层，30 个状态上跑普通 BFS；讲义 best 剪枝等价于三维 visited 少一维。多源 BFS = 加一个超级源点的单源；水淹七军里水位就是状态，更高的水位才值得再扩展；结尾提变换的迷宫（时间 mod K）。",
+     "src": "W12 2.4–2.6 节 · OJ 04115、M12029 · W13 题单 T04129；只按坐标记的错误写法、三维 visited 写法、超级源点 BFS 为自拟对照代码",
+     "chapters": {
+      "title": "开场",
+      "problem": "鸣人和佐助",
+      "naive": "只记坐标",
+      "wrong": "反例",
+      "layers": "分层图",
+      "code": "best 剪枝",
+      "multi": "超级源点",
+      "flood": "水淹七军",
+      "recap": "小结"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W12_DP_BFS.md#24-%E4%BE%8B%E5%B8%A6%E7%8A%B6%E6%80%81%E7%9A%84-bfs--04115-%E9%B8%A3%E4%BA%BA%E5%92%8C%E4%BD%90%E5%8A%A9"
+    },
+    {
      "id": "dijkstra",
      "dir": "cs101_cine_dijkstra",
      "title": "Dijkstra：带权的波纹",
@@ -511,6 +597,30 @@
    ]
   },
   {
+   "week": 13,
+   "topic": "计算机原理（2）与阶段综合练习",
+   "films": [
+    {
+     "id": "runtime",
+     "dir": "cs101_cine_runtime",
+     "title": "程序是怎么跑起来的：字节码、内存与缓存",
+     "desc": "编译型与解释型；用 dis 看求和循环每圈 7 条字节码、三百万圈两千一百万条，sum 只有十来条；把 1 纳秒放大成 1 秒看存储层次；8×8 矩阵按行与按列遍历时缓存行的命中与缺失；列表是指针数组，row = a[i] 提到循环外内层少两条字节码；一万次 print 与一次 join 的系统调用次数。",
+     "src": "W13 1.1–1.2、3.2–3.3、4.2 节 · 缓存行 LRU 模拟器、8 KB 输出缓冲与逐个 print 的对照版为自拟示意",
+     "chapters": {
+      "title": "循环与 sum",
+      "compile": "编译与解释",
+      "bytecode": "数字节码",
+      "ladder": "1 纳秒 = 1 秒",
+      "cache": "按行与按列",
+      "python": "Python 里的局部性",
+      "buffer": "print 与 join",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W13_Computer_Principles_2.md#1-%E7%A8%8B%E5%BA%8F%E6%98%AF%E6%80%8E%E4%B9%88%E8%B7%91%E8%B5%B7%E6%9D%A5%E7%9A%84"
+    }
+   ]
+  },
+  {
    "week": 98,
    "tag": "EX",
    "label": "例题精讲",
@@ -533,6 +643,65 @@
       "recap": "回顾与同类题"
      },
      "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/ADS_problem_list_at_2026fall.md#2026fall-%E8%AE%A1%E6%A6%82algo-ds%E6%AF%8F%E6%97%A5%E9%80%89%E4%BD%9C"
+    },
+    {
+     "id": "deadline",
+     "dir": "cs101_cine_deadline",
+     "title": "最多能按时完成几个任务：排序加反悔",
+     "desc": "例题精讲。n 个任务各有耗时和截止，最多按时完成几个？照考场流程走一遍：看范围（n ≤ 10⁵ 只能 n log n）、认题型（贪心）、按截止排序、超时就用大根堆扔掉最长的，再讲为什么扔最长的不会更差、三个易错点，最后和暴力对拍两百组。",
+     "src": "W13 讲义 5.3 节 · 主例六个任务与「不反悔」的错误贪心为自拟",
+     "chapters": {
+      "title": "开场",
+      "read": "看范围与认题型",
+      "sortkey": "排序键",
+      "walk": "大根堆反悔",
+      "why": "为什么扔最长的",
+      "code": "代码",
+      "trap": "易错点",
+      "check": "对拍",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_W13_Computer_Principles_2.md#53-%E4%B8%80%E9%81%93%E7%BB%BC%E5%90%88%E4%BE%8B%E9%A2%98%E7%9A%84%E5%AE%8C%E6%95%B4%E6%8B%86%E8%A7%A3"
+    },
+    {
+     "id": "shopping",
+     "dir": "cs101_cine_shopping",
+     "title": "购物：覆盖连续金额的贪心",
+     "desc": "例题精讲，2025-11-06 模拟机考第五题。维护「能凑出 1～reach」：下一枚面值不超过 reach+1 时，平移出来的一段与原段首尾相接，否则断档。每步挑能接上的最大面值，样例 1、2、2、5、10 共 5 枚；与另一种带法逐枚比，说明贪心最早到达上限；呼应二进制拆分；暴力枚举 56 种五枚组合只有一种可行，随机 1000 组对拍全部一致。",
+     "src": "OpenJudge M29896（2025-11-06 模拟机考）· 2025fall W10–11 讲义 · 暴力枚举对拍为补写",
+     "chapters": {
+      "title": "开场",
+      "read": "读样例",
+      "reach": "不变量 reach",
+      "walk": "样例走一遍",
+      "why": "为何挑最大",
+      "echo": "呼应二进制拆分",
+      "code": "讲义代码",
+      "brute": "暴力对拍",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/2025fall-cs101/20251021_ADS_week10-11_interval_sorting_monotonicStack_trie_etc.md#m29896%E8%B4%AD%E7%89%A9"
+    },
+    {
+     "id": "partition",
+     "dir": "cs101_cine_partition",
+     "title": "数的划分：深搜与动态规划",
+     "desc": "例题精讲，2025-11-06 模拟机考真题。随便填会把 7 分 3 份数成 15 种，规定后一份不小于前一份就收拢成 4 种；讲义深搜用 low 去重、rem // left 当上界，7 个节点对 20 个；lru_cache 把 200 分 6 份的 434 万次调用压到 11888 种状态；DP 按「有没有 1」分两类：拿掉一个 1，或每份减 1；两种写法 970 组对拍一致；考场上先估答案多大再选写法。",
+     "src": "OpenJudge M28906（2025-11-06 模拟机考）· W16 讲义第 5 节 · DP 递推与对拍代码为自拟",
+     "chapters": {
+      "title": "开场",
+      "read": "读题",
+      "dup": "去重",
+      "tree": "搜索树",
+      "prune": "上界剪枝",
+      "memo": "记忆化",
+      "split": "DP 分两类",
+      "table": "填表",
+      "check": "对拍",
+      "choose": "怎么选",
+      "recap": "回顾与同类题"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202612_ADS_W16_Review_Final_Machine_Exam.md#t4-m28906-%E6%95%B0%E7%9A%84%E5%88%92%E5%88%86"
     }
    ]
   }
