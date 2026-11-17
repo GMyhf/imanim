@@ -903,13 +903,14 @@ def q_statebfs():
 # 1) import 区加：import runtimedata  # noqa: E402
 # 2) 新输入常量（片中都没出现过）放到常量区：
 RT_LOOP_N = 1000                         # 循环 1000 圈（片中是三百万）
+RT_PER = 7                               # 每圈字节码条数：取片中旁白的数（3.11、3.14 实测都是 7）；题面写明，不随评测机版本变
 RT_CACHE = (6, 2, 8)                     # 6×6 矩阵、缓存行装 2 个数、缓存放得下 8 个缓存行（片中 8×8、4、4）
 RT_PRINT_N, RT_BUF = 6000, 8192          # print 0²…5999² 到文件、8 KB 缓冲（片中一万行）
 # 3) BUILDERS 里加 "runtime": q_runtime（顺序随 films.json：bsearch 之后、lights 之前）
 
 
 def q_runtime():
-    per, _ = runtimedata.loop_formula()
+    per = RT_PER
     body = per * RT_LOOP_N                                            # 只算循环体
     n, line, ways = RT_CACHE
     col = runtimedata.misses(runtimedata.col_major(n), line=line, ways=ways)

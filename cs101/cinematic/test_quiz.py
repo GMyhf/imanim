@@ -882,7 +882,9 @@ class QuizAnswerTest(unittest.TestCase):
         self.assertEqual(right("statebfs", 2), str(sb_flood_by_source(G.SB_FL_H, G.SB_FL_SRC)))
 
     def test_runtime(self):
-        self.assertEqual(right("runtime", 0), str(rt_loop_body_count(G.RT_LOOP_N)))
+        self.assertEqual(right("runtime", 0), str(G.RT_PER * G.RT_LOOP_N))
+        if sys.version_info[:2] in ((3, 11), (3, 14)):                 # 每圈条数随解释器版本变，只在实测过的版本上核对
+            self.assertEqual(rt_loop_body_count(G.RT_LOOP_N), G.RT_PER * G.RT_LOOP_N)
         self.assertEqual(right("runtime", 1), str(rt_col_misses(*G.RT_CACHE)))
         self.assertEqual(right("runtime", 2), str(rt_block_writes(G.RT_PRINT_N, G.RT_BUF)))
 

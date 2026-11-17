@@ -9,6 +9,7 @@
 import json
 import math
 from pathlib import Path
+import sys
 import unittest
 
 import runtimedata as D
@@ -38,6 +39,8 @@ def block_writes(nbytes, buf):
 
 
 class RuntimeFacts(unittest.TestCase):
+    @unittest.skipUnless(sys.version_info[:2] in ((3, 11), (3, 14)),
+                         "字节码条数随 CPython 版本变；旁白的「七条」在 3.11（本机、CI）与 3.14（渲染机）上实测")
     def test_bytecode(self):
         body = D.loop_body()
         self.assertEqual(len(body), 7)                                    # 七条：取数、存 i、读 s、读 i、加、存 s、跳回
