@@ -2,7 +2,7 @@
 
 用 [Manim](https://www.manim.community/)（ManimCE 0.22.0）制作的 3B1B 风格算法讲解短片，1080p60，中文配音、画面内字幕。两门课的总入口：**https://infomall.zhengmao.ltd/anim/**（页面源文件 `cs101/cinematic/site/home.html`）。
 
-- **CS101**《计算概论（B）》2026fall：33 支、约 110 分钟。
+- **CS101**《计算概论（B）》2026fall：34 支、约 113 分钟。
   在线观看 **https://infomall.zhengmao.ltd/cs101-anim/** ·
   1080p 成片 [Releases `cs101-anim-2026fall`](https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall) ·
   说明 [`cs101/cinematic/README.md`](cs101/cinematic/README.md)

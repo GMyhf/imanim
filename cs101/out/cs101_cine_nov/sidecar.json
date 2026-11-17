@@ -1,0 +1,29 @@
+{
+  "lesson": "nov",
+  "title": "十一月月考讲评：把题面翻译成熟悉的结构",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3–4 节（E31529、E31530、M31531、M31532、M31533、T31534）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 207.5,
+  "speech_seconds": 196.39,
+  "beats": {
+    "title": 0.0,
+    "warm": 14.67,
+    "arrows": 43.08,
+    "cards": 75.37,
+    "perc": 106.57,
+    "brackets": 140.78,
+    "recap": 180.02
+  },
+  "subtitles": 47,
+  "audit_issues": 0,
+  "endcard": 204.4,
+  "endcard_info": {
+    "next": "熄灯问题：只枚举第一行",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 17.87,
+  "wall_seconds": 353.6
+}

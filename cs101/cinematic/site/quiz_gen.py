@@ -38,6 +38,7 @@ import kadanedata  # noqa: E402
 import knapdata  # noqa: E402
 import knapvardata  # noqa: E402
 import knightdata  # noqa: E402
+import novdata  # noqa: E402
 import lcsdata  # noqa: E402
 import lightsdata  # noqa: E402
 import lisdata  # noqa: E402
@@ -1043,12 +1044,57 @@ def q_partition():
     ]
 
 
+NOV_CARDS = 6                                            # 牌堆魔术：片里只演示了 n = 4，题面样例是 5
+NOV_ARROWS = ["LDRU", "UULU"]                            # 箭头迷阵 2×4
+NOV_BR, NOV_Q = "(()))(()", (2, 7)                       # 括号区间审计：两端一样高、中途跌破
+
+
+def q_nov():
+    n = NOV_CARDS
+    ans = novdata.run_io(novdata.solve_t4, f"{n}\n")
+    dq = deque()                                         # 常见错误：两步撤销的顺序反了（先移底牌再放回）
+    for i in range(n, 0, -1):
+        if dq:
+            dq.appendleft(dq.pop())
+        dq.appendleft(i)
+    swapped = " ".join(map(str, dq))
+    plain = " ".join(map(str, range(1, n + 1)))         # 以为初始就是 1..n
+    rev = " ".join(ans.split()[::-1])
+    g = NOV_ARROWS
+    rows, cols = len(g), len(g[0])
+    walks, st = novdata.arrows_trace(g)
+    esc = st.count(2)
+    direct = sum(1 for i in range(rows) for j in range(cols)
+                 if not (0 <= i + novdata.MOVE[g[i][j]][0] < rows and 0 <= j + novdata.MOVE[g[i][j]][1] < cols))
+    oncyc = sum(len(w["path"]) for w in walks if w["end"] == "cycle")
+    s, (l, r) = NOV_BR, NOV_Q
+    pre = novdata.prefix(s)
+    ok, eq, nx = novdata.judge(s, l, r)
+    assert eq and not ok
+    return [
+        Q(f"牌堆魔术：{n} 张牌，每轮先把顶牌移到底、再翻开顶牌拿走，要翻出 1, 2, …, {n}。初始牌堆从上到下是？",
+          ans, [swapped, plain, rev],
+          f"倒着做：i 从 {n} 倒数到 1，先把牌 i 放回牌顶（撤销「翻开」），再把底牌移回牌顶（撤销「移到底」），得到 {ans}。"
+          f"{swapped} 是两步撤销的顺序反了：撤销要按相反的顺序，后做的先撤。"),
+        Q(f"箭头迷阵：2×{cols} 网格两行依次是 {g[0]}、{g[1]}（U 上 D 下 L 左 R 右）。从多少个格子出发能走出场地？",
+          esc, [direct, rows * cols - esc, rows * cols - oncyc],
+          f"左上 L 和右上 U 一步出界；第 1 行第 3 格 R 走到右上再出界；第 2 行第 1、4 格向上接到能逃的格子，共 {esc} 个。"
+          f"第 1 行第 2 格 D 与第 2 行第 2 格 U 互指成环，第 2 行第 3 格 L 接进这个环，这 3 格逃不出。"
+          f"{direct} 只数了一步出界的；{rows * cols - oncyc} 把接进环的也当成能逃。"),
+        Q(f"括号区间审计：s = {s}，询问 [{l}, {r}]。pre[{r}] 与 pre[{l - 1}] 都是 {pre[r]}，按讲义的判定结论是？",
+          f"NO：nxt[{l - 1}] = {nx} ≤ {r}，中途跌破起点",
+          [f"YES：两端一样高就合法", f"YES：nxt[{l - 1}] = {nx} > {l - 1}", f"NO：两端不一样高"],
+          f"pre = {seq(pre)}。两端一样高只是第一条；第二条要求区间里 pre 不低于 pre[{l - 1}] = {pre[l - 1]}，"
+          f"而位置 {nx} 的 pre 是 {pre[nx]}，已经跌破，所以 nxt[{l - 1}] = {nx} ≤ {r}，子串 {s[l - 1:r]} 不合法。"),
+    ]
+
+
 BUILDERS = {"sort": q_sort, "stack": q_stack, "fib": q_fib, "hanoi": q_hanoi, "perm": q_perm,
             "queens": q_queens, "dsu": q_dsu, "interval": q_interval, "dpintro": q_dpintro,
             "knap": q_knap, "lcs": q_lcs, "bfs": q_bfs, "dijkstra": q_dijkstra, "bsearch": q_bsearch,
             "binary": q_binary, "float": q_float, "matrix": q_matrix, "lights": q_lights,
             "subsets": q_subsets, "knight": q_knight, "triangle": q_triangle, "kadane": q_kadane, "knapvar": q_knapvar, "lis": q_lis, "grid": q_grid,
-            "complexity": q_complexity, "divide": q_divide, "foodchain": q_foodchain, "statebfs": q_statebfs, "runtime": q_runtime, "deadline": q_deadline, "shopping": q_shopping, "partition": q_partition}
+            "complexity": q_complexity, "divide": q_divide, "foodchain": q_foodchain, "statebfs": q_statebfs, "runtime": q_runtime, "deadline": q_deadline, "shopping": q_shopping, "partition": q_partition, "nov": q_nov}
 
 
 def build() -> dict:

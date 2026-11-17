@@ -599,6 +599,31 @@ def shop_min_brute(x, coins):
             return k
 
 
+def nov_reveal(order):
+    """牌堆魔术按题意正着做（不调用 novdata）。"""
+    dq, out = deque(order), []
+    while dq:
+        dq.rotate(-1)
+        out.append(dq.popleft())
+    return out
+
+
+def nov_escape(g):
+    """逐格模拟 nm+1 步还在场内就是绕圈（不调用 novdata）。"""
+    n, m = len(g), len(g[0])
+    mv = {"U": (-1, 0), "D": (1, 0), "L": (0, -1), "R": (0, 1)}
+    cnt = 0
+    for si in range(n):
+        for sj in range(m):
+            i, j = si, sj
+            for _ in range(n * m + 1):
+                if not (0 <= i < n and 0 <= j < m):
+                    break
+                i, j = i + mv[g[i][j]][0], j + mv[g[i][j]][1]
+            cnt += not (0 <= i < n and 0 <= j < m)
+    return cnt
+
+
 def partition_brute(n, k):
     """穷举非降 k 元组（不调用 partitiondata）。"""
     return sum(1 for c in itertools.combinations_with_replacement(range(1, n + 1), k) if sum(c) == n)
@@ -903,6 +928,24 @@ class QuizAnswerTest(unittest.TestCase):
         self.assertEqual(len(neg), 1)
         x, c = neg[0]
         self.assertEqual(right("shopping", 2), f"X = {x}，面值 {' '.join(map(str, c))}")
+
+    def test_nov(self):
+        n = G.NOV_CARDS
+        want = next(p for p in itertools.permutations(range(1, n + 1)) if nov_reveal(p) == list(range(1, n + 1)))
+        self.assertEqual(right("nov", 0), " ".join(map(str, want)))
+        self.assertEqual(right("nov", 1), str(nov_escape(G.NOV_ARROWS)))
+        s, (l, r) = G.NOV_BR, G.NOV_Q
+        sub, d, ok = s[l - 1:r], 0, True
+        for ch in sub:
+            d += 1 if ch == "(" else -1
+            ok = ok and d >= 0
+        self.assertFalse(ok and d == 0)
+        pre = [0]
+        for ch in s:
+            pre.append(pre[-1] + (1 if ch == "(" else -1))
+        nx = next((k for k in range(l, len(s) + 1) if pre[k] < pre[l - 1]), len(s) + 1)
+        self.assertEqual(pre[r], pre[l - 1])
+        self.assertEqual(right("nov", 2), f"NO：nxt[{l - 1}] = {nx} ≤ {r}，中途跌破起点")
 
     def test_partition(self):
         n, k = G.PART_Q1

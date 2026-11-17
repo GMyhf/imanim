@@ -45,6 +45,7 @@
 | 最多能按时完成几个任务：排序加反悔（例题精讲） | 2026fall 第 13 周 5.3 节综合例题（主例与错误贪心为自拟） | `cs101/out/cs101_cine_deadline/` |
 | 购物：覆盖连续金额的贪心（例题精讲） | OpenJudge M29896（2025-11-06 模拟机考）· 2025fall 第 10–11 周讲义 | `cs101/out/cs101_cine_shopping/` |
 | 数的划分：深搜与动态规划（例题精讲） | OpenJudge M28906（2025-11-06 模拟机考）· 第 16 周讲义第 5 节（DP 递推与对拍为自拟） | `cs101/out/cs101_cine_partition/` |
+| 十一月月考讲评：把题面翻译成熟悉的结构 | 2026fall 11 月月考讲评与阶段复习 第 3–4 节（OpenJudge 31529–31534；选座一排十个座位与 4×4 渗透数据为自拟） | `cs101/out/cs101_cine_nov/` |
 
 **成片 mp4 不进 git**（`.gitignore` 排除 `cs101/out/cs101_cine_*/*.mp4`），放在 GitHub Releases：
 https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
@@ -90,7 +91,7 @@ python cs101/cinematic/publish.py --course cs201 kmp --dry-run           # 打�
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 33 支）
+python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 34 支）
 python cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 

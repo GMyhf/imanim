@@ -62,7 +62,8 @@ LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "runtime": ("runtime.json", "runtime_scene.py", "RuntimeLesson"),
            "deadline": ("deadline.json", "deadline_scene.py", "DeadlineLesson"),
            "shopping": ("shopping.json", "shopping_scene.py", "ShoppingLesson"),
-           "partition": ("partition.json", "partition_scene.py", "PartitionLesson")}
+           "partition": ("partition.json", "partition_scene.py", "PartitionLesson"),
+           "nov": ("nov.json", "nov_scene.py", "NovLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 
