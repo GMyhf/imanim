@@ -1,0 +1,32 @@
+# 每次推送与 PR：两门课算法动画的发布前检查（不渲染、不联网到 Mac 与中转）。
+# publish.py --check-only 会跑：片目与 make.py 登记一致、sidecar 为 1080p 且不超 4 分钟、画面检查 0 处、
+# 章节键与 beats 一致、题库片目与 films.json 一致且与 quiz_gen 现生成的完全相同、各片数字对撞测试与小测重算。
+name: 动画发布前检查
+
+on:
+  push:
+    branches: [master]
+    paths: ["cs101/cinematic/**", "cs201/cinematic/**", "cs101/out/**", "cs201/out/**", ".github/workflows/check.yml"]
+  pull_request:
+    paths: ["cs101/cinematic/**", "cs201/cinematic/**", "cs101/out/**", "cs201/out/**", ".github/workflows/check.yml"]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        course: [cs101, cs201]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # 只用标准库：数据模块、测试、题库生成与检查都不依赖 manim
+      - name: 检查 ${{ matrix.course }}
+        run: python cs101/cinematic/publish.py --course ${{ matrix.course }} --check-only
+      - name: 入口页能生成
+        run: |
+          if [ "${{ matrix.course }}" = cs101 ]; then site=cs101/cinematic/site; else site=cs201/cinematic/site; fi
+          python cs101/cinematic/site/build.py --site "$site" --standalone --feedback

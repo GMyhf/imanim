@@ -73,15 +73,48 @@ def chapter_nav(chs):
     return f'\n        <div class="chap" role="group" aria-label="章节">{btns}</div>'
 
 
+def srt_cues(fdir):
+    """各片 subs.srt（句级字幕，时间轴与成片一致）→ [(起, 止, 句子)]；没有就返回空表。"""
+    for d in (HERE.resolve().parent.parent / "out", HERE / "sidecars"):
+        p = d / fdir / "subs.srt"
+        if p.exists():
+            cues = []
+            for blk in p.read_text(encoding="utf-8").strip().split("\n\n"):
+                ln = blk.strip().splitlines()
+                if len(ln) >= 3 and "-->" in ln[1]:
+                    a, b = (sum(float(x) * m for x, m in zip(t.strip().replace(",", ".").split(":"), (3600, 60, 1)))
+                            for t in ln[1].split("-->"))
+                    cues.append((a, b, " ".join(ln[2:])))
+            return cues
+    return []
+
+
 def transcript(f, chs):
-    """旁白文字稿：按 beat 分段，段首是可点的章节标签。旁白稿缺失就不出。"""
+    """旁白文字稿：按 beat 分段，段首是可点的章节标签；有 subs.srt 时逐句带时间，播放时高亮当前句、点句子跳过去。
+    旁白稿缺失就不出。"""
     p = CINE / f"{f['id']}.json"
     if not p.exists():
         return ""
     narr = {b["id"]: b["narration"] for b in json.loads(p.read_text(encoding="utf-8"))["beats"]}
-    paras = "".join(f'<p><button type="button" class="ts-ch" data-t="{t:.2f}">{esc(lab)} · {mmss(t)}</button>'
-                    f'{esc(narr.get(bid, ""))}</p>' for bid, lab, t in chs if narr.get(bid))
-    return f'\n          <details class="ts"><summary>旁白文字稿</summary><div class="ts-body">{paras}</div></details>'
+    cues = srt_cues(f["dir"])
+    starts = [t for _, _, t in chs] + [float("inf")]
+    paras = []
+    for k, (bid, lab, t) in enumerate(chs):
+        if not narr.get(bid):
+            continue
+        mine = [c for c in cues if starts[k] - 0.3 <= c[0] < starts[k + 1] - 0.3]
+        body = ("".join(f'<span class="s" data-t="{a:.2f}" data-e="{b:.2f}">{esc(x)}</span>' for a, b, x in mine)
+                if mine else esc(narr[bid]))
+        paras.append(f'<p><button type="button" class="ts-ch" data-t="{t:.2f}">{esc(lab)} · {mmss(t)}</button>{body}</p>')
+    return f'\n          <details class="ts"><summary>旁白文字稿</summary><div class="ts-body">{"".join(paras)}</div></details>'
+
+
+RATES = ["0.75", "1", "1.25", "1.5", "2"]
+
+
+def rate_select():
+    opts = "".join(f'<option value="{r}"{" selected" if r == "1" else ""}>{r}×</option>' for r in RATES)
+    return f'<label class="rate" title="播放速度"><span>倍速</span><select aria-label="播放速度">{opts}</select></label>'
 
 
 def quiz(fid):
@@ -123,7 +156,7 @@ for w in data["weeks"]:
         <div class="film-body">
           <h3><span class="seen" title="已看过" aria-label="已看过">✓</span>{esc(title)}</h3>
           <p class="desc">{esc(f['desc'])}</p>
-          <div class="meta"><span class="dur">{mmss(sc['seconds'])}</span>{src}<button type="button" class="copy">复制链接</button></div>{transcript(f, chs)}{quiz(f['id'])}{feedback(f['id']) if FEEDBACK else ""}
+          <div class="meta"><span class="dur">{mmss(sc['seconds'])}</span>{src}{rate_select()}<button type="button" class="copy">复制链接</button></div>{transcript(f, chs)}{quiz(f['id'])}{feedback(f['id']) if FEEDBACK else ""}
         </div>
       </article>""")
     sections.append(f"""
@@ -200,6 +233,17 @@ PAGE_SCRIPT = """<script>
   }
   paintSeen();
 
+  // 倍速：所有片共用，存在 localStorage anim-rate；video.load() 会把 playbackRate 复位，所以连 defaultPlaybackRate 一起设
+  var RATE_KEY = "anim-rate";
+  function setRate(r) {
+    var x = parseFloat(r) || 1;
+    films.forEach(function (a) {
+      var v = a.querySelector("video"), s = a.querySelector(".rate select");
+      v.defaultPlaybackRate = x; v.playbackRate = x; if (s) s.value = String(r);
+    });
+  }
+  (function () { var r = load(RATE_KEY); if (r && r !== "1") setRate(r); })();
+
   // 章节：点了跳过去并播放；播放时高亮当前章节
   function seek(v, t) {
     function go() { v.currentTime = t; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
@@ -221,6 +265,31 @@ PAGE_SCRIPT = """<script>
       if (v.duration && v.currentTime / v.duration >= 0.8) markSeen(a.id);
     });
     v.addEventListener("ended", function () { markSeen(a.id); });
+
+    // 文字稿逐句：播放时高亮当前句（文字稿展开时把它滚到可见处）；点句子跳过去由上面的 [data-t] 统一处理
+    var sents = Array.prototype.slice.call(a.querySelectorAll(".ts-body .s")), tsb = a.querySelector(".ts-body"),
+        ts = a.querySelector("details.ts"), curS = null;
+    if (sents.length) v.addEventListener("timeupdate", function () {
+      var t = v.currentTime, hit = null;
+      for (var i = 0; i < sents.length; i++) {
+        if (t + 0.05 >= parseFloat(sents[i].dataset.t)) hit = sents[i]; else break;
+      }
+      if (hit && t > parseFloat(hit.dataset.e) + 1.5) hit = null;      // 句间停顿较长时不高亮
+      if (hit === curS) return;
+      if (curS) curS.classList.remove("on");
+      curS = hit;
+      if (hit) {
+        hit.classList.add("on");
+        if (ts && ts.open) {
+          var top = hit.offsetTop - tsb.offsetTop;
+          if (top < tsb.scrollTop || top > tsb.scrollTop + tsb.clientHeight - 40) tsb.scrollTop = Math.max(0, top - 60);
+        }
+      }
+    });
+
+    // 倍速：所有片共用一个选择，记在本机
+    var sel = a.querySelector(".rate select");
+    if (sel) sel.addEventListener("change", function () { setRate(sel.value); save(RATE_KEY, sel.value); });
 
     // 复制链接
     var cp = a.querySelector("button.copy");
@@ -384,6 +453,12 @@ nav.weeks a:hover, nav.weeks a:focus-visible {{ border-color: var(--accent); out
 .film details > summary:hover {{ color: var(--fg); }}
 .ts-body {{ display: grid; gap: 8px; margin-top: 8px; max-height: 340px; overflow-y: auto; padding-right: 4px; }}
 .film .ts-body p {{ font-size: 13px; line-height: 1.7; color: var(--fg); margin: 0; }}
+.ts-body .s {{ cursor: pointer; border-radius: 3px; transition: background .2s; }}
+.ts-body .s:hover {{ text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }}
+.ts-body .s.on {{ background: color-mix(in srgb, var(--accent) 22%, transparent); }}
+.rate {{ display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted, inherit); }}
+.rate select {{ font: inherit; font-size: 12px; padding: 1px 4px; border-radius: 6px; border: 1px solid var(--line);
+  background: transparent; color: inherit; }}
 .ts-ch {{ font: inherit; font-size: 12px; padding: 0; margin-right: 8px; border: 0; background: none; color: var(--accent); cursor: pointer; }}
 .quiz ol {{ margin: 8px 0 0; padding-left: 20px; display: grid; gap: 12px; }}
 .film .qz-q {{ margin: 0 0 6px; font-size: 14px; color: var(--fg); }}
