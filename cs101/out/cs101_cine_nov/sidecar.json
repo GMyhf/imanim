@@ -20,10 +20,10 @@
   "audit_issues": 0,
   "endcard": 204.4,
   "endcard_info": {
-    "next": "熄灯问题：只枚举第一行",
+    "next": "双重回文：十进制和二进制都要对称",
     "last": false,
     "url": "infomall.zhengmao.ltd/cs101-anim/"
   },
-  "size_mb": 17.87,
-  "wall_seconds": 353.6
+  "size_mb": 17.88,
+  "wall_seconds": 239.8
 }

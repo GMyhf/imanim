@@ -1,0 +1,30 @@
+{
+  "lesson": "novseat",
+  "title": "图书馆选座：指针为什么不用回头",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3 节 T2（OpenJudge E31530；一排十个座位与五个座位的反例为自拟）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 218.57,
+  "speech_seconds": 206.52,
+  "beats": {
+    "title": 0.0,
+    "rule": 14.58,
+    "naive": 52.72,
+    "mono": 78.8,
+    "pointer": 103.62,
+    "code": 128.45,
+    "bug": 156.88,
+    "recap": 196.48
+  },
+  "subtitles": 52,
+  "audit_issues": 0,
+  "endcard": 215.47,
+  "endcard_info": {
+    "next": "箭头迷阵：每格一条出边，路线必定出界或成环",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 14.74,
+  "wall_seconds": 344.2
+}

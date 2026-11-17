@@ -1,0 +1,31 @@
+{
+  "lesson": "novarrow",
+  "title": "箭头迷阵：每格一条出边，路线必定出界或成环",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3 节 T3（OpenJudge M31531；绕圈网格与递归对照写法为自拟）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 234.15,
+  "speech_seconds": 222.41,
+  "beats": {
+    "title": 0.0,
+    "graph": 25.35,
+    "states": 51.48,
+    "walk": 83.4,
+    "wander": 121.57,
+    "cost": 146.38,
+    "recur": 164.65,
+    "code": 192.13,
+    "recap": 214.3
+  },
+  "subtitles": 56,
+  "audit_issues": 0,
+  "endcard": 231.05,
+  "endcard_info": {
+    "next": "牌堆魔术：倒着撤销每一步",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 17.45,
+  "wall_seconds": 336.1
+}

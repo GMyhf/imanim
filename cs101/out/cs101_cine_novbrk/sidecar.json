@@ -1,0 +1,31 @@
+{
+  "lesson": "novbrk",
+  "title": "括号区间审计：前缀和与单调栈",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3 节 T6（OpenJudge T31534）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 233.52,
+  "speech_seconds": 220.51,
+  "beats": {
+    "title": 0.0,
+    "task": 16.92,
+    "mountain": 42.9,
+    "nxt": 78.97,
+    "stack": 99.8,
+    "judge": 138.37,
+    "pitfall": 163.92,
+    "code": 189.33,
+    "recap": 210.23
+  },
+  "subtitles": 51,
+  "audit_issues": 0,
+  "endcard": 230.42,
+  "endcard_info": {
+    "next": "熄灯问题：只枚举第一行",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.95,
+  "wall_seconds": 307.0
+}

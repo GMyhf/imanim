@@ -1,0 +1,31 @@
+{
+  "lesson": "novcard",
+  "title": "牌堆魔术：倒着撤销每一步",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3 节 T4（OpenJudge M31532 牌堆魔术）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 230.7,
+  "speech_seconds": 219.0,
+  "beats": {
+    "title": 0.0,
+    "rule": 17.45,
+    "undo": 46.9,
+    "sample2": 77.47,
+    "pos": 107.15,
+    "code": 137.72,
+    "bug": 157.58,
+    "cost": 185.13,
+    "recap": 208.93
+  },
+  "subtitles": 52,
+  "audit_issues": 0,
+  "endcard": 227.6,
+  "endcard_info": {
+    "next": "渗透实验：并查集加两个虚拟结点",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 15.93,
+  "wall_seconds": 296.4
+}

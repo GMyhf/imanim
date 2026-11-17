@@ -46,6 +46,12 @@
 | 购物：覆盖连续金额的贪心（例题精讲） | OpenJudge M29896（2025-11-06 模拟机考）· 2025fall 第 10–11 周讲义 | `cs101/out/cs101_cine_shopping/` |
 | 数的划分：深搜与动态规划（例题精讲） | OpenJudge M28906（2025-11-06 模拟机考）· 第 16 周讲义第 5 节（DP 递推与对拍为自拟） | `cs101/out/cs101_cine_partition/` |
 | 十一月月考讲评：把题面翻译成熟悉的结构 | 2026fall 11 月月考讲评与阶段复习 第 3–4 节（OpenJudge 31529–31534；选座一排十个座位与 4×4 渗透数据为自拟） | `cs101/out/cs101_cine_nov/` |
+| 双重回文：十进制和二进制都要对称 | 11 月月考讲评与阶段复习 第 3 节 T1 · OpenJudge E31529 | `cs101/out/cs101_cine_novpal/` |
+| 图书馆选座：指针为什么不用回头 | 11 月月考讲评与阶段复习 第 3 节 T2 · OpenJudge E31530 · 一排十个座位与 00001 反例为自拟 | `cs101/out/cs101_cine_novseat/` |
+| 箭头迷阵：每格一条出边，路线必定出界或成环 | 11 月月考讲评与阶段复习 第 3 节 T3 · OpenJudge M31531 · 3×3 绕圈网格与递归对照写法为自拟 | `cs101/out/cs101_cine_novarrow/` |
+| 牌堆魔术：倒着撤销每一步 | 11 月月考讲评与阶段复习 第 3 节 T4 · OpenJudge M31532 · 位置队列演示、写反的错误写法与搬动计数为按讲义补写 | `cs101/out/cs101_cine_novcard/` |
+| 渗透实验：并查集加两个虚拟结点 | 11 月月考讲评与阶段复习 第 3 节 T5 · OpenJudge M31533 · 4×5 网格、五结点链与 BFS 示意局面为自拟 | `cs101/out/cs101_cine_novperc/` |
+| 括号区间审计：前缀和与单调栈 | 11 月月考讲评与阶段复习 第 3 节 T6 · OpenJudge T31534 · 用题面样例 2；错误写法为按讲义补写的对照 | `cs101/out/cs101_cine_novbrk/` |
 
 **成片 mp4 不进 git**（`.gitignore` 排除 `cs101/out/cs101_cine_*/*.mp4`），放在 GitHub Releases：
 https://github.com/GMyhf/imanim/releases/tag/cs101-anim-2026fall
@@ -91,7 +97,7 @@ python cs101/cinematic/publish.py --course cs201 kmp --dry-run           # 打�
 ```bash
 # 仓库根目录；ffmpeg 在 PATH 上（或设 MVP_FFMPEG_DIR）
 export PATH=$PWD/.venv/bin:$HOME/.TinyTeX/bin/x86_64-linux:$PATH
-python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 34 支）
+python cs101/cinematic/make.py --lesson fib --quality draft     # 480p15 预览，约 1 分钟（id 见 make.py 的 LESSONS，共 40 支）
 python cs101/cinematic/make.py --lesson fib                     # 1080p60 成片
 python cs101/cinematic/make.py --lesson fib --tts-only          # 只合成配音、写 timing.json
 

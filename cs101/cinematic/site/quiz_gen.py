@@ -39,6 +39,10 @@ import knapdata  # noqa: E402
 import knapvardata  # noqa: E402
 import knightdata  # noqa: E402
 import novdata  # noqa: E402
+import novarrowdata  # noqa: E402
+import novpaldata  # noqa: E402
+import novpercdata  # noqa: E402
+import novseatdata  # noqa: E402
 import lcsdata  # noqa: E402
 import lightsdata  # noqa: E402
 import lisdata  # noqa: E402
@@ -1089,12 +1093,318 @@ def q_nov():
     ]
 
 
+NOVPAL_N = 33                                            # 双重回文：n 本身就是答案，卡 range 的右端
+NOVPAL_X = 19                                            # pal(19, 2)：19 = 10011₂，倒过来 11001₂ = 25
+NOVPAL_EVEN = (22, 6)                                    # 偶数十进制回文 / 二进制位数为奇数的偶数
+
+
+def q_novpal():
+    n = NOVPAL_N
+    ans = novpaldata.run_io(novpaldata.SOLVE, f"{n}\n")
+    pals = novpaldata.double_pals(n)
+    short = novpaldata.double_pals(n - 1)                # 常见错误：range(1, n, 2) 漏掉 n 本身
+    off = f"{len(short)} {short[-1]}"
+    nostrip = novpaldata.run_io(novpaldata.solve_t1_nostrip, f"{n}\n")   # 忘切 0b 前缀
+    decs = novpaldata.dec_pals(n)                       # 只判了十进制
+    deconly = f"{len(decs)} {decs[-1]}"
+    x = NOVPAL_X
+    st = novpaldata.pal_trace(x, 2)
+    y = st[-1][2]
+    early = 0                                            # 循环条件写成 t > 1：最后一位没接上
+    t = x
+    while t > 1:
+        early = early * 2 + t % 2
+        t //= 2
+    as_dec = int("".join(str(r) for _, r, _ in st))      # 写成 y * 10 + t % 2：拼出的是二进制数字串
+    e1, e2 = NOVPAL_EVEN
+    return [
+        Q(f"双重回文：输入 n = {n}，正确输出是？",
+          ans, [off, nostrip, deconly],
+          f"1 到 {n} 的双重回文是 {seq(pals)}，共 {len(pals)} 个，最大 {pals[-1]}。"
+          f"{off} 是 range(1, n, 2) 漏了 n 本身；{nostrip} 是 bin(i) 忘了切掉 '0b' 前缀，"
+          f"一个也匹配不上，best 停在初值 1；{deconly} 是只判了十进制。"),
+        Q(f"讲义 C++ 版 pal(x, base) 把 x 按 base 进制倒过来。调用 pal({x}, 2)，循环结束时 y 等于多少？",
+          y, [x, as_dec, early],
+          f"{x} = {novpaldata.binstr(x)}₂，余数依次是 {seq(r for _, r, _ in st)}，"
+          f"y 依次是 {seq(v for _, _, v in st)}，最后 y = {y} ≠ {x}，不是回文。"
+          f"{as_dec} 是把 y * base 写成了 y * 10；{early} 是循环条件写成 t > 1，最高位那个 1 没接上。"),
+        Q("讲义只枚举奇数 for i in range(1, n + 1, 2)。为什么偶数可以全部跳过？",
+          "偶数二进制末位是 0，而最高位一定是 1，首尾不同",
+          ["偶数的十进制不可能是回文", "偶数的二进制位数一定是偶数", "题目只问奇数"],
+          f"没有前导零，二进制最高位是 1；偶数末位是 0，倒过来首位成了 0，不可能相等。"
+          f"十进制偶数可以是回文（如 {e1}），二进制位数也可以是奇数（{e2} = {novpaldata.binstr(e2)}₂ 是三位）。"),
+    ]
+
+
+NS_ROW, NS_M = "000100001", 3                            # 选座：最右边有人，左边界写错会出错
+NS_EMPTY = (8, 6)                                        # 全空一排 8 座、来 6 人：朴素模拟扫过的格子
+NS_CANDS = ["4 1\n1000", "4 1\n0001", "4 2\n0100", "5 2\n00100"]   # 哪个输入暴露 s[-1] 的错误
+
+
+def q_novseat():
+    s, m = NS_ROW, NS_M
+    inp = f"{len(s)} {m}\n{s}\n"
+    fmt = lambda out: " / ".join(out.split("\n"))              # noqa: E731
+    ans = fmt(novseatdata.run_io(novseatdata.solve, inp))
+    bug = fmt(novseatdata.run_io(novseatdata.solve_bug_left, inp))
+    t, k = list(s), 0                                    # 常见错误：只找空座，不看邻座
+    for _ in range(m):
+        if "0" in t:
+            t[t.index("0")] = "1"
+            k += 1
+    first_empty = f"{k} / {''.join(t)}"
+    t, k = list(s), 0                                    # 常见错误：只判左邻，忘了右邻
+    for i in range(len(t)):
+        if k == m:
+            break
+        if t[i] == "0" and (i == 0 or t[i - 1] == "0"):
+            t[i] = "1"
+            k += 1
+    left_only = f"{k} / {''.join(t)}"
+    n, mm = NS_EMPTY
+    tr, _ = novseatdata.naive_trace("0" * n, mm)
+    naive = sum(len(seen) for seen, _ in tr)
+    seated = sum(len(seen) for seen, got in tr if got is not None)
+    ptr = len(novseatdata.pointer_trace("0" * n, mm)[0])
+    differ = [c for c in NS_CANDS if novseatdata.run_io(novseatdata.solve, c + "\n")
+              != novseatdata.run_io(novseatdata.solve_bug_left, c + "\n")]
+    assert len(differ) == 1
+    hit = differ[0]
+    show = lambda c: "n m = " + c.split("\n")[0] + "，s = " + c.split("\n")[1]   # noqa: E731
+    return [
+        Q(f"图书馆选座：s = {s}，来 {m} 人（每人坐编号最小、左右邻座都空的空位）。输出（人数 / 最终状态）是？",
+          ans, [bug, first_empty, left_only],
+          f"第一人坐 1 号（没有左邻、2 号空）；2 号挨着 1 号，3、5 号挨着原来有人的 4 号，第二人坐 6 号；"
+          f"7 号挨着 6 号，8 号挨着 9 号，第三人离开，答案 {ans}。{bug} 是删了 i == 0 的判断：s[-1] 读到 9 号的 1，"
+          f"1 号被误判成左邻有人。"
+          f"{first_empty} 只找空座不看邻座；{left_only} 只判了左邻。"),
+        Q(f"一排 {n} 个座位全空，来 {mm} 人。朴素模拟每人都从 1 号往右找（坐不下的人扫满整排），一共检查多少个座位？",
+          naive, [ptr, n * mm, seated],
+          f"前 {n // 2} 人依次坐 1、3、5、7 号，分别扫 1、3、5、7 格；后 {mm - n // 2} 人坐不下，各扫 {n} 格，"
+          f"共 {naive} 格。{ptr} 是一个指针的扫描量；{n * mm} 是上界 n×m，不是实际值；{seated} 漏了坐不下的人。"),
+        Q("把讲义代码的 left 写成 left = s[i - 1] == '0'（删掉 i == 0 的判断）。下面哪个输入上输出会和正确答案不同？",
+          show(hit), [show(c) for c in NS_CANDS if c != hit],
+          f"i = 0 时 s[-1] 读到最后一个座位。只有最后一座有人、而一号本来该坐时才会出错：{show(hit)} 正确答案坐一号，"
+          f"错误写法以为一号左邻有人，改坐二号。其余输入最后一座是空的，读到的 0 恰好不影响结果；两个样例的最后一座也都是空的，所以样例全过。"),
+    ]
+
+
+NA_GRID = ["DURU", "ULDD", "ULLR"]                       # 箭头迷阵 3×4：片里只演示了题面两个样例与 3×3 螺旋
+NA_JOIN = (["RULD", "ULLL", "RLUR"], 3)                  # 从 s = 3 出发，一路走到撞上 st = 2 的格子
+NA_ROW = 5000                                            # 一行 5000 个 R：片里演示的是 900 与 2000
+
+
+def q_novarrow():
+    g = NA_GRID
+    rows, cols = len(g), len(g[0])
+    walks, st = novarrowdata.trace(g)
+    esc = st.count(2)
+    assert esc == novarrowdata.solve(g)
+    direct = sum(1 for i in range(rows) for j in range(cols)
+                 if not (0 <= i + novarrowdata.MOVE[g[i][j]][0] < rows and 0 <= j + novarrowdata.MOVE[g[i][j]][1] < cols))
+    oncyc = sum(len(w["path"]) for w in walks if w["end"] == "cycle")
+    cyc = next(w for w in walks if w["end"] == "cycle")
+    tail = next(w for w in walks if w["end"] == "join" and len(w["path"]) > 1)
+    tail_hit = tail["hit"][0] * cols + tail["hit"][1]
+
+    g2, s2 = NA_JOIN
+    w2 = next(w for w in novarrowdata.trace(g2)[0] if w["sid"] == s2)
+    assert w2["end"] == "join" and w2["res"] == 2
+    hit2 = w2["hit"][0] * len(g2[0]) + w2["hit"][1]
+    k2 = len(w2["ids"])
+
+    m = NA_ROW
+    rec = novarrowdata.rec_outcome(m)
+    loop = novarrowdata.solve(["R" * m])
+    assert rec == "RecursionError" and loop == m
+    return [
+        Q(f"箭头迷阵：3×{cols} 网格三行依次是 {'、'.join(g)}（U 上 D 下 L 左 R 右，格子按行编号 0 起）。从多少个格子出发能走出场地？",
+          esc, [direct, rows * cols - oncyc, rows * cols - esc],
+          f"格 {cyc['ids'][0]} 与格 {cyc['ids'][1]} 上下互指成环；从格 {tail['sid']} 出发的路线 {' → '.join(map(str, tail['ids']))} "
+          f"最后撞上格 {tail_hit}，接进这个环，也逃不出。能逃的共 {esc} 个。"
+          f"{direct} 只数了一步出界的；{rows * cols - oncyc} 把接进环的格子也当成能逃；{rows * cols - esc} 数成了逃不出的格数。"),
+        Q(f"讲义代码处理网格 {'、'.join(g2)} 时，从 s = {s2} 出发，path 依次记下 {', '.join(map(str, w2['ids']))}，"
+          f"下一步走到格 {hit2}，它的 st 已经是 2。接下来？",
+          f"res = 2：接上已知结论，path 上 {k2} 格都标成能逃",
+          [f"res = 3：走到了访问过的格子，算成环，{k2} 格标逃不出",
+           "res = 1：先保持「在路上」，等以后再判断",
+           f"只把最后一格 {w2['ids'][-1]} 标成 2，其余 {k2 - 1} 格退回 0 重新出发"],
+          f"只有撞上状态 1（本条路线上的格子）才是成环；格 {hit2} 是以前的路线留下的结论 2，路线从这里接下去必然出界，"
+          f"所以整条 path 照抄 2。把「访问过」当成「成环」是常见错误：那样会把能逃的格子算成逃不出。"
+          f"只回填一格则会让后面的格子重复走，失去每格只走一次的 O(nm)。"),
+        Q(f"输入是 1 行 {m} 列、全是 R 的网格。把讲义的循环写法改成递归（每格先递归问下一格的结论），在 Python 默认设置下会怎样？",
+          f"递归写法报 {rec}，循环写法正常输出 {loop}",
+          [f"两种写法都输出 {loop}", f"两种写法都超时：路线太长，是 O(m²)",
+           f"循环写法也出错：path 列表装不下 {m} 个格子"],
+          f"从格 0 出发要一路递归到最右边，深度约 {m} 层，超过 Python 默认递归深度上限 1000，抛 {rec}。"
+          f"循环写法把这条路线存进 path 列表，列表长度不受限制；每格仍只走一次，是 O(m) 而不是 O(m²)，输出 {loop}。"),
+    ]
+
+
+NOVCARD_N, NOVCARD_I = 7, 4                              # 牌堆魔术倒推：n = 7，问做完 i = 4 这一轮（片里演示的是 n = 5）
+NOVCARD_POS_N, NOVCARD_POS_K = 7, 4                      # 位置做法：n = 7，牌 4 填在几号位
+NOVCARD_LIST_N = 1000                                    # list.insert(0, x) 的搬动次数（片里算的是 n = 2×10⁵）
+
+
+def q_novcard():
+    n, i = NOVCARD_N, NOVCARD_I
+    st = next(s for s in novdata.cards_reverse_trace(n) if s["card"] == i)
+    right1 = seq(st["moved"])
+    put_only = seq(st["put"])                            # 只放了牌、没移底牌
+    wrong_dir = seq(st["put"][1:] + st["put"][:1])       # 撤销方向反了：又把顶牌移到底
+    desc = seq(range(n, i - 1, -1))                      # 以为倒着放牌就是倒序叠起来
+    pn, pk = NOVCARD_POS_N, NOVCARD_POS_K
+    q, pops = deque(range(pn)), []
+    while q:
+        q.append(q.popleft())
+        pops.append(q.popleft())
+    q, pops_bad = deque(range(pn)), []                   # 常见错误：先弹出、再把队首移到队尾
+    while q:
+        pops_bad.append(q.popleft())
+        if q:
+            q.append(q.popleft())
+    m = NOVCARD_LIST_N
+    moves = sum(2 * size for size in range(m))
+    return [
+        Q(f"牌堆魔术倒着做：n = {n}，从空牌堆开始，i 从 {n} 倒数，每轮先把牌 i 放回牌顶、再把底牌移回牌顶。"
+          f"做完 i = {i} 这一轮后，牌堆从上到下是？",
+          right1, [put_only, wrong_dir, desc],
+          f"i = {i + 1} 做完是 {seq(st['put'][1:])}；放回牌 {i} 得 {put_only}，再把底牌 {st['put'][-1]} 移回牌顶得 {right1}。"
+          f"{put_only} 只放了牌、漏了第二步；{wrong_dir} 是把顶牌又移到了底，撤销的方向反了。"),
+        Q(f"牌堆魔术的另一种做法：把 0..{pn - 1} 号位置排成队列，每轮先把队首移到队尾、再弹出队首，第 k 次弹出的位置填牌 k。"
+          f"n = {pn} 时，牌 {pk} 填在几号位？",
+          pops[pk - 1], [pk - 1, pops_bad[pk - 1], pops[pk - 2]],
+          f"弹出顺序依次是 {seq(pops)}，第 {pk} 次弹出 {pops[pk - 1]} 号位。"
+          f"{pops_bad[pk - 1]} 是先弹出再移到队尾，和题意的顺序反了；{pk - 1} 是以为位置就是牌号减一。"),
+        Q(f"把讲义代码里的两次 dq.appendleft 换成 list.insert(0, x)，n = {m} 时，所有插入一共要把已有元素后挪多少次？",
+          moves, [moves // 2, 3 * m, m],
+          f"第 i 轮开始时列表已有 n − i 个元素，每轮插到开头两次（放牌、底牌回顶），各挪 n − i 次，"
+          f"合计 2(0 + 1 + … + (n − 1)) = n(n − 1) = {moves}。{moves // 2} 漏了每轮有两次插入；{3 * m} 是 deque 写法的两端操作次数。"),
+    ]
+
+
+NOVPERC_GRID = (3, 4, [(1, 1), (2, 2), (3, 3), (1, 4), (2, 1), (3, 2)])   # 斜着排的三格：八连通会误判第 3 步
+NOVPERC_ONE = (1, 5, [(1, 3), (1, 4)])                                   # 只有一行：elif 写法
+NOVPERC_ENC = (5, 7, (3, 4))                                             # 5×7 网格，0-based 的 (3, 4)
+
+
+def q_novperc():
+    n, m, ops = NOVPERC_GRID
+    inp = novpercdata.inp_of(n, m, ops)
+    ans = novdata.run_io(novdata.solve_t5, inp)
+    opened, diag = set(), -1                             # 常见错误：把斜对角也当相邻（八连通）
+    for k, (r, c) in enumerate(ops):
+        opened.add((r - 1, c - 1))
+        seen = {x for x in opened if x[0] == 0}
+        q = deque(seen)
+        while q:
+            i, j = q.popleft()
+            for a in (-1, 0, 1):
+                for b in (-1, 0, 1):
+                    y = (i + a, j + b)
+                    if y in opened and y not in seen:
+                        seen.add(y)
+                        q.append(y)
+        if any(x[0] == n - 1 for x in seen):
+            diag = k + 1
+            break
+    off = int(ans) - 1                                   # 常见错误：输出 0 起的 k，没加一
+    n1, m1, ops1 = NOVPERC_ONE
+    inp1 = novpercdata.inp_of(n1, m1, ops1)
+    good1 = novdata.run_io(novdata.solve_t5, inp1)
+    bad1 = novdata.run_io(novpercdata.solve_t5_elif, inp1)
+    assert (good1, bad1) == ("1", "-1")
+    en, em, (r, c) = NOVPERC_ENC
+    right3 = f"u = {r * em + c}，TOP = {en * em}，BOT = {en * em + 1}"
+    return [
+        Q(f"渗透实验：{n} 行 {m} 列，依次打开 " + "、".join(f"({a}, {b})" for a, b in ops) + "（行列从 1 数）。输出是？",
+          ans, [diag, off, -1],
+          f"只有上下左右算相邻。(1, 1) 与 (2, 2)、(2, 2) 与 (3, 3) 都是斜对角，不相通；第 5 步 (2, 1) 把 (1, 1) 和 (2, 2) 接起来，"
+          f"第 {ans} 步 (3, 2) 在最后一行、上接 (2, 2)，TOP 与 BOT 同根。{diag} 是把斜对角也当相邻；{off} 是忘了把从 0 数的 k 加一。"),
+        Q(f"把讲义里的第二个 if r == n - 1 改成 elif。输入 {n1} 行 {m1} 列，依次打开 "
+          + "、".join(f"({a}, {b})" for a, b in ops1) + "，改后输出是？",
+          bad1, [good1, "2"],
+          f"只有一行时 r == 0 恒成立，elif 分支永远进不去，没有格子连上 BOT，所以输出 {bad1}。"
+          f"正确答案是 {good1}：第一行就是最后一行，打开第一格就同时连上 TOP 和 BOT。"),
+        Q(f"{en} 行 {em} 列的网格，行列从 0 数，格子 ({r}, {c}) 按讲义编号是多少？TOP、BOT 呢？",
+          right3,
+          [f"u = {r * en + c}，TOP = {en * em}，BOT = {en * em + 1}",
+           f"u = {(r + 1) * em + (c + 1)}，TOP = {en * em}，BOT = {en * em + 1}",
+           f"u = {r * em + c}，TOP = {en * em + 1}，BOT = {en * em + 2}"],
+          f"一行有 m = {em} 格，编号 u = r × m + c = {r} × {em} + {c} = {r * em + c}，正好占满 0 到 nm − 1 = {en * em - 1}；"
+          f"两个虚拟结点排在后面：TOP = nm = {en * em}，BOT = nm + 1 = {en * em + 1}，fa 开 nm + 2 个。"
+          f"{r * en + c} 是乘错了行数 n；{(r + 1) * em + (c + 1)} 是用了从 1 数的行列；"
+          f"TOP = {en * em + 1}、BOT = {en * em + 2} 是把虚拟结点也从 1 往后数，fa 就不够长了。"),
+    ]
+
+
+NOVBRK_S, NOVBRK_QS = "())()()(", [(3, 8), (6, 7), (1, 8), (4, 7)]     # 括号区间审计：四问输出
+NOVBRK_STK = ("(()(()", 6)                                               # 单调栈：扫完位置 j 后栈里剩谁
+NOVBRK_NXT = "(()))("                                                     # nxt 数组
+
+
+def q_novbrk():
+    s, qs = NOVBRK_S, NOVBRK_QS
+    inp = f"{s}\n{len(qs)}\n" + "".join(f"{l} {r}\n" for l, r in qs)
+    ans = novdata.run_io(novdata.solve_t6, inp).split("\n")
+    pre = novdata.prefix(s)
+    nxt, _ = novdata.next_lower(pre)
+    n = len(s)
+    cnt_only = ["YES" if pre[r] == pre[l - 1] else "NO" for l, r in qs]          # 常见错误：只数括号个数
+    ge = [n + 1] * (n + 1)                                                      # 常见错误：弹栈写成 >=
+    stk = []
+    for j in range(n + 1):
+        while stk and pre[stk[-1]] >= pre[j]:
+            ge[stk.pop()] = j
+        stk.append(j)
+    ge_ans = ["YES" if pre[r] == pre[l - 1] and ge[l - 1] > r else "NO" for l, r in qs]
+    off = ["YES" if pre[r] == pre[l - 1] and nxt[l] > r else "NO" for l, r in qs]   # 常见错误：查 nxt[l] 而不是 nxt[l-1]
+    assert len({tuple(ans), tuple(cnt_only), tuple(ge_ans), tuple(off)}) == 4
+
+    s2, j2 = NOVBRK_STK
+    pre2 = novdata.prefix(s2)
+    _, ev = novdata.next_lower(pre2)
+    stack = ev[j2][2]
+    st_ge = []                                                                  # 同高也弹
+    for j in range(j2 + 1):
+        while st_ge and pre2[st_ge[-1]] >= pre2[j]:
+            st_ge.pop()
+        st_ge.append(j)
+    popped = sorted(p for _, ps, _ in ev[:j2 + 1] for p in ps)
+
+    s3 = NOVBRK_NXT
+    pre3 = novdata.prefix(s3)
+    nxt3, _ = novdata.next_lower(pre3)
+    n3 = len(s3)
+    ge3 = [next((k for k in range(i + 1, n3 + 1) if pre3[k] <= pre3[i]), n3 + 1) for i in range(n3 + 1)]
+    no_n = [n3 if v == n3 + 1 else v for v in nxt3]                             # 找不到时记 n（和合法下标 n 撞车）
+    adj = [i + 1 if i < n3 and pre3[i + 1] < pre3[i] else n3 + 1 for i in range(n3 + 1)]   # 只看相邻下一步
+    return [
+        Q(f"括号区间审计：s = {s}，四问依次是 {ivs(qs)}。讲义代码的输出（四行连起来）是？",
+          " ".join(ans), [" ".join(cnt_only), " ".join(ge_ans), " ".join(off)],
+          f"pre = {seq(pre)}，nxt = {seq(nxt)}。合法要两端同高且 nxt[l-1] > r。"
+          f"{' '.join(cnt_only)} 是只数括号个数；{' '.join(ge_ans)} 是弹栈条件写成 >=：同高的 r 本身就算「跌破」，"
+          f"两端同高的询问全被判 NO；{' '.join(off)} 是把 nxt[l-1] 写成了 nxt[l]。"),
+        Q(f"单调栈求 nxt：s = {s2}，pre = {seq(pre2)}。按讲义（栈顶高度 > 当前才弹）扫完位置 j = {j2} 后，栈里从底到顶是？",
+          seq(stack), [seq(st_ge), seq(range(j2 + 1)), seq(popped)],
+          f"栈里存的是还没找到更低处的位置，高度从底到顶不降。j = {j2} 时 pre = {pre2[j2]}，"
+          f"弹出比它高的 {seq(ev[j2][1])}，遇到同高的 {stack[-2]} 就停，再压入 {j2}。{seq(st_ge)} 是同高也弹的写法；{seq(popped)} 是已经被弹出、填好 nxt 的位置。"),
+        Q(f"s = {s3}（n = {n3}），pre = {seq(pre3)}。nxt[i] 是 i 右边第一个 pre 比 pre[i] 小的位置，找不到记 n+1。nxt[0..{n3}] 是？",
+          seq(nxt3), [seq(ge3), seq(no_n), seq(adj)],
+          f"从 0 出发高度 {pre3[0]}，第一次跌到 {pre3[nxt3[0]]} 在位置 {nxt3[0]}，所以 nxt[0] = {nxt3[0]}；"
+          f"位置 1 的高度 {pre3[1]}，在 {nxt3[1]} 跌到 {pre3[nxt3[1]]}，nxt[1] = {nxt3[1]}。"
+          f"{seq(ge3)} 把「不高于」当成「更低」（弹栈写成 >=）；{seq(no_n)} 找不到记成 n，"
+          f"会和真正的位置 n 撞车：nxt[l-1] = n 时 r = n 的询问被误判 NO；"
+          f"{seq(adj)} 只看了相邻的下一步，没往右一直找。"),
+    ]
+
+
 BUILDERS = {"sort": q_sort, "stack": q_stack, "fib": q_fib, "hanoi": q_hanoi, "perm": q_perm,
             "queens": q_queens, "dsu": q_dsu, "interval": q_interval, "dpintro": q_dpintro,
             "knap": q_knap, "lcs": q_lcs, "bfs": q_bfs, "dijkstra": q_dijkstra, "bsearch": q_bsearch,
             "binary": q_binary, "float": q_float, "matrix": q_matrix, "lights": q_lights,
             "subsets": q_subsets, "knight": q_knight, "triangle": q_triangle, "kadane": q_kadane, "knapvar": q_knapvar, "lis": q_lis, "grid": q_grid,
-            "complexity": q_complexity, "divide": q_divide, "foodchain": q_foodchain, "statebfs": q_statebfs, "runtime": q_runtime, "deadline": q_deadline, "shopping": q_shopping, "partition": q_partition, "nov": q_nov}
+            "complexity": q_complexity, "divide": q_divide, "foodchain": q_foodchain, "statebfs": q_statebfs, "runtime": q_runtime, "deadline": q_deadline, "shopping": q_shopping, "partition": q_partition, "nov": q_nov, "novpal": q_novpal, "novseat": q_novseat, "novarrow": q_novarrow, "novcard": q_novcard, "novperc": q_novperc, "novbrk": q_novbrk}
 
 
 def build() -> dict:

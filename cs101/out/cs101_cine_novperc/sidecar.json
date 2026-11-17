@@ -1,0 +1,31 @@
+{
+  "lesson": "novperc",
+  "title": "渗透实验：并查集加两个虚拟结点",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3 节 T5（OpenJudge M31533）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 233.65,
+  "speech_seconds": 220.66,
+  "beats": {
+    "title": 0.0,
+    "problem": 14.15,
+    "naive": 49.23,
+    "dsu": 70.95,
+    "virtual": 104.5,
+    "walk": 131.95,
+    "code": 167.58,
+    "pitfall": 190.67,
+    "recap": 210.65
+  },
+  "subtitles": 43,
+  "audit_issues": 0,
+  "endcard": 230.55,
+  "endcard_info": {
+    "next": "括号区间审计：前缀和与单调栈",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 16.62,
+  "wall_seconds": 324.8
+}

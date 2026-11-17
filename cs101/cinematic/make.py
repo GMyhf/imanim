@@ -63,7 +63,13 @@ LESSONS = {"fib": ("fib.json", "fib_scene.py", "FibLesson"),
            "deadline": ("deadline.json", "deadline_scene.py", "DeadlineLesson"),
            "shopping": ("shopping.json", "shopping_scene.py", "ShoppingLesson"),
            "partition": ("partition.json", "partition_scene.py", "PartitionLesson"),
-           "nov": ("nov.json", "nov_scene.py", "NovLesson")}
+           "nov": ("nov.json", "nov_scene.py", "NovLesson"),
+           "novpal": ("novpal.json", "novpal_scene.py", "NovPalLesson"),
+           "novseat": ("novseat.json", "novseat_scene.py", "NovSeatLesson"),
+           "novarrow": ("novarrow.json", "novarrow_scene.py", "NovArrowLesson"),
+           "novcard": ("novcard.json", "novcard_scene.py", "NovCardLesson"),
+           "novperc": ("novperc.json", "novperc_scene.py", "NovPercLesson"),
+           "novbrk": ("novbrk.json", "novbrk_scene.py", "NovBrkLesson")}
 QUALITY = {"draft": ["-ql"], "hd": ["-qh"], "fullhd": ["-r", "1920,1080", "--fps", "60"]}
 
 

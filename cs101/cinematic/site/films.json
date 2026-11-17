@@ -624,7 +624,7 @@
    "week": 14,
    "tag": "月考",
    "label": "月考讲评",
-   "topic": "11 月月考讲评",
+   "topic": "11 月月考讲评：总览与六题精讲",
    "films": [
     {
      "id": "nov",
@@ -642,6 +642,118 @@
       "recap": "失分点与订正"
      },
      "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#3-%E6%9C%88%E8%80%83%E8%AE%B2%E8%AF%84"
+    },
+    {
+     "id": "novpal",
+     "dir": "cs101_cine_novpal",
+     "title": "双重回文：十进制和二进制都要对称",
+     "desc": "11 月月考 T1 精讲。十进制、二进制都回文才算数：样例一逐个看 1 到 5 的二进制；字符串翻转判回文，忘切 0b 前缀样例一会输出 0 1；偶数二进制最高位 1、末位 0，只枚举奇数；讲义 C++ 版按进制把数倒过来，33 的 y 依次长成 1、2、4、8、16、33；样例二从十个奇数十进制回文里筛出七个；50 万个奇数约 1.2×10⁷ 个字符，n = 10⁶ 答案 19 个、最大 585585。",
+     "src": "11 月月考讲评与阶段复习 第 3 节 T1 · OpenJudge E31529",
+     "chapters": {
+      "title": "题意",
+      "sample1": "样例一逐个看",
+      "strrev": "字符串翻转与 0b 前缀",
+      "even": "只枚举奇数",
+      "revnum": "C++：把数倒过来",
+      "sample2": "样例二",
+      "cost": "复杂度与 n = 10⁶",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#t1-e31529-%E5%8F%8C%E9%87%8D%E5%9B%9E%E6%96%87"
+    },
+    {
+     "id": "novseat",
+     "dir": "cs101_cine_novseat",
+     "title": "图书馆选座：指针为什么不用回头",
+     "desc": "11 月月考 T2 精讲。两个样例逐步走一遍；朴素模拟每人从头扫，一排十个座位共扫 35 格，最坏 n×m = 4×10⁶ 也能过；再想一步：座位只会越坐越满，某人坐在 i 后左边都不能坐、i+1 挨着他，下一位一定在右边，所以一个指针扫一遍、坐满 m 人就停，O(n)。讲义代码逐行对照，or 短路保护边界；删掉 i == 0 后 s[-1] 悄悄读到最后一个座位，样例全过却在 00001 上答错，删掉 i == n - 1 则 Python 直接 IndexError、C++ 的 s[n] 读到空字符。",
+     "src": "11 月月考讲评与阶段复习 第 3 节 T2 · OpenJudge E31530 · 一排十个座位与 00001 反例为自拟",
+     "chapters": {
+      "title": "开场",
+      "rule": "题意与样例",
+      "naive": "朴素模拟 O(nm)",
+      "mono": "单调性：下一位在右边",
+      "pointer": "一个指针 O(n)",
+      "code": "讲义代码逐行",
+      "bug": "边界：s[-1] 与 s[n]",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#t2-e31530-%E5%9B%BE%E4%B9%A6%E9%A6%86%E9%80%89%E5%BA%A7"
+    },
+    {
+     "id": "novarrow",
+     "dir": "cs101_cine_novarrow",
+     "title": "箭头迷阵：每格一条出边，路线必定出界或成环",
+     "desc": "11 月月考 T3 精讲。每格恰好一条出边，路线是确定的：走了格子数加一步还在场内就必然绕圈，所以暴力是 O((nm)²)。四种状态 0/1/2/3 加一个 path 列表，用样例二逐次出发演示出界、撞上本条路线成环、接上已知结论三种收尾与回填；辨析「途中可以先绕圈」不等于成环；每格只进一次 path，O(nm)。最后实际跑递归写法：一行九百个 R 能过，两千个就 RecursionError，path 列表就是显式的调用栈。",
+     "src": "11 月月考讲评与阶段复习 第 3 节 T3 · OpenJudge M31531 · 3×3 绕圈网格与递归对照写法为自拟",
+     "chapters": {
+      "title": "题意与样例一",
+      "graph": "一条出边与鸽巢",
+      "states": "四种状态与 path",
+      "walk": "样例二逐次出发",
+      "wander": "绕圈不等于成环",
+      "cost": "每格只走一次",
+      "recur": "递归为何会炸",
+      "code": "讲义代码对照",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#t3-m31531-%E7%AE%AD%E5%A4%B4%E8%BF%B7%E9%98%B5"
+    },
+    {
+     "id": "novcard",
+     "dir": "cs101_cine_novcard",
+     "title": "牌堆魔术：倒着撤销每一步",
+     "desc": "11 月月考 T4（M31532）精讲。每轮先把顶牌移到底、再翻开顶牌，要翻出 1 到 n：先用样例 1 正着表演一遍；已知结果求开头就倒着做，后做的先撤——先把牌 i 放回牌顶，再把底牌移回牌顶，样例 2 逐步倒推出 3 1 5 2 4，只剩一张牌时不用特判；另一种思路正着模拟位置队列，第 k 次弹出的位置填牌 k。讲义代码逐行对照；两步撤销写反会先在空牌堆上报错、判空后输出 1 3 2 4，正着验翻出 3 4 2 1；deque 两端 O(1)，换成 list.insert(0, x) 在 n = 2×10⁵ 时要挪约 4×10¹⁰ 次。",
+     "src": "11 月月考讲评与阶段复习 第 3 节 T4 · OpenJudge M31532 · 位置队列演示、写反的错误写法与搬动计数为按讲义补写",
+     "chapters": {
+      "title": "开场",
+      "rule": "题意 · 样例 1 正着表演",
+      "undo": "倒推：后做的先撤",
+      "sample2": "样例 2 逐步倒推",
+      "pos": "另一种思路：模拟位置",
+      "code": "讲义代码对照",
+      "bug": "典型错误：两步写反",
+      "cost": "deque 与 list.insert",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#t4-m31532-%E7%89%8C%E5%A0%86%E9%AD%94%E6%9C%AF"
+    },
+    {
+     "id": "novperc",
+     "dir": "cs101_cine_novperc",
+     "title": "渗透实验：并查集加两个虚拟结点",
+     "desc": "月考 T5 精讲。两个样例走一遍；每开一格就 BFS 一次，全部打开是 2×10⁵ × 2×10⁵ = 四百亿步。只开不关、连通块只合并，所以用并查集：路径减半 fa[x] = fa[fa[x]] 在一条五结点链上逐步演示，union 根挂根。第一行任意格通最后一行任意格，两两比根要 m² 次，加 TOP、BOT 两个虚拟结点后只比一次。自拟 4×5 网格八次打开，看蓝块、橙块、紫格怎样并到同根。最后对照讲义代码（编号 r·m + c，fa 开 nm + 2），并把第二个 if 改成 elif 实际跑 n = 1：输出 −1 而不是 1。",
+     "src": "11 月月考讲评与阶段复习 第 3 节 T5 · OpenJudge M31533 · 4×5 网格、五结点链与 BFS 示意局面为自拟",
+     "chapters": {
+      "title": "开场",
+      "problem": "题意与两个样例",
+      "naive": "每次 BFS 为什么超时",
+      "dsu": "并查集：路径减半与 union",
+      "virtual": "两个虚拟结点",
+      "walk": "4×5 网格逐步打开",
+      "code": "讲义代码对照",
+      "pitfall": "⚠ n = 1 与 elif",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#t5-m31533-%E6%B8%97%E9%80%8F%E5%AE%9E%E9%AA%8C"
+    },
+    {
+     "id": "novbrk",
+     "dir": "cs101_cine_novbrk",
+     "title": "括号区间审计：前缀和与单调栈",
+     "desc": "11 月月考 T6 精讲。二十万次询问每次现扫要四百亿步；把括号串的前缀和画成一座山，子串合法就是两端同高、中间不跌破起点，两条各给反例。不跌破是区间最小值，单调栈一遍预处理出右边第一个更低的位置 nxt，逐步演示谁入栈、谁被弹出；样例二四问逐个判定。演示两种错误写法（只数括号个数、弹栈写成 >=）各自输出什么，以及读入一次读完、答案 join 一次输出；最后对照讲义代码，提一句 ST 表。",
+     "src": "11 月月考讲评与阶段复习 第 3 节 T6 · OpenJudge T31534 · 用题面样例 2；错误写法为按讲义补写的对照",
+     "chapters": {
+      "title": "开场",
+      "task": "题意与暴力",
+      "mountain": "前缀和画成山",
+      "nxt": "不跌破 → nxt",
+      "stack": "单调栈逐步",
+      "judge": "样例二四问",
+      "pitfall": "错误写法与输入输出",
+      "code": "讲义代码",
+      "recap": "回顾"
+     },
+     "href": "https://github.com/GMyhf/2026fall-cs101/blob/main/courseware/202611_ADS_November_Exam_Review.md#t6-t31534-%E6%8B%AC%E5%8F%B7%E5%8C%BA%E9%97%B4%E5%AE%A1%E8%AE%A1"
     }
    ]
   },

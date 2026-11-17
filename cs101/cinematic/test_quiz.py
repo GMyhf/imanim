@@ -624,6 +624,157 @@ def nov_escape(g):
     return cnt
 
 
+def novpal_brute(n):
+    """1..n 全部（含偶数）用字符串翻转判双重回文（不调用 novdata / novpaldata）。"""
+    return [i for i in range(1, n + 1) if str(i) == str(i)[::-1] and format(i, "b") == format(i, "b")[::-1]]
+
+
+def ns_can(s, i):
+    return s[i] == "0" and (i == 0 or s[i - 1] == "0") and (i == len(s) - 1 or s[i + 1] == "0")
+
+
+def ns_seats(s, m):
+    """逐人从头找的独立实现，返回 (人数, 最终串, 每人检查的格子数)。"""
+    s, sat, scans = list(s), 0, []
+    for _ in range(m):
+        got = next((i for i in range(len(s)) if ns_can(s, i)), None)
+        scans.append(len(s) if got is None else got + 1)
+        if got is not None:
+            s[got] = "1"
+            sat += 1
+    return sat, "".join(s), scans
+
+
+def ns_seats_wrap(s, m):
+    """左边界写错的独立实现：i = 0 的左邻取 s[-1]。"""
+    s, sat = list(s), 0
+    for i in range(len(s)):
+        if sat == m:
+            break
+        if s[i] == "0" and s[i - 1] == "0" and (i == len(s) - 1 or s[i + 1] == "0"):
+            s[i] = "1"
+            sat += 1
+    return sat, "".join(s)
+
+
+def na_states(g):
+    """逐格模拟 nm+1 步：还在场内就是绕圈。返回每格 2（能逃）/ 3（逃不出）。"""
+    n, m = len(g), len(g[0])
+    mv = {"U": (-1, 0), "D": (1, 0), "L": (0, -1), "R": (0, 1)}
+    out = []
+    for si in range(n):
+        for sj in range(m):
+            i, j = si, sj
+            for _ in range(n * m + 1):
+                if not (0 <= i < n and 0 <= j < m):
+                    break
+                i, j = i + mv[g[i][j]][0], j + mv[g[i][j]][1]
+            out.append(2 if not (0 <= i < n and 0 <= j < m) else 3)
+    return out
+
+
+def na_rec_depth_error(m):
+    """一行 m 个 R：独立写的递归版，看会不会撞上默认递归深度。"""
+    def go(j):
+        if j >= m:
+            return 2
+        return go(j + 1)
+    try:
+        go(0)
+        return False
+    except RecursionError:
+        return True
+
+
+def novcard_undo(n, stop):
+    """倒推到 i = stop 这一轮做完（list 写法）。"""
+    a = []
+    for i in range(n, stop - 1, -1):
+        a = [i] + a
+        a = a[-1:] + a[:-1]
+    return a
+
+
+def novcard_by_positions(n):
+    """位置做法的独立写法：在还没填的位置里循环，跳过一个、填下一个。返回各位置的牌。"""
+    deck, alive, cur = [0] * n, list(range(n)), 0
+    for k in range(1, n + 1):
+        cur = (cur + 1) % len(alive)
+        deck[alive.pop(cur)] = k
+        if alive:
+            cur %= len(alive)
+    return deck
+
+
+def novcard_insert_moves(n):
+    """真用 list.insert(0, x) 跑讲义的倒推，累加每次插入前的长度；顺带核对结果能正着翻出 1..n。"""
+    lst, moves = [], 0
+    for i in range(n, 0, -1):
+        moves += len(lst)
+        lst.insert(0, i)
+        x = lst.pop()
+        moves += len(lst)
+        lst.insert(0, x)
+    assert nov_reveal(lst) == list(range(1, n + 1))
+    return moves
+
+
+def perc_bfs4(n, m, ops):
+    """每打开一格从第一行打开格 BFS（四连通），1-based 行列。"""
+    opened = set()
+    for k, (r, c) in enumerate(ops):
+        opened.add((r - 1, c - 1))
+        seen = {x for x in opened if x[0] == 0}
+        q = deque(seen)
+        while q:
+            i, j = q.popleft()
+            if i == n - 1:
+                return k + 1
+            for y in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                if y in opened and y not in seen:
+                    seen.add(y)
+                    q.append(y)
+    return -1
+
+
+def perc_elif_one_row(n, m, ops):
+    """elif 写法的语义：第一行只连 TOP；不在第一行的最后一行格子才连 BOT。BOT 的块里要有格子才可能同根。"""
+    opened = set()
+    for k, (r, c) in enumerate(ops):
+        opened.add((r - 1, c - 1))
+        bot_cells = {x for x in opened if x[0] == n - 1 and x[0] != 0}
+        if not bot_cells:
+            continue
+        seen = {x for x in opened if x[0] == 0}
+        q = deque(seen)
+        while q:
+            i, j = q.popleft()
+            if (i, j) in bot_cells:
+                return k + 1
+            for y in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):
+                if y in opened and y not in seen:
+                    seen.add(y)
+                    q.append(y)
+    return -1
+
+
+def novbrk_valid(sub):
+    """按定义用栈匹配现扫（不调用 novdata）。"""
+    depth = 0
+    for ch in sub:
+        depth += 1 if ch == "(" else -1
+        if depth < 0:
+            return False
+    return depth == 0
+
+
+def novbrk_heights(s):
+    h = [0]
+    for ch in s:
+        h.append(h[-1] + (1 if ch == "(" else -1))
+    return h
+
+
 def partition_brute(n, k):
     """穷举非降 k 元组（不调用 partitiondata）。"""
     return sum(1 for c in itertools.combinations_with_replacement(range(1, n + 1), k) if sum(c) == n)
@@ -946,6 +1097,85 @@ class QuizAnswerTest(unittest.TestCase):
         nx = next((k for k in range(l, len(s) + 1) if pre[k] < pre[l - 1]), len(s) + 1)
         self.assertEqual(pre[r], pre[l - 1])
         self.assertEqual(right("nov", 2), f"NO：nxt[{l - 1}] = {nx} ≤ {r}，中途跌破起点")
+
+    def test_novpal(self):
+        n = G.NOVPAL_N
+        b = novpal_brute(n)
+        self.assertEqual(right("novpal", 0), f"{len(b)} {b[-1]}")
+        self.assertEqual(b[-1], n)                              # n 本身就是答案，range 少一才会出错
+        x = G.NOVPAL_X
+        self.assertEqual(right("novpal", 1), str(int(format(x, "b")[::-1], 2)))
+        self.assertNotEqual(int(format(x, "b")[::-1], 2), x)
+        self.assertEqual(right("novpal", 2), "偶数二进制末位是 0，而最高位一定是 1，首尾不同")
+        self.assertTrue(all(format(i, "b")[-1] == "0" and format(i, "b")[0] == "1" for i in range(2, 2000, 2)))
+        e1, e2 = G.NOVPAL_EVEN
+        self.assertTrue(e1 % 2 == 0 and str(e1) == str(e1)[::-1])
+        self.assertTrue(e2 % 2 == 0 and len(format(e2, "b")) % 2 == 1)
+
+    def test_novseat(self):
+        sat, fin, _ = ns_seats(G.NS_ROW, G.NS_M)
+        self.assertEqual(right("novseat", 0), f"{sat} / {fin}")
+        n, m = G.NS_EMPTY
+        self.assertEqual(right("novseat", 1), str(sum(ns_seats("0" * n, m)[2])))
+        bad = [c for c in G.NS_CANDS
+               if ns_seats(c.split()[2], int(c.split()[1]))[:2] != ns_seats_wrap(c.split()[2], int(c.split()[1]))]
+        self.assertEqual(len(bad), 1)
+        a, b, s = bad[0].split()
+        self.assertEqual(right("novseat", 2), f"n m = {a} {b}，s = {s}")
+
+    def test_novarrow(self):
+        self.assertEqual(right("novarrow", 0), str(na_states(G.NA_GRID).count(2)))
+        g2, s2 = G.NA_JOIN
+        st2 = na_states(g2)
+        self.assertEqual(st2[s2], 2)                                      # 出发格最终能逃：res 照抄 2
+        mv = {"U": (-1, 0), "D": (1, 0), "L": (0, -1), "R": (0, 1)}
+        cols = len(g2[0])
+        i, j, path = s2 // cols, s2 % cols, []
+        while (i * cols + j) != 0:                                        # 题干：路线走到格 0
+            path.append(i * cols + j)
+            i, j = i + mv[g2[i][j]][0], j + mv[g2[i][j]][1]
+        self.assertEqual(st2[0], 2)
+        self.assertTrue(all(st2[u] == 2 for u in path))
+        self.assertEqual(right("novarrow", 1), f"res = 2：接上已知结论，path 上 {len(path)} 格都标成能逃")
+        self.assertTrue(na_rec_depth_error(G.NA_ROW))
+        self.assertEqual(na_states(["R" * 50]).count(2), 50)              # 全是 R 的一行每格都能逃
+        self.assertEqual(right("novarrow", 2), f"递归写法报 RecursionError，循环写法正常输出 {G.NA_ROW}")
+
+    def test_novcard(self):
+        n, i = G.NOVCARD_N, G.NOVCARD_I
+        self.assertEqual(right("novcard", 0), ", ".join(map(str, novcard_undo(n, i))))
+        full = novcard_undo(n, 1)
+        self.assertEqual(nov_reveal(full), list(range(1, n + 1)))
+        deck = novcard_by_positions(G.NOVCARD_POS_N)
+        self.assertEqual(nov_reveal(deck), list(range(1, G.NOVCARD_POS_N + 1)))
+        self.assertEqual(right("novcard", 1), str(deck.index(G.NOVCARD_POS_K)))
+        m = G.NOVCARD_LIST_N
+        self.assertEqual(right("novcard", 2), str(novcard_insert_moves(m)))
+        self.assertEqual(novcard_insert_moves(m), m * (m - 1))
+
+    def test_novperc(self):
+        n, m, ops = G.NOVPERC_GRID
+        self.assertEqual(right("novperc", 0), str(perc_bfs4(n, m, ops)))
+        n1, m1, ops1 = G.NOVPERC_ONE
+        self.assertEqual(n1, 1)
+        self.assertEqual(right("novperc", 1), str(perc_elif_one_row(n1, m1, ops1)))
+        self.assertEqual(perc_bfs4(n1, m1, ops1), 1)                    # 正确写法是 1，片中失分点
+        en, em, (r, c) = G.NOVPERC_ENC
+        u = sum(em for _ in range(r)) + c                               # 前 r 行各 m 格，再数 c 格
+        self.assertEqual(right("novperc", 2), f"u = {u}，TOP = {en * em}，BOT = {en * em + 1}")
+
+    def test_novbrk(self):
+        s, qs = G.NOVBRK_S, G.NOVBRK_QS
+        self.assertEqual(right("novbrk", 0), " ".join("YES" if novbrk_valid(s[l - 1:r]) else "NO" for l, r in qs))
+        s2, j2 = G.NOVBRK_STK
+        h = novbrk_heights(s2)
+        # 栈 = 前 j2 个位置里右边（到 j2 为止）还没出现更低点的
+        self.assertEqual(right("novbrk", 1), ", ".join(str(i) for i in range(j2 + 1)
+                                                         if all(h[k] >= h[i] for k in range(i + 1, j2 + 1))))
+        h3 = novbrk_heights(G.NOVBRK_NXT)
+        n3 = len(G.NOVBRK_NXT)
+        want = [next((k for k in range(i + 1, n3 + 1) if h3[k] < h3[i]), n3 + 1) for i in range(n3 + 1)]
+        self.assertEqual(right("novbrk", 2), ", ".join(map(str, want)))
 
     def test_partition(self):
         n, k = G.PART_Q1

@@ -1,0 +1,30 @@
+{
+  "lesson": "novpal",
+  "title": "双重回文：十进制和二进制都要对称",
+  "source": "计算概论（B）2026fall · 11 月月考讲评与阶段复习 第 3 节 T1（OpenJudge E31529）",
+  "voice": "zh-CN-YunxiNeural",
+  "tts": "edge-tts",
+  "quality": "fullhd",
+  "seconds": 228.35,
+  "speech_seconds": 217.58,
+  "beats": {
+    "title": 0.0,
+    "sample1": 16.97,
+    "strrev": 44.8,
+    "even": 75.9,
+    "revnum": 100.23,
+    "sample2": 142.42,
+    "cost": 173.33,
+    "recap": 201.32
+  },
+  "subtitles": 51,
+  "audit_issues": 0,
+  "endcard": 225.25,
+  "endcard_info": {
+    "next": "图书馆选座：指针为什么不用回头",
+    "last": false,
+    "url": "infomall.zhengmao.ltd/cs101-anim/"
+  },
+  "size_mb": 14.82,
+  "wall_seconds": 321.4
+}
